@@ -1,0 +1,9 @@
+X: mode (hunting or grazing)
+ T: remaining scared time: remain_scared_time1/2
+ D_G: Dijkstra distance between Pacman and every ghost: distance1/2
+ D_D: Dijkstra distance between Pacman and the closest dot (��ͨ�ĵ�): rwd_pac_distance
+ D_B: Dijkstra distance between Pacman and every big dot (���еĴ��): energizers are all positions. Only have to join table locs_df
+ G: status of two ghosts; 2d array and each element is chosen from 1:normal, 2:scared, 3:dead.: ifscared1/2
+ 
+ L: current location for two ghosts: ghost1Pos, ghost2Pos
+ V: current moving direction for two ghosts: ghost1_dir, ghost2_dir
