@@ -10,9 +10,7 @@ Date:
 '''
 
 import torch
-import torch.nn as nn
 import numpy as np
-import copy
 
 from util import np2tensor, tensor2np
 from MLP import MLP
@@ -20,7 +18,7 @@ from MLP import MLP
 
 class Graze2Hunt:
 
-    def __init__(self, in_dim, batch_size = 5, lr = 1e-4, enable_cuda = False):
+    def __init__(self, in_dim, batch_size = 5, lr = 1e-3, enable_cuda = False):
         # Initialize parameters
         self.enable_cuda = enable_cuda
         self.batch_size = batch_size
@@ -51,8 +49,10 @@ class Graze2Hunt:
                 batch_data = np.array(batch_data, dtype = np.double)
                 batch_label = np.array(batch_label, dtype = np.double)
                 loss = self._trainBatch(batch_data, batch_label)
-                # Collect info and clear the batch
                 batch_loss.append(loss)
+                loss.backward()
+                self.network.optimizer.step()
+                # Collect info and clear the batch
                 print("The average loss for the {}-th batch is {}".format(batch_count, loss / self.batch_size))
                 batch_data, batch_label = [], []
         self.trained = True
@@ -73,9 +73,22 @@ class Graze2Hunt:
             label = np2tensor(batch_label[i, :], cuda_enabled = False, gradient_required = False)
             output = self.network(input)
             total_loss += self.network.lossFunc(output, label)
-        total_loss.backward()
-        self.network.optimizer.step()
         return total_loss
+
+    def test(self, testing_set):
+        '''
+        Validate the network on testing dataset.
+        :param testing_set: Testing dataset with shape of (number of testing samples, number of features)
+        :param testing_label: Lables of tsting data.
+        :return: Average binary class entropy loss over testing data.
+        '''
+        pred_output = []
+        test_num = len(testing_set)
+        for i in range(test_num):
+            input = np2tensor(testing_set[i, :], cuda_enabled=False, gradient_required=False)
+            output = self.network(input)
+            pred_output.append(tensor2np(output))
+        return np.array(pred_output)
 
     def saveModel(self, filename):
         '''

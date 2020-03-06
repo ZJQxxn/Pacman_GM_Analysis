@@ -3,3 +3,5 @@
 *.pyc
 *.iml
 *.csv
+*.pt
+*.mat

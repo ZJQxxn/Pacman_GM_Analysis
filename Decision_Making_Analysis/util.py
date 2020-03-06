@@ -25,4 +25,4 @@ def np2tensor(nparray, cuda_enabled = False, gradient_required = True):
     if cuda_enabled:
         return torch.tensor(torch.tensor(nparray).cuda(), requires_grad=gradient_required)
     else:
-        return torch.tensor(torch.tensor(nparray), requires_grad=gradient_required)
+        return torch.tensor(nparray).clone().detach().requires_grad_(gradient_required)
