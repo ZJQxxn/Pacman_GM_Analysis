@@ -26,3 +26,13 @@ def np2tensor(nparray, cuda_enabled = False, gradient_required = True):
         return torch.tensor(torch.tensor(nparray).cuda(), requires_grad=gradient_required)
     else:
         return torch.tensor(nparray).clone().detach().requires_grad_(gradient_required)
+
+def oneHot(value, val_list):
+    res = list(
+        np.zeros((len(val_list,), ), dtype = np.int)
+    )
+    if value not in val_list:
+        raise ValueError('Undefined value ``{}''! Can not convert the value to an one-hot vector.'.format(value))
+    else:
+        res[val_list.index(value)] = 1
+    return res

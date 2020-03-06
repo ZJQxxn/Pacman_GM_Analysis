@@ -18,7 +18,7 @@ import scipy.io as sio
 from Hunt2GrazeModel import Hunt2Graze
 from Graze2HuntModel import Graze2Hunt
 from evaluation import binaryClassError
-from util import tensor2np
+from util import tensor2np, oneHot
 
 
 class Analyzer:
@@ -113,10 +113,13 @@ class Analyzer:
 
 
     def _H2GPreprocess(self):
-        #TODO:not finished
         '''
         Preprocessing data for analyzing hunting to grazing.
         Processed data have following features:
+            - Ghosts location (data[11] and data[12])
+            - Pacman location (data[10])
+            - Remained scared time (data[2] and data[3])
+            - Ghosts moving direction (data[13] and data[14]),should be converted to one-hot vector.
             
         :return: Preprocessed data matrix.
             - h2g_training_data: Features in training set for hunt2graze analyzing.
@@ -125,27 +128,29 @@ class Analyzer:
             - h2g_testing_label: Labels in testing set for hunt2graze analyzing
         '''
         # Extract useful features
+        dir_list = ['up', 'down', 'left', 'right', 'stay'] # TODO: If the direction is '', we assume the ghosts stands still
         preprocessed_data = []
         for index, each in enumerate(self.hunting_data):
-            # TODO: specify features
-            temp = np.zeros((4,))
-            temp[0] = each[4]
-            temp[1] = each[5]
-            temp[2] = each[6]
-            temp[3] = self._computeDotDis(each[10], each[7])
+            temp = [
+                [int(i) for i in each[11].strip('()').split(',')], # ghost 1 location
+                [int(i) for i in each[12].strip('()').split(',')], # ghost 2 location
+                [int(i) for i in each[10].strip('()').split(',')], # Pacman location
+                float(each[2]) if each[2] != '' else 0,  # ghost 1 remained scared time
+                float(each[3]) if each[3] != '' else 0,  # ghost 2 remained scared time
+                oneHot(each[13] if each[13] != '' else 'stay', dir_list), # ghost 1 moving direction
+                oneHot(each[14] if each[14] != '' else 'stay', dir_list)  # ghost 2 moving direction
+            ]
             preprocessed_data.append(temp)
         preprocessed_data = np.array(preprocessed_data)
-        # Normalization
-        for col_index in range(preprocessed_data.shape[1]):
-            preprocessed_data[:, col_index] = (preprocessed_data[:, col_index] - np.nanmean(preprocessed_data[:, col_index])) / np.nanstd(preprocessed_data[:, col_index])
         # Split into training and testing sets(60% for training and 40% for testing) for each mode
         training_ratio = 0.6
-        sample_num = preprocessed_data.shape[0] - 1
+        sample_num = len(preprocessed_data) - 1
         training_num = int(training_ratio * sample_num)
-        shuffled__index = np.random.shuffle(np.arange(0, sample_num))
-        training_index = shuffled__index[:training_num]
-        testing_index = shuffled__index[training_num:]
-        h2g_training_data = preprocessed_data[training_index, :]
+        shuffled_index = np.arange(0, sample_num)
+        np.random.shuffle(shuffled_index)
+        training_index = shuffled_index[:training_num]
+        testing_index = shuffled_index[training_num:]
+        h2g_training_data = preprocessed_data[training_index]
         h2g_training_label = self.hunting_label[training_index, :]
         h2g_testing_data = preprocessed_data[testing_index, :]
         h2g_testing_label = self.hunting_label[testing_index, :]
@@ -195,6 +200,11 @@ class Analyzer:
     def H2GAnalyze(self):
         #TODO: not finished
         training_data, training_label, testing_data, testing_label = self._H2GPreprocess()
+        all_data = np.vstack((training_data, testing_data))
+        all_lable = np.vstack((training_label, testing_label))
+        m = Hunt2Graze()
+        # Use the deterministic model for analysis
+        correct_rate, pred_label = m.deterministicModel(all_data, all_lable)
 
 
 
@@ -207,5 +217,9 @@ if __name__ == '__main__':
     label_filename = 'data/all_labels.csv'
     mode_filename = 'data/all_modes.csv'
     a = Analyzer(feature_filename, label_filename, mode_filename)
-    # print(a.data[0])
-    a.G2HAnalyze(3, batch_size = 1) # With MLP: f(D)
+
+    # # Analyze grazing to hunting
+    # a.G2HAnalyze(3, batch_size = 1) # With MLP: f(D)
+
+    # Analyze hunting to grazeing
+    a.H2GAnalyze()  # With MLP: f(D)
