@@ -212,14 +212,14 @@ class Analyzer:
 
 
     def H2GAnalyze(self):
-        #TODO: not finished
         training_data, training_label, testing_data, testing_label = self._H2GPreprocess()
         all_data = np.vstack((training_data, testing_data))
         all_lable = np.vstack((training_label, testing_label))
         m = Hunt2Graze()
         # Use the deterministic model for analysis
-        correct_rate, pred_label = m.deterministicModel(all_data, all_lable)
-
+        pred_label = m.deterministicModel(all_data, all_lable)
+        correct_rate = correctRate(pred_label, all_lable)
+        print('Classification correct rate {}'.format(correct_rate))
 
 
 
@@ -233,8 +233,8 @@ if __name__ == '__main__':
     a = Analyzer(feature_filename, label_filename, mode_filename)
 
     # Analyze grazing to hunting
-    a.G2HAnalyze(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
+    # a.G2HAnalyze(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
     # a.G2HAnalyze(3, batch_size = 1, need_train= True) # With MLP: f(D)
 
-    # # Analyze hunting to grazeing
-    # a.H2GAnalyze()  # with deterministic model
+    # Analyze hunting to grazeing
+    a.H2GAnalyze()  # with deterministic model
