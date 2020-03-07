@@ -17,7 +17,7 @@ import scipy.io as sio
 
 from Hunt2GrazeModel import Hunt2Graze
 from Graze2HuntModel import Graze2Hunt
-from evaluation import binaryClassError, correctRate
+from evaluation import binaryClassError, correctRate, AUC
 from util import tensor2np, oneHot
 
 
@@ -205,8 +205,10 @@ class Analyzer:
         pred_label = model.test(testing_data)
         estimation_loss = binaryClassError(pred_label, testing_label)
         correct_rate = correctRate(pred_label, testing_label)
-        print('Loss after training {}'.format(estimation_loss))
+        auc = AUC(pred_label, testing_label)
+        print('BCE Loss after training {}'.format(estimation_loss))
         print('Classification correct rate {}'.format(correct_rate))
+        print('AUC {}'.format(auc))
 
 
     def H2GAnalyze(self):

@@ -11,6 +11,8 @@ Date:
 
 import torch
 import numpy as np
+from sklearn import metrics
+
 from util import np2tensor, tensor2np
 
 
@@ -26,8 +28,8 @@ def binaryClassError(pred_label, true_label):
 
 
 def AUC(pred_label, true_label):
-    # TODO: AUC for the classfication result
-    pass
+    auc = metrics.roc_auc_score(true_label, pred_label)
+    return auc
 
 def correctRate(pred_label, true_label):
     pred_label = np.array(np.round(pred_label), dtype = np.int)
