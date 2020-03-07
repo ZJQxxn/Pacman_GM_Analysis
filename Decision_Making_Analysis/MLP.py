@@ -37,6 +37,7 @@ class MLP(nn.Module):
         # Activationj function
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=0)
 
     def forward(self, input):
         '''
@@ -48,6 +49,7 @@ class MLP(nn.Module):
         output = self.hidden_layer(input)
         output = self.relu(output)
         output = self.sigmoid(output)
+        output = self.softmax(output)
         return output
 
 

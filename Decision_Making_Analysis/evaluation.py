@@ -28,3 +28,13 @@ def binaryClassError(pred_label, true_label):
 def AUC(pred_label, true_label):
     # TODO: AUC for the classfication result
     pass
+
+def correctRate(pred_label, true_label):
+    pred_label = np.array(np.round(pred_label), dtype = np.int)
+    true_label = np.array(true_label, dtype = np.int)
+    total_count = len(true_label)
+    correct_count = 0
+    for index in range(total_count):
+        if np.all(pred_label[index] == true_label[index]):
+            correct_count += 1
+    return correct_count / total_count

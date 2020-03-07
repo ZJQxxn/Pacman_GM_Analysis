@@ -15,6 +15,7 @@ import numpy as np
 import copy
 
 from util import np2tensor, tensor2np
+from evaluation import correctRate
 
 
 class Hunt2Graze:
@@ -52,7 +53,6 @@ class Hunt2Graze:
             - pred_label: Prediction of labels.
         '''
         pred_label = []
-        correct_count = 0
         for index, each in enumerate(data):
             # TODO: features
             ghosts_loc = each[0:2]
@@ -66,7 +66,5 @@ class Hunt2Graze:
             else:
                 cur_label = [1, 0]  # Remained hunting mode
             pred_label.append(cur_label)
-            # Count correct estimation
-            if cur_label == label[index]:
-                correct_count += 1
-        return (correct_count / len(label), pred_label)
+        correct_rate = correctRate(pred_label, label)
+        return (correct_rate, pred_label)

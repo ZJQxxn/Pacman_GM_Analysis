@@ -17,7 +17,7 @@ import scipy.io as sio
 
 from Hunt2GrazeModel import Hunt2Graze
 from Graze2HuntModel import Graze2Hunt
-from evaluation import binaryClassError
+from evaluation import binaryClassError, correctRate
 from util import tensor2np, oneHot
 
 
@@ -171,30 +171,42 @@ class Analyzer:
             return np.nan
 
 
-    def G2HAnalyze(self, in_dim, batch_size = 5, lr = 1e-2, enable_cuda = False):
+    def G2HAnalyze(self, in_dim, batch_size = 5, lr = 1e-2, enable_cuda = False, need_train = True, model_file = ''):
         print('Start preprocessing...')
         training_data, training_label, testing_data, testing_label = self._G2HPreprocess()
         print('...Finished preprocessing!\n')
         model = Graze2Hunt(in_dim, batch_size, lr, enable_cuda)
+
+
         # Loss before training
         pred_label = model.test(testing_data)
         estimation_loss = binaryClassError(pred_label, testing_label)
         print('Loss before training {}'.format(estimation_loss))
+
         # Train the model
-        print('=' * 30)
-        print('Train model for analyzing Graze2Hunt:\n', model.network)
-        batch_loss = model.train(training_data, training_label)
-        sio.savemat('train_batch_los.mat',
-                    {'batch_loss': np.array([tensor2np(each) for each in batch_loss]), 'batch_size': batch_size})
-        model.saveModel('save_m/G2H_model.pt')
-        # model = Graze2Hunt(in_dim, batch_size, lr, enable_cuda)
-        # model.loadModel('save_m/G2H_model.pt')
+        if need_train:
+            print('=' * 30)
+            print('Train model for analyzing Graze2Hunt:\n', model.network)
+            batch_loss = model.train(training_data, training_label)
+            sio.savemat('train_batch_los.mat',
+                        {'batch_loss': np.array([tensor2np(each) for each in batch_loss]), 'batch_size': batch_size})
+            model.saveModel('save_m/G2H_model_batch{}.pt'.format(batch_size))
+        else:
+            if '' == model_file:
+                raise ValueError('The filename of the trained model is not defined!')
+            print('=' * 30)
+            print('Load model for analyzing Graze2Hunt:\n', model_file)
+            model = Graze2Hunt(in_dim, batch_size, lr, enable_cuda)
+            model.loadModel(model_file)
+
         # Testing the model after training
         print('\n', '=' * 30)
         print('Testing...')
         pred_label = model.test(testing_data)
         estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_label)
         print('Loss after training {}'.format(estimation_loss))
+        print('Classification correct rate {}'.format(correct_rate))
 
 
     def H2GAnalyze(self):
@@ -218,8 +230,9 @@ if __name__ == '__main__':
     mode_filename = 'data/all_modes.csv'
     a = Analyzer(feature_filename, label_filename, mode_filename)
 
-    # # Analyze grazing to hunting
-    # a.G2HAnalyze(3, batch_size = 1) # With MLP: f(D)
+    # Analyze grazing to hunting
+    a.G2HAnalyze(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
+    # a.G2HAnalyze(3, batch_size = 1, need_train= True) # With MLP: f(D)
 
-    # Analyze hunting to grazeing
-    a.H2GAnalyze()  # With MLP: f(D)
+    # # Analyze hunting to grazeing
+    # a.H2GAnalyze()  # with deterministic model
