@@ -236,5 +236,5 @@ if __name__ == '__main__':
     # a.G2HAnalyze(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
     # a.G2HAnalyze(3, batch_size = 1, need_train= True) # With MLP: f(D)
 
-    # Analyze hunting to grazeing
+    # # Analyze hunting to grazeing
     a.H2GAnalyze()  # with deterministic model

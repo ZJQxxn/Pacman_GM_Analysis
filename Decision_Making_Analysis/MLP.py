@@ -47,7 +47,7 @@ class MLP(nn.Module):
             - output: (2,) ndarray denotes the probability of this input belonging to each class
         '''
         output = self.hidden_layer(input)
-        output = self.relu(output)
+        output = self.relu(output) # TODO: use only one is enough, ReLu or Sigmoid
         output = self.sigmoid(output)
         output = self.softmax(output)
         return output
