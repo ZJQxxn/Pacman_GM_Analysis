@@ -17,6 +17,8 @@ from util import np2tensor, tensor2np
 
 
 def binaryClassError(pred_label, true_label):
+    # pred_label = torch.tensor(pred_label)
+    # true_label = torch.tensor(true_label)
     lossFunc = torch.nn.BCELoss()
     total_loss = 0
     sample_num= len(true_label)

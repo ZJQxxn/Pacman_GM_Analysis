@@ -17,7 +17,7 @@ def extractData(filename):
     :return: VOID
     '''
     data = []
-    with open('df_total_GM.csv', 'r') as file:
+    with open('data/df_total_GM.csv', 'r') as file:
         reader = csv.DictReader(file)
         count = 0
         for row in reader:
@@ -36,8 +36,12 @@ def extractData(filename):
                         row['ghost1Pos'], # Current location of ghost 1
                         row['ghost2Pos'], # Current location of ghost 2
                         row['ghost1_dir'], # Ghost 1 moving direction (up/down/left/right)
-                        row['ghost2_dir'] # Ghost 2 moving direction (up/down/left/right)
-                        ]
+                        row['ghost2_dir'], # Ghost 2 moving direction (up/down/left/right)1
+                        row['status_g'], # Whether grazing (1 for true, 0 for false)
+                        row['status_h1'], # Whether hunting ghost 1 (1 for true, 0 for false)
+                        row['status_h2'], # Whether hunting ghost 2 (1 for true, 0 for false)
+                        row['Step'] # No. of this time step 
+            ]
             data.append(features)
             count += 1
     with open(filename, 'w', newline='') as file:
@@ -56,6 +60,7 @@ def determineLabel(filename, label_filename):
     data = []
     label = []
     hunt_count = 0
+    grazing_count = 0
     with open(filename, 'r') as file:
         reader = csv.reader(file)
         for row in reader:
@@ -63,12 +68,14 @@ def determineLabel(filename, label_filename):
     for index in range(len(data)-1):
         # Determine the label based on the next time step
         next_time = data[index+1]
-        next_time_mode = [0, 1, 'hunting'] if int(float(next_time[8])) == 2 or int(float(next_time[9])) == 2 else [1, 0, 'grazing']
+        next_time_mode = whichMode(next_time[15], next_time[16], next_time[17])
         if [0,1,'hunting'] == next_time_mode:
             hunt_count += 1
+        elif [1, 0, 'grazing'] == next_time_mode:
+            grazing_count += 1
         label.append(next_time_mode)
     print("The number of hunting Pacman is {} \n The number of grazing Pacman is {}".format(
-                        hunt_count, len(data)-1-hunt_count
+        hunt_count, grazing_count
     ))
     with open(label_filename, 'w', newline='') as file:
         writer = csv.writer(file)
@@ -84,7 +91,6 @@ def determineMode(filename, mode_filename):
     '''
     data = []
     modes = []
-    hunt_count = 0
     with open(filename, 'r') as file:
         reader = csv.reader(file)
         for row in reader:
@@ -92,16 +98,25 @@ def determineMode(filename, mode_filename):
     for index in range(len(data)):
         # Determine the modes for the current time step
         cur_time = data[index]
-        cur_time_mode = [0, 1, 'hunting'] if int(float(cur_time[8])) == 2 or int(float(cur_time[9])) == 2 else [1, 0, 'grazing']
-        if [0, 1, 'hunting'] == cur_time_mode:
-            hunt_count += 1
+        cur_time_mode = whichMode(cur_time[15], cur_time[16], cur_time[17])
         modes.append(cur_time_mode)
-    print("The number of hunting Pacman is {} \n The number of grazing Pacman is {}".format(
-                        hunt_count, len(data)-1-hunt_count
-    ))
     with open(mode_filename, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerows(modes)
+
+def whichMode(status_g, status_h1, status_h2):
+    status_g = int(float(status_g))
+    status_h1 = int(float(status_h1))
+    status_h2 = int(float(status_h2))
+    mode = None
+    if not status_g and  not status_h1 and not status_h2:
+        mode = [0, 0, 'escaping']
+    elif status_g:
+        mode = [1, 0, 'grazing']
+    else:
+        mode = [0, 1, 'hunting']
+    return mode
+
 
 
 if __name__ == '__main__':
@@ -109,11 +124,11 @@ if __name__ == '__main__':
     label_filename = 'data/all_labels.csv'
     mode_filename = 'data/all_modes.csv'
 
-    # # Extract features
-    # extractData(filename)
+    # Extract features
+    extractData(filename)
 
-    # # Determine lables based on the next time step
-    # determineLabel(filename, label_filename)
-    #
-    # # Determine modes based for the current time step
-    # determineMode(filename, mode_filename)
+    # Determine lables based on the next time step
+    determineLabel(filename, label_filename)
+
+    # Determine modes based for the current time step
+    determineMode(filename, mode_filename)

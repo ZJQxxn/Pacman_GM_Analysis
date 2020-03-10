@@ -14,6 +14,10 @@ import numpy as np
 import copy
 import csv
 import scipy.io as sio
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+import matplotlib.pyplot as plt
+import random
 
 from Hunt2GrazeModel import Hunt2Graze
 from Graze2HuntModel import Graze2Hunt
@@ -30,6 +34,7 @@ class Analyzer:
         :param label_file: Filename for labels.
         :param mode_file: Filename for modes.
         '''
+        random.seed(a = None)
         self.data = []
         self.labels = []
         self.modes = []
@@ -55,27 +60,33 @@ class Analyzer:
         self.hunting_index = []
         self.grazing_index = []
         for index in range(len(self.data)-1):
-            data = self.data[index]
-            if 'hunting' == self.modes[index][2]:
-                self.hunting_index.append(index)
-            elif 'grazing' == self.modes[index][2]:
-                self.grazing_index.append(index)
-            else:
-                raise ValueError('Undefined Pacman mode! Check you modes file.')
+            # data = self.data[index]the last
+            # Discard the escaping data and the last time step of ach trial
+            if 'escaping' != self.modes[index][2] and self.data[index + 1][18] != '0':
+                if 'hunting' == self.modes[index][2]:
+                    self.hunting_index.append(index)
+                elif 'grazing' == self.modes[index][2]:
+                    self.grazing_index.append(index)
+                else:
+                    raise ValueError('Undefined Pacman mode! Check you modes file.')
         self.hunting_data = self.data[self.hunting_index, :]
         self.grazing_data = self.data[self.grazing_index, :]
-        # TODO: Only use first two of labels, because the thrid is a string
+        # Only use first two of labels, because the thrid is a string
         self.hunting_label = np.array(self.labels[self.hunting_index, :2], dtype = np.float)
         self.grazing_label = np.array(self.labels[self.grazing_index, :2], dtype = np.float)
 
-
-    def _G2HPreprocess(self):
+    # ======================================
+    #           PREPROCESSING
+    # ======================================
+    def _G2HPreprocess(self, need_stan = True):
         '''
         Preprocessing data for analyzing grazing to hunting.
         Processed data have following features:
             - distance between Pacman and ghosts (data[4], data[5])
             - distance between Pacman and the closest dot (data[6])
-            - distance between Pacman and the closest  big dots, computed with Pacman (data[10]) and dot position (data[7]).
+            - distance between Pacman and the closest big dots, computed with Pacman (data[10]) and dot position (data[7]).
+        :var: Input variables
+            - need_stan: bool. Determine whether need to do standardization.
         :return: Preprocessed data matrix.
             - g2h_training_data: Features in training set for graze2hunt analyzing.
             - g2h_training_label: Labels in training set for graze2hunt analyzing.
@@ -94,9 +105,10 @@ class Analyzer:
             preprocessed_data.append(temp[:3])
         preprocessed_data = np.array(preprocessed_data)
         # Normalization
-        for col_index in range(preprocessed_data.shape[1]):
-            preprocessed_data[:, col_index] = (preprocessed_data[:, col_index] - np.nanmean(
-                preprocessed_data[:, col_index])) / np.nanstd(preprocessed_data[:, col_index])
+        if need_stan:
+            for col_index in range(preprocessed_data.shape[1]):
+                preprocessed_data[:, col_index] = (preprocessed_data[:, col_index] - np.nanmean(
+                    preprocessed_data[:, col_index])) / np.nanstd(preprocessed_data[:, col_index])
         # Split into training and testing sets(60% for training and 40% for testing) for each mode
         training_ratio = 0.6
         sample_num = preprocessed_data.shape[0] - 1
@@ -171,7 +183,10 @@ class Analyzer:
             return np.nan
 
 
-    def G2HAnalyze(self, in_dim, batch_size = 5, lr = 1e-2, enable_cuda = False, need_train = True, model_file = ''):
+    # ======================================
+    #           ANALYZING
+    # ======================================
+    def G2HAnalyzeMLP(self, in_dim, batch_size = 5, lr = 1e-2, enable_cuda = False, need_train = True, model_file = ''):
         print('Start preprocessing...')
         training_data, training_label, testing_data, testing_label = self._G2HPreprocess()
         print('...Finished preprocessing!\n')
@@ -210,6 +225,64 @@ class Analyzer:
         print('Classification correct rate {}'.format(correct_rate))
         print('AUC {}'.format(auc))
 
+    def G2HAnalyzeLogistic(self):
+        print('Start preprocessing...')
+        training_data, training_label, testing_data, testing_label = self._G2HPreprocess()
+        print('...Finished preprocessing!\n')
+        # Label: 0 for hunting and 1 for grazing
+        training_ind_label = np.array([list(each).index(0) for each in training_label])
+        testing_label = 1 - testing_label # To satisfy the prediction of logistic regression TODO: more explanation
+        # Train a Logistic Model
+        model = LogisticRegression(
+            penalty = 'l2',# TODO: change to elastic net and use solver 'saga'; l1_ratio
+            random_state = 0,
+            solver = 'lbfgs',
+            fit_intercept = True)
+        model.fit(training_data, training_ind_label)
+        # Testing
+        pred_label = model.predict_proba(testing_data)
+        estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_label)
+        auc = AUC(pred_label, testing_label)
+        print('BCE Loss after training {}'.format(estimation_loss))
+        print('Classification correct rate {}'.format(correct_rate))
+        print('AUC {}'.format(auc))
+        print(
+            model.coef_,
+            model.intercept_
+        )
+        # accuracy = model.score(testing_data, testing_label)
+        # print("Accuracy (Jaccard Score) on testing set: ", accuracy)
+
+    def G2HAnalyzeDTree(self):
+        # In decision tree, don't have to do standardization
+        print('Start preprocessing...')
+        training_data, training_label, testing_data, testing_label = self._G2HPreprocess(need_stan = False) # don't need standardization
+        print('...Finished preprocessing!\n')
+        # Label: 0 for hunting and 1 for grazing
+        training_ind_label = np.array([list(each).index(0) for each in training_label])
+        testing_ind_label = np.array([list(each).index(0) for each in testing_label])
+        testing_label = 1 - testing_label # To satisfy the prediction of logistic regression TODO: more explanation
+        # Train the decision classification tree
+        model = DecisionTreeClassifier(criterion = 'entropy',
+                                       random_state = 0,
+                                       max_depth = 5)
+        trained_tree = model.fit(training_data, training_ind_label)
+        # Testing
+        pred_label = trained_tree.predict_proba(testing_data)
+        estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = np.sum(trained_tree.predict(testing_data) == testing_ind_label) / len(testing_ind_label)
+        auc = AUC(pred_label, testing_label)
+        print('BCE Loss after training {}'.format(estimation_loss))
+        print('Classification correct rate {}'.format(correct_rate))
+        print('AUC {}'.format(auc))
+        # Plot the trained tree
+        plt.figure(figsize=(15,15))
+        plot_tree(trained_tree, filled = True, proportion = True)
+        plt.savefig('trained_tree.pdf')
+        plt.tight_layout()
+        plt.show()
+
 
     def H2GAnalyze(self):
         training_data, training_label, testing_data, testing_label = self._H2GPreprocess()
@@ -234,7 +307,9 @@ if __name__ == '__main__':
 
     # Analyze grazing to hunting
     # a.G2HAnalyze(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
-    # a.G2HAnalyze(3, batch_size = 1, need_train= True) # With MLP: f(D)
+    # a.G2HAnalyzeMLP(3, batch_size = 1, need_train= True) # With MLP: f(D)
+    # a.G2HAnalyzeLogistic() # Train with logistic regression
+    a.G2HAnalyzeDTree() # Train with decision classification tree
 
     # # Analyze hunting to grazeing
-    a.H2GAnalyze()  # with deterministic model
+    # a.H2GAnalyze()  # with deterministic model

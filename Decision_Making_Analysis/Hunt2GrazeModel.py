@@ -47,8 +47,8 @@ class Hunt2Graze:
             raise ValueError('Unknown direction {}!'.format(cur_dir))
         return next_loc
 
+    #TODO: ============================================================================
     def _estimateGhostLocation(self, ghosts_loc, move_dir):
-        #TODO: estimate the location? estimat the path? probablistic model?
         '''
         Estimate the location two ghosts.
         :param ghosts_loc: The current location of two ghosts, with shape of (2,2).
@@ -59,6 +59,59 @@ class Hunt2Graze:
             self._move(ghosts_loc[0], move_dir[0]),
             self._move(ghosts_loc[1], move_dir[1])
         ]
+
+    def _future_position(ghost_pos, ghost_dir, t, pacman_pos): #TODO: check this function; future loc of one ghost?
+        if t == 0:
+            return ghost_pos
+        history = [ghost_pos]
+        for i in range(t // 2):
+            d_dict = {
+                key: val for key, val in maptodict(ghost_pos).items() if val not in history
+            }
+            if i == 0 and ghost_dir in d_dict.keys():
+                ghost_pos = d_dict[ghost_dir]
+            else:
+                dict_df = pd.DataFrame.from_dict(d_dict, orient="index")
+                #             if dict_df.empty:
+                #                 set_trace()
+                #                 print ('empty')
+                dict_df["poss_pos"] = tuple_list(dict_df[[0, 1]].values)
+                try:
+                    ghost_dir, ghost_pos = (
+                        locs_df[(locs_df.pos1 == pacman_pos)]
+                            .merge(dict_df.reset_index(), left_on="pos2", right_on="poss_pos")
+                            .sort_values(by="dis")[["index", "poss_pos"]]
+                            .values[-1]
+                    )
+                except:
+                    return pacman_pos
+            history.append(ghost_pos)
+        return ghost_pos
+
+    def maptodict(ghost_pos):
+        import pandas as pd
+        def tuple_list(l):
+            return [tuple(a) for a in l]
+        map_info = pd.read_csv("map_info_brian.csv")
+        map_info = map_info.assign(pacmanPos=tuple_list(map_info[["Pos1", "Pos2"]].values))
+        map_info_mapping = {
+            "up": "Next1Pos",
+            "left": "Next2Pos",
+            "down": "Next3Pos",
+            "right": "Next4Pos",
+        }
+        d_dict = {}
+        for d in ["up", "down", "right", "left"]:
+            pos = tuple(
+                map_info.loc[
+                    map_info.pacmanPos == ghost_pos,
+                    [map_info_mapping[d] + "1", map_info_mapping[d] + "2"],
+                ].values[0]
+            )
+            if pos != (0, 0):
+                d_dict[d] = pos
+        return d_dict
+    #TODO: ============================================================================
 
 
     def _computePursuingTime(self, pacman_loc, ghosts_path):
