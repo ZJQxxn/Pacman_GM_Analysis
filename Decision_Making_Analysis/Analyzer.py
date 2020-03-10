@@ -16,7 +16,9 @@ import csv
 import scipy.io as sio
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.tree.export import export_text, export_graphviz
 import matplotlib.pyplot as plt
+import graphviz
 import random
 
 from Hunt2GrazeModel import Hunt2Graze
@@ -149,8 +151,10 @@ class Analyzer:
                 [int(i) for i in each[10].strip('()').split(',')], # Pacman location
                 float(each[2]) if each[2] != '' else 0,  # ghost 1 remained scared time
                 float(each[3]) if each[3] != '' else 0,  # ghost 2 remained scared time
-                oneHot(each[13] if each[13] != '' else 'stay', dir_list), # ghost 1 moving direction
-                oneHot(each[14] if each[14] != '' else 'stay', dir_list)  # ghost 2 moving direction
+                # oneHot(each[13] if each[13] != '' else 'stay', dir_list), # ghost 1 moving direction
+                # oneHot(each[14] if each[14] != '' else 'stay', dir_list)  # ghost 2 moving direction
+                each[13],  # ghost 1 moving direction
+                each[14]  # ghost 2 moving direction
             ]
             preprocessed_data.append(temp)
         preprocessed_data = np.array(preprocessed_data)
@@ -203,7 +207,7 @@ class Analyzer:
             print('=' * 30)
             print('Train model for analyzing Graze2Hunt:\n', model.network)
             batch_loss = model.train(training_data, training_label)
-            sio.savemat('train_batch_los.mat',
+            sio.savemat('MLP_train_batch_loss_batch{}.mat'.format(batch_size),
                         {'batch_loss': np.array([tensor2np(each) for each in batch_loss]), 'batch_size': batch_size})
             model.saveModel('save_m/G2H_model_batch{}.pt'.format(batch_size))
         else:
@@ -234,9 +238,10 @@ class Analyzer:
         testing_label = 1 - testing_label # To satisfy the prediction of logistic regression TODO: more explanation
         # Train a Logistic Model
         model = LogisticRegression(
-            penalty = 'l2',# TODO: change to elastic net and use solver 'saga'; l1_ratio
+            penalty = 'elasticnet',# TODO: change to elastic net and use solver 'saga'; l1_ratio
             random_state = 0,
-            solver = 'lbfgs',
+            solver = 'saga',
+            l1_ratio = 0.5,
             fit_intercept = True)
         model.fit(training_data, training_ind_label)
         # Testing
@@ -251,8 +256,10 @@ class Analyzer:
             model.coef_,
             model.intercept_
         )
-        # accuracy = model.score(testing_data, testing_label)
-        # print("Accuracy (Jaccard Score) on testing set: ", accuracy)
+        # Save tranfering rate
+        with open('Logistic_grazing2hunting_rate (ENet).csv', 'w') as file:
+            writer = csv.writer(file)
+            writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1,1)))))
 
     def G2HAnalyzeDTree(self):
         # In decision tree, don't have to do standardization
@@ -266,7 +273,7 @@ class Analyzer:
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion = 'entropy',
                                        random_state = 0,
-                                       max_depth = 5)
+                                       max_depth = 4)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
@@ -276,29 +283,43 @@ class Analyzer:
         print('BCE Loss after training {}'.format(estimation_loss))
         print('Classification correct rate {}'.format(correct_rate))
         print('AUC {}'.format(auc))
+        # Store tree features
+        print('Feature Importances:', trained_tree.feature_importances_)
+        tree_structure =  export_text(trained_tree, feature_names = ['D_g1', 'D_g2', 'D_d'])
+        with open('tree_structure.txt', 'w') as file:
+            file.write(tree_structure)
+        print('Decision Rule:\n', tree_structure)
+        # Store hunting rate
+        with open('DTree_grazing2hunting_rate.csv', 'w') as file:
+            writer = csv.writer(file)
+            writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1,1)))))
         # Plot the trained tree
-        plt.figure(figsize=(15,15))
-        plot_tree(trained_tree, filled = True, proportion = True)
-        plt.savefig('trained_tree.pdf')
-        plt.tight_layout()
-        plt.show()
-
+        node_data = export_graphviz(trained_tree,
+                                    out_file = None,
+                                    feature_names=['D_g1', 'D_g2', 'D_d'],
+                                    class_names=['Hunting', 'Grazing'],
+                                    filled = True,
+                                    proportion = True)
+        graph = graphviz.Source(node_data)
+        graph.render('trained_tree_structure', view = True)
 
     def H2GAnalyze(self):
+        print('Start preprocessing...')
         training_data, training_label, testing_data, testing_label = self._H2GPreprocess()
+        print('...Finished preprocessing!\n')
         all_data = np.vstack((training_data, testing_data))
-        all_lable = np.vstack((training_label, testing_label))
+        all_label = np.vstack((training_label, testing_label))
         m = Hunt2Graze()
         # Use the deterministic model for analysis
-        pred_label = m.deterministicModel(all_data, all_lable)
-        correct_rate = correctRate(pred_label, all_lable)
+        pred_label = m.deterministicModel(all_data, all_label)
+        correct_rate = correctRate(pred_label, all_label)
         print('Classification correct rate {}'.format(correct_rate))
 
 
 
 if __name__ == '__main__':
-    torch.set_num_threads(3)
-    torch.set_num_interop_threads(3)
+    torch.set_num_threads(4)
+    torch.set_num_interop_threads(4)
 
     feature_filename = 'data/extract_feature.csv'
     label_filename = 'data/all_labels.csv'
@@ -309,7 +330,7 @@ if __name__ == '__main__':
     # a.G2HAnalyze(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
     # a.G2HAnalyzeMLP(3, batch_size = 1, need_train= True) # With MLP: f(D)
     # a.G2HAnalyzeLogistic() # Train with logistic regression
-    a.G2HAnalyzeDTree() # Train with decision classification tree
+    # a.G2HAnalyzeDTree() # Train with decision classification tree
 
-    # # Analyze hunting to grazeing
-    # a.H2GAnalyze()  # with deterministic model
+    # Analyze hunting to grazeing
+    a.H2GAnalyze()  # with deterministic model

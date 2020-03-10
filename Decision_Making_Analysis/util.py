@@ -36,3 +36,31 @@ def oneHot(value, val_list):
     else:
         res[val_list.index(value)] = 1
     return res
+
+import pandas as pd
+import numpy as np
+
+def tuple_list(l):
+    return [tuple(a) for a in l]
+
+def maptodict(ghost_pos):
+    # ghost_pos = pd.DataFrame(ghost_pos)
+    map_info = pd.read_csv("data/map_info_brian.csv")
+    map_info = map_info.assign(pacmanPos=tuple_list(map_info[["Pos1", "Pos2"]].values))
+    map_info_mapping = {
+        "up": "Next1Pos",
+        "left": "Next2Pos",
+        "down": "Next3Pos",
+        "right": "Next4Pos",
+    }
+    d_dict = {}
+    for d in ["up", "down", "right", "left"]:
+        pos = tuple(
+            map_info.loc[
+                list(map_info.pacmanPos == tuple(ghost_pos)),
+                [map_info_mapping[d] + "1", map_info_mapping[d] + "2"],
+            ].values[0]
+        )
+        if pos != (0, 0):
+            d_dict[d] = pos
+    return d_dict

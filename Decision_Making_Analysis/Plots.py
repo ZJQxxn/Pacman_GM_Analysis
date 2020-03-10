@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import scipy.io as sio
 import numpy as np
 
-mat_file = sio.loadmat('G2H_train_batch_loss_batch1.mat')
+mat_file = sio.loadmat('MLP_train_batch_loss_batch1.mat')
 # mat_file = sio.loadmat('train_batch_los.mat') # without ReLu
 
 batch_loss = np.array(mat_file['batch_loss']).squeeze()[:500]
