@@ -17,8 +17,25 @@ from MLP import MLP
 
 
 class Graze2Hunt:
+    '''
+    Description:
+        Analyzing grazing to hunting transferring rate with various methods.
+        TODO: put logistic and decision tree here.
+    
+    Variables:
+    
+    Functions:
+    
+    '''
 
     def __init__(self, in_dim, batch_size = 5, lr = 1e-3, enable_cuda = False):
+        '''
+        Initialization
+        :param in_dim: Input dimension.
+        :param batch_size: Training batch size (default = 5).
+        :param lr: Learning rate (default = 1e-3).
+        :param enable_cuda: Whther enables CUDA (default = False).
+        '''
         # Initialize parameters
         self.enable_cuda = enable_cuda
         self.batch_size = batch_size
@@ -27,9 +44,26 @@ class Graze2Hunt:
         self.network = MLP(in_dim, batch_size, lr, self.enable_cuda).double()
         self.network = self.network.cuda() if self.enable_cuda else self.network
 
-    def train(self, train_set, train_label):
+    def _trainBatch(self, batch_data, batch_label):
         '''
-        Train the analyzer.
+        Train with the batch data.
+        :param batch_data: A batch of data. ndarray with shape of (batch_size, number of features)
+        :param batch_label: A batch of label. ndarray with shape of (batch_size, number of features)
+        :return: Total loss for the batch.
+        '''
+        self.network.zero_grad()
+        # Initialization for this batch
+        total_loss = 0
+        for i in range(self.batch_size):
+            input = np2tensor(batch_data[i, :], cuda_enabled = False, gradient_required = False)
+            label = np2tensor(batch_label[i, :], cuda_enabled = False, gradient_required = False)
+            output = self.network(input)
+            total_loss += self.network.lossFunc(output, label)
+        return total_loss
+
+    def trainMLP(self, train_set, train_label):
+        '''
+        Train the analyzer with MLP.
         :param train_set: ndarray with shape of (number of samples, number of features) 
         :param train_label: ndarray with shape of (number of samples, 2). Label denotes whether the next time step, 
                             the Pacman is the in hunting mode or not ([1,0] means still in grazing mode and [0,1] means 
@@ -58,24 +92,7 @@ class Graze2Hunt:
         self.trained = True
         return batch_loss
 
-    def _trainBatch(self, batch_data, batch_label):
-        '''
-        Train with the batch data.
-        :param batch_data: A batch of data. ndarray with shape of (batch_size, number of features)
-        :param batch_label: A batch of label. ndarray with shape of (batch_size, nyumber of  features)
-        :return: Total loss for the batch.
-        '''
-        self.network.zero_grad()
-        # Initialization for this batch
-        total_loss = 0
-        for i in range(self.batch_size):
-            input = np2tensor(batch_data[i, :], cuda_enabled = False, gradient_required = False)
-            label = np2tensor(batch_label[i, :], cuda_enabled = False, gradient_required = False)
-            output = self.network(input)
-            total_loss += self.network.lossFunc(output, label)
-        return total_loss
-
-    def test(self, testing_set):
+    def testMLP(self, testing_set):
         '''
         Validate the network on testing dataset.
         :param testing_set: Testing dataset with shape of (number of testing samples, number of features)
@@ -90,20 +107,20 @@ class Graze2Hunt:
             pred_output.append(tensor2np(output))
         return np.array(pred_output)
 
-    def saveModel(self, filename):
+    def saveMLPModel(self, filename):
         '''
-            Save Pytorch network to a ``.pt'' file .
-            :param filename: The filename.
-            :return: VOID
+        Save Pytorch network to a ``.pt'' file .
+        :param filename: The filename.
+        :return: VOID
         '''
         pars = self.network.state_dict()
         torch.save(pars, filename)
 
-    def loadModel(self, filename):
+    def loadMLPModel(self, filename):
         '''
-            Load Pytorch network from ``.pt'' file.
-            :param filename: Filename of .py file.
-            :return: VOID
+        Load Pytorch network from ``.pt'' file.
+        :param filename: Filename of .py file.
+        :return: VOID
         '''
         pars = torch.load(filename, map_location=torch.device('cpu'))
         self.network.load_state_dict(pars)

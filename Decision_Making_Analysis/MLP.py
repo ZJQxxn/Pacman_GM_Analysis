@@ -18,6 +18,10 @@ class MLP(nn.Module):
             Every neuron uses the ReLu function as the activation function.
             The output is a 2-d vector because we have two classes.
             Use cross entropy loss as the loss function.
+        
+        Variables:
+        
+        Functions:
     '''
     def __init__(self, in_dim, batch_size = 5, lr = 1e-4, enable_cuda = False):
         super(MLP, self).__init__()
@@ -41,7 +45,7 @@ class MLP(nn.Module):
 
     def forward(self, input):
         '''
-        Feddforward.
+        Feedforward.
         :param input: The input with shape of (batch_size, number of features) 
         :return: The output vector:
             - output: (2,) ndarray denotes the probability of this input belonging to each class

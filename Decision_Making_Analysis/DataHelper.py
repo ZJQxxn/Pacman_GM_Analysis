@@ -104,7 +104,18 @@ def determineMode(filename, mode_filename):
         writer = csv.writer(file)
         writer.writerows(modes)
 
+
 def whichMode(status_g, status_h1, status_h2):
+    '''
+    Determin the mode based on some status.
+    :param status_g: Whether in the grazing status.
+    :param status_h1: Whether in the hunting ghost 1 status.
+    :param status_h2: Whether in the hunting ghost 2 status.
+    :return: The mode. 
+             [0,0,'escaping'], 
+             [1,0,'grazing'], 
+             or [0,1,'hunting'].
+    '''
     status_g = int(float(status_g))
     status_h1 = int(float(status_h1))
     status_h2 = int(float(status_h2))

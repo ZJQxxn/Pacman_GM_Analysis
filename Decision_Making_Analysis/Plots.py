@@ -1,3 +1,13 @@
+'''
+Description:
+    Plotting the batch loss for the MLP.
+    
+Author:
+    Jiaqi Zhang <zjqseu@gmail.com>
+    
+Date:
+    2020/3/6
+'''
 import matplotlib.pyplot as plt
 import scipy.io as sio
 import numpy as np

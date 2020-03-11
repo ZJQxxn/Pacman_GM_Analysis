@@ -17,6 +17,12 @@ from util import np2tensor, tensor2np
 
 
 def binaryClassError(pred_label, true_label):
+    '''
+    Compute binary class entropy loss.
+    :param pred_label: Prediction with shape of (number of samples, 2).
+    :param true_label: True labels with shape of (number of samples, 2).
+    :return: Binary class entropy loss.
+    '''
     # pred_label = torch.tensor(pred_label)
     # true_label = torch.tensor(true_label)
     lossFunc = torch.nn.BCELoss()
@@ -30,10 +36,22 @@ def binaryClassError(pred_label, true_label):
 
 
 def AUC(pred_label, true_label):
+    '''
+    Compute AUC value.
+    :param pred_label: Prediction with shape of (number of samples, 2).
+    :param true_label: True labels with shape of (number of samples, 2).
+    :return: AUC value.
+    '''
     auc = metrics.roc_auc_score(true_label, pred_label)
     return auc
 
 def correctRate(pred_label, true_label):
+    '''
+    Compute classification correct rate.
+    :param pred_label: Prediction with shape of (number of samples, 2).
+    :param true_label: True labels with shape of (number of samples, 2).
+    :return: Correct rate.
+    '''
     pred_label = np.array(np.round(pred_label), dtype = np.int)
     true_label = np.array(true_label, dtype = np.int)
     total_count = len(true_label)
