@@ -93,8 +93,10 @@ class Analyzer:
         self.grazing_index = []
         for index in range(len(self.data)-1):
             # data = self.data[index]the last
-            # Discard the escaping data and the last time step of ach trial
-            if 'escaping' != self.modes[index][2] and self.data[index + 1][18] != '0':
+            # Discard the data of escaping mode, with escaping label, and at the last time step of a trial
+            if 'escaping' != self.modes[index][2] \
+                    and 'escaping' != self.modes[index + 1][2] \
+                    and self.data[index + 1][18] != "0":
                 if 'hunting' == self.modes[index][2]:
                     self.hunting_index.append(index)
                 elif 'grazing' == self.modes[index][2]:
@@ -232,6 +234,11 @@ class Analyzer:
         np.random.shuffle(shuffled_index)
         training_index = shuffled_index[:training_num]
         testing_index = shuffled_index[training_num:]
+        # TODO: ===========================================
+        with open('testing_index.csv', 'w') as file:
+            writer = csv.writer(file)
+            writer.writerows(testing_index)
+        # TODO: ===========================================
         h2g_training_data = preprocessed_data[training_index]
         h2g_training_label = self.hunting_label[training_index, :]
         h2g_testing_data = preprocessed_data[testing_index, :]
@@ -417,6 +424,16 @@ class Analyzer:
         with open('Logistic_hunting2grazing_rate (ENet).csv', 'w') as file:
             writer = csv.writer(file)
             writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1, 1)))))
+        # TODO: print out fail trials
+        fail_index = []
+        for index in range(pred_label.shape[0]):
+            if np.all(np.round(pred_label[index,:]) == testing_label[index,:]):
+                continue
+            else:
+                fail_index.append(index)
+        with open('fail_testing_index.csv', 'w') as file:
+            writer = csv.writer(file)
+            writer.writerows(fail_index)
 
     def H2GAnalyzeDTree(self):
         '''
@@ -464,10 +481,10 @@ if __name__ == '__main__':
     # # Analyze grazing to hunting
     # a.G2HAnalyzeMLP(3, batch_size = 1, need_train= False, model_file='save_m/G2H_model_batch1(cr-0.972).pt') # With MLP: f(D)
     # a.G2HAnalyzeMLP(3, batch_size = 1, need_train= True) # With MLP: f(D)
-    a.G2HAnalyzeLogistic(save_accuracy=False) # Train with logistic regression
+    # a.G2HAnalyzeLogistic() # Train with logistic regression
     # a.G2HAnalyzeDTree() # Train with decision classification tree
 
     # # Analyze hunting to grazeing
     # a.H2GAnalyzeDeterministic()  # with deterministic model
-    # a.H2GAnalyzeLogistic() # with logistic regression
+    a.H2GAnalyzeLogistic() # with logistic regression
     # a.H2GAnalyzeDTree() # with decision tree

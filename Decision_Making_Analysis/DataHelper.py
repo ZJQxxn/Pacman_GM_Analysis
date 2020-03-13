@@ -59,7 +59,8 @@ def determineLabel(filename, label_filename):
     '''
     data = []
     label = []
-    hunt_count = 0
+    hunt1_count = 0
+    hunt2_count = 0
     grazing_count = 0
     with open(filename, 'r') as file:
         reader = csv.reader(file)
@@ -69,13 +70,17 @@ def determineLabel(filename, label_filename):
         # Determine the label based on the next time step
         next_time = data[index+1]
         next_time_mode = whichMode(next_time[15], next_time[16], next_time[17])
-        if [0,1,'hunting'] == next_time_mode:
-            hunt_count += 1
-        elif [1, 0, 'grazing'] == next_time_mode:
+        if [0,1,0, 'hunting1'] == next_time_mode:
+            hunt1_count += 1
+        elif [0, 0, 1, 'hunting2'] == next_time_mode:
+            hunt2_count += 1
+        elif [1, 0, 0, 'grazing'] == next_time_mode:
             grazing_count += 1
         label.append(next_time_mode)
-    print("The number of hunting Pacman is {} \n The number of grazing Pacman is {}".format(
-        hunt_count, grazing_count
+    print("The number of hunting1 Pacman is {} \n "
+          "The number of hunting2 Pacman is {} \n "
+          "The number of grazing Pacman is {}".format(
+        hunt1_count, hunt2_count, grazing_count
     ))
     with open(label_filename, 'w', newline='') as file:
         writer = csv.writer(file)
@@ -106,37 +111,41 @@ def determineMode(filename, mode_filename):
 
 
 def whichMode(status_g, status_h1, status_h2):
+    #TODO: change for different settings
     '''
     Determin the mode based on some status.
     :param status_g: Whether in the grazing status.
     :param status_h1: Whether in the hunting ghost 1 status.
     :param status_h2: Whether in the hunting ghost 2 status.
     :return: The mode. 
-             [0,0,'escaping'], 
-             [1,0,'grazing'], 
-             or [0,1,'hunting'].
+             [0,0,0,'escaping'], 
+             [1,0,0,'grazing'], 
+             [0,1,0,'hunting1']
+             or [0,0,1,'hunting2'].
     '''
     status_g = int(float(status_g))
     status_h1 = int(float(status_h1))
     status_h2 = int(float(status_h2))
     mode = None
     if not status_g and  not status_h1 and not status_h2:
-        mode = [0, 0, 'escaping']
+        mode = [0, 0, 0, 'escaping']
     elif status_g:
-        mode = [1, 0, 'grazing']
+        mode = [1, 0, 0, 'grazing']
+    elif status_h1:
+        mode = [0, 1, 0, 'hunting1']
     else:
-        mode = [0, 1, 'hunting']
+        mode = [0, 0, 1, 'hunting2']
     return mode
 
 
 
 if __name__ == '__main__':
     filename = 'data/extract_feature.csv'
-    label_filename = 'data/all_labels.csv'
-    mode_filename = 'data/all_modes.csv'
+    label_filename = 'data/split_all_labels.csv'
+    mode_filename = 'data/split_all_modes.csv'
 
-    # Extract features
-    extractData(filename)
+    # # Extract features
+    # extractData(filename)
 
     # Determine lables based on the next time step
     determineLabel(filename, label_filename)
