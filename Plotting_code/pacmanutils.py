@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import skimage.graph
+from shapely.geometry import Polygon, Point
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -34,7 +35,7 @@ import zipfile
 import sys
 import networkx as nx
 import itertools
-from itertools import groupby, compress
+from itertools import groupby, compress, permutations
 from more_itertools import consecutive_groups
 import pickle
 from IPython.core.debugger import set_trace
@@ -45,6 +46,9 @@ def dedup_list(num):
     num = sorted(num)
     return list(num for num, _ in groupby(num))
 
+
+def select_idx_index(s):
+    return s[s == s.max()].index.values
 
 
 def compare_list(a, b):
@@ -118,6 +122,27 @@ def is_corner(df_restart, map_info):
     return df_restart
 
 
+polys = [
+    [[2, 5], [2, 12], [7, 12], [7, 5]],
+    [[8, 5], [8, 14], [14, 14], [14, 5]],
+    [[27, 5], [22, 5], [22, 12], [27, 12]],
+    [[21, 5], [15, 5], [15, 14], [21, 14]],
+    [[2, 13], [7, 13],[7,15],[9, 15], [9, 23], [2, 23]],
+    [[20, 15], [20, 23], [29, 23], [29, 13],[22,13],[22,15]],
+    [[10, 15], [10, 23], [19, 23], [19, 15]],
+    [[2, 24], [2, 34], [7, 34], [7, 24]],
+    [[8, 24], [8, 34], [14, 34], [14, 24]],
+    [[27, 24], [22, 24], [22, 34], [27, 34]],
+    [[21, 24], [15, 24], [15, 34], [21, 34]]
+]
+
+poly_ext = [Polygon(p).buffer(0.001) for p in polys]
+
+def determine_centroid(poly_list, pos):
+    for p in poly_list:
+        if p.contains(Point(pos)):
+            return (p.centroid.xy[0][-1], p.centroid.xy[1][-1])
+
 fp = FontProperties(fname="Font Awesome 5 Pro-Solid-900.otf")
 symbols = dict(
     ghost="\uf6e2", cookie="\uf563", cat="\uf6be", eye="\uf06e", monkey="\uf6fb", fix="\uf648"
@@ -125,8 +150,32 @@ symbols = dict(
 
 suicide_df = pd.read_csv("suicide_point.csv", delimiter=",")
 map_info = pd.read_csv("map_info_brian.csv")
-map_info = map_info.assign(pacmanPos=tuple_list(map_info[["Pos1", "Pos2"]].values))
-cross_pos = map_info[map_info.NextNum >= 3].pacmanPos.values
+map_info['pos'] = map_info['pos'].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
+map_info["pos_global"] = [
+    determine_centroid(poly_ext, pos) for pos in map_info.pos.values
+]    
+
+
+t_junction_pos = (
+    map_info[
+        ((map_info.Pos1 == 2) | (map_info.Pos1 == 27))
+        & ((map_info.Pos2 <= 12) | (map_info.Pos2 >= 24))
+    ].pos.values.tolist()
+    + map_info[
+        ((map_info.Pos1.between(2, 7)) | (map_info.Pos1.between(22, 27)))
+        & (map_info.Pos2.isin([9, 30]))
+    ].pos.values.tolist()
+)
+
+
+pos_cnts = map_info[map_info.iswall == 0].pos_global.value_counts().sort_index().reset_index()
+pos_cnts = pos_cnts.assign(region="region_" + pos_cnts.index.astype(str))
+
+pos_cnts.columns = ["pos", "pos_count",'region']
+
+
+
+cross_pos = map_info[map_info.NextNum >= 3].pos.values
 cross_pos = list(
     set(cross_pos)
     - set(
@@ -152,10 +201,12 @@ cross_road = tuple_list(
     map_info[(map_info.iswall == 0) & (map_info.NextNum >= 3)][["Pos1", "Pos2"]].values
 )
 
+# pos1 is pacmanPos, pos2 is beans
 locs_df = pd.read_csv("dij_distance_map.csv")
-locs_df.pos1, locs_df.pos2 = (
+locs_df.pos1, locs_df.pos2, locs_df.path = (
     locs_df.pos1.apply(eval),
     locs_df.pos2.apply(eval),
+    locs_df.path.apply(eval)
 )
 handler_text2num = {"up": 1, "down": 2, "left": 3, "right": 4, "None": 0}
 
@@ -164,10 +215,36 @@ adjacent_cross = pd.read_csv("adjacent_cross.csv")
 for c in ["pos1", "pos2", "no_cross_path"]:
     adjacent_cross[c] = adjacent_cross[c].map(eval)
 
+    
+possible_dirs = (
+    map_info[["pos", "Next1Pos2", "Next2Pos2", "Next3Pos2", "Next4Pos2"]]
+    .replace({0: np.nan})
+    .set_index("pos")
+)
+
+possible_dirs.columns = ["up", "left", "down", "right"]
+
+possible_dirs = (
+    possible_dirs.stack()
+    .reset_index(level=1)
+    .groupby(level=0, sort=False)["level_1"]
+    .apply(list)
+    .reset_index().rename(columns={"pos": "p_choice"})
+)
+
+
+turning_pos = (
+    possible_dirs[
+        possible_dirs.level_1.apply(
+            lambda x: sorted(x) not in [["down", "up"], ["left", "right"]]
+        )
+    ].p_choice.values.tolist()
+    + cross_pos
+)
 
 d = dict(
     zip(
-        map_info.pacmanPos,
+        map_info.pos,
         list(
             zip(
                 *[
@@ -471,6 +548,13 @@ def plot_eating_all(df_pos, k, idx, Rewards_dict):
         color="brown",
         s=reward_sel[reward_sel.Step == idx].Reward * 70,
         marker=get_marker(symbols["cookie"]),
+    )
+    plt.scatter(
+        pd.DataFrame(cross_pos)[0] + 0.5,
+        pd.DataFrame(cross_pos)[1] + 0.5,
+        color="blue",
+        s=30,
+        marker='x',
     )
     plt.scatter(
         np.array(df_pos.loc[idx, "pacmanPos"])[0] + 0.5,
@@ -1103,6 +1187,18 @@ def relative_dir(pt_pos, pacman_pos):
         pass
     return l
 
+def vague_relative_dir(a, b):
+    l = relative_dir(a, b)
+    error = np.array(a) - np.array(b)
+    if abs(error[0]) < 4.2:
+        for d in ["left", "right"]:
+            if d in l:
+                l.remove(d)
+    if abs(error[1]) < 1:
+        for d in ["up", "down"]:
+            if d in l:
+                l.remove(d)
+    return l
 
 def if_cause_dead(f, idx):
     if f not in last_trials and abs(Process_dict[f].index.max()) - idx <= 5:
@@ -1479,6 +1575,39 @@ xedges = np.linspace(1, 27, 4).round()
 yedges = np.linspace(4, 33, 4).round()
 
 forbidden_pos = list(map(lambda x: (x, 18), list(range(7)) + list(range(23, 30))))
+
+global_pos_dirs = (
+    pd.DataFrame(list(permutations(pos_cnts.pos, 2)), columns=["pos1", "pos2"])
+    .assign(
+        relative_dir=[
+            vague_relative_dir(i[1], i[0]) for i in permutations(pos_cnts.pos, 2)
+        ]
+    )
+    .sort_values(by="pos1")
+)
+
+global_pos_dirs = (
+    global_pos_dirs.merge(
+        pos_cnts.rename(columns={"region": "pos1_region"}),
+        left_on="pos1",
+        right_on="pos",
+        how="left",
+    )
+    .drop(columns=["pos", "pos_count"])
+    .merge(
+        pos_cnts.rename(columns={"region": "pos2_region"}),
+        left_on="pos2",
+        right_on="pos",
+        how="left",
+    )
+    .drop(columns=["pos", "pos_count"])
+)
+
+locs_df_notunl = locs_df[
+    (~locs_df.pos1.isin(forbidden_pos)) & (~locs_df.pos2.isin(forbidden_pos))
+]
+
+opposite_dirs = {"left": "right", "right": "left", "up": "down", "down": "up"}
 
 def global_pos(pos):
     if not isinstance(pos, float) and pos not in forbidden_pos and pos is not None:

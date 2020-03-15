@@ -1,7 +1,7 @@
 ###==========preps===============
 from pacmanutils import *
 
-df_total = pd.read_csv("df_total.csv", index_col=0).rename(
+df_total = pd.read_csv("df_total_GM.csv", index_col=0).rename(
     columns={"Unnamed: 0": "index"}
 )
 

@@ -1,6 +1,6 @@
 '''
 Description:
-    Check all the time step that convert from hunting to grazing. Find out the common characteristics.
+    Check all the time step that our model fails to detect hunting2grazing transferation.
 
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -27,19 +27,21 @@ with open('data/df_total_GM.csv', 'r') as file:
         ]
         data.append(features)
 
-required_data = []
-selection_index = [0,1,5]
-for index in range(len(data) - 1):
-    this_mode = whichMode(data[index][2], data[index][3], data[index][4])
-    next_mode = whichMode(data[index+1][2], data[index+1][3], data[index+1][4])
+testing_index = []
+with open('save_m/testing_index.csv', 'r') as file:
+    reader  = csv.reader(file)
+    for each in reader:
+        testing_index.append(int(float(each[0])))
 
-    if 'escaping' != this_mode[2] \
-            and 'escaping' != next_mode[2] \
-            and data[index + 1][4] != "0":
-        if 'hunting1' == this_mode[3] or 'hunting2' == this_mode[3]:
-            if 'grazing' == next_mode[3]:
-                required_data.append(np.array(data[index])[selection_index])
+fail_index = []
+with open('save_m/fail_testing_index.csv', 'r') as file:
+    reader = csv.reader(file)
+    for each in reader:
+        fail_index.append(int(float(each[0])))
 
-with open('hunting_abort_index.csv', 'w') as file:
+testing_data = np.array(data)[testing_index]
+fail_data = testing_data[fail_index]
+
+with open('save_m/H2G_fail_data.csv', 'w') as file:
     writer = csv.writer(file)
-    writer.writerows(required_data)
+    writer.writerows(fail_data)

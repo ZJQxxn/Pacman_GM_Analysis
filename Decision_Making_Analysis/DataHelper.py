@@ -127,14 +127,16 @@ def whichMode(status_g, status_h1, status_h2):
     status_h1 = int(float(status_h1))
     status_h2 = int(float(status_h2))
     mode = None
-    if not status_g and  not status_h1 and not status_h2:
-        mode = [0, 0, 0, 'escaping']
-    elif status_g:
-        mode = [1, 0, 0, 'grazing']
-    elif status_h1:
-        mode = [0, 1, 0, 'hunting1']
-    else:
-        mode = [0, 0, 1, 'hunting2']
+    if 1 == status_h1 or 1 == status_h2:
+        if status_h1:
+            mode = [0, 1, 0, 'hunting1']
+        else:
+            mode = [0, 0, 1, 'hunting2']
+    else :
+        if 1 == status_g:
+            mode = [1, 0, 0, 'grazing']
+        else:
+            mode = [0, 0, 0, 'escaping']
     return mode
 
 

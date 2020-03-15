@@ -147,11 +147,12 @@ class SplitAnalyzer:
                 ghost_loc = [[int(float(ghost_loc[index])), int(float(ghost_loc[index + 1]))] for index in range(len(ghost_loc) - 1)]
             else:
                 ghost_loc = []
+            #TODO: distance
             temp = [
                 float(each[4]), # Distance betweeen Pacman and ghost 1
                 float(each[5]), # Distance between Pacman and ghost 2
-                float(each[6]) # Distance between Pacman and the closest dot
-                # np.min(computeLocDis(self.map_distance, pacman_loc, ghost_loc))  # Distance between Pacman and the closest big dot
+                # float(each[6]), # Distance between Pacman and the closest dot
+                float(each[4]) if 1 == self.grazing_label[index][1] else np.min([float(each[4]), float(each[5])]) # combined distance
             ]
             preprocessed_data.append(temp)
             no_hunt2_label.append(self.grazing_label[index, :])
@@ -207,11 +208,12 @@ class SplitAnalyzer:
                              range(len(ghost_loc) - 1)]
             else:
                 ghost_loc = []
+            # TODO: distance
             temp = [
-                float(each[4]),  # Distance betweeen Pacman and ghost 1
-                float(each[5]),  # Distance between Pacman and ghost 2
-                float(each[6])  # Distance between Pacman and the closest dot
-                # np.min(computeLocDis(self.map_distance, pacman_loc, ghost_loc))  # Distance between Pacman and the closest big dot
+                float(each[4]), # Distance betweeen Pacman and ghost 1
+                float(each[5]), # Distance between Pacman and ghost 2
+                # float(each[6]),  # Distance between Pacman and the closest dot
+                float(each[5]) if 1 == self.grazing_label[index][2] else np.min([float(each[4]), float(each[5])])# combined distance
             ]
             preprocessed_data.append(temp)
             no_hunt1_label.append(self.grazing_label[index, :])
@@ -292,8 +294,8 @@ class SplitAnalyzer:
             else:
                 integrated_dist = float(each[5])
             temp = [
-                float(each[4]), # Distance betweeen Pacman and ghost 1
-                float(each[5]), # Distance between Pacman and ghost 2
+                # float(each[4]), # Distance betweeen Pacman and ghost 1
+                # float(each[5]), # Distance between Pacman and ghost 2
                 float(each[6]), # Distance between Pacman and the closest dot
                 integrated_dist
             ]
@@ -388,7 +390,7 @@ class SplitAnalyzer:
         testing_label = 1 - testing_label
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion = 'gini',
-                                       random_state = 0,
+                                       # random_state = 0,
                                        max_depth = 3)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
@@ -401,7 +403,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_g1', 'D_g2', 'D_d'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_1','D_1', 'D_C'])
         with open('G2H1_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -412,7 +414,7 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_g1', 'D_g2', 'D_d'],
+                                    feature_names=['D_1','D_1', 'D_C'],
                                     class_names=['Hunting 1', 'Grazing'],
                                     filled = True,
                                     proportion = True)
@@ -474,8 +476,7 @@ class SplitAnalyzer:
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion = 'gini',
                                        # random_state = 0,
-                                       max_depth = 3,
-                                       class_weight = {1:300, 0:1})
+                                       max_depth = 3)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
@@ -487,7 +488,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_g1', 'D_g2', 'D_d'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_1','D_1', 'D_C'])
         with open('G2H2_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -498,7 +499,7 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_g1', 'D_g2', 'D_d'],
+                                    feature_names=['D_1','D_1', 'D_C'],
                                     class_names=['Hunting 2', 'Grazing'],
                                     filled = True,
                                     proportion = True)
@@ -519,10 +520,8 @@ class SplitAnalyzer:
         testing_label = 1 - testing_label  # To satisfy the prediction of logistic regression TODO: more explanation
         # Train a Logistic Model
         model = LogisticRegression(
-            penalty='elasticnet',
-            random_state=0,
-            solver='saga',
-            l1_ratio=0.5,
+            penalty='l2',
+            solver='lbfgs',
             fit_intercept=True)
         model.fit(training_data, training_ind_label)
         # Testing
@@ -568,8 +567,7 @@ class SplitAnalyzer:
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion = 'gini',
                                        # random_state = 0,
-                                       max_depth = 4,
-                                       class_weight={0:1, 1:60})
+                                       max_depth = 3)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
@@ -581,7 +579,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_g1', 'D_g2', 'D_d', 'D_I'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_d', 'D_I'])
         with open('G2HIntegrate_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -592,7 +590,7 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_g1', 'D_g2', 'D_d', 'D_I'],
+                                    feature_names=['D_d', 'D_I'],
                                     class_names=['Hunting', 'Grazing'],
                                     filled = True,
                                     proportion = True)
@@ -610,9 +608,11 @@ if __name__ == '__main__':
     mode_filename = 'data/split_all_modes.csv'
     a = SplitAnalyzer(feature_filename, label_filename, mode_filename)
     # # Analyze grazing to hunting
+
     # a.G2H1AnalyzeLogistic()
     # a.G2H2AnalyzeLogistic()
     # a.G2IntegrateHAnalyzeLogistic()
+
     # a.G2H1AnalyzeDTree()
-    # a.G2H2AnalyzeDTree()
+    a.G2H2AnalyzeDTree()
     # a.G2IntegrateHAnalyzeDTree()

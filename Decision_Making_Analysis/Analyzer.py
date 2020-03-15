@@ -237,7 +237,7 @@ class Analyzer:
         # TODO: ===========================================
         with open('testing_index.csv', 'w') as file:
             writer = csv.writer(file)
-            writer.writerows(testing_index)
+            writer.writerows(testing_index.reshape(-1,1))
         # TODO: ===========================================
         h2g_training_data = preprocessed_data[training_index]
         h2g_training_label = self.hunting_label[training_index, :]
@@ -433,7 +433,7 @@ class Analyzer:
                 fail_index.append(index)
         with open('fail_testing_index.csv', 'w') as file:
             writer = csv.writer(file)
-            writer.writerows(fail_index)
+            writer.writerows(np.index(fail_index).reshape(-1,1))
 
     def H2GAnalyzeDTree(self):
         '''
