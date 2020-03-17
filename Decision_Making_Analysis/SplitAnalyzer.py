@@ -1,7 +1,7 @@
 '''
 Description:
     Analyze the transitive probability between hunting and grazing mode. 
-    Hunting ghost 1 and hunting ghost 2 is considered as two diefferent modes.  
+    Hunting ghost 1 and hunting ghost 2 is considered as two different modes.  
 
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -149,7 +149,7 @@ class SplitAnalyzer:
                 ghost_loc = []
             #TODO: distance
             temp = [
-                float(each[4]), # Distance betweeen Pacman and ghost 1
+                # float(each[4]), # Distance betweeen Pacman and ghost 1
                 float(each[5]), # Distance between Pacman and ghost 2
                 # float(each[6]), # Distance between Pacman and the closest dot
                 float(each[4]) if 1 == self.grazing_label[index][1] else np.min([float(each[4]), float(each[5])]) # combined distance
@@ -211,7 +211,7 @@ class SplitAnalyzer:
             # TODO: distance
             temp = [
                 float(each[4]), # Distance betweeen Pacman and ghost 1
-                float(each[5]), # Distance between Pacman and ghost 2
+                # float(each[5]), # Distance between Pacman and ghost 2
                 # float(each[6]),  # Distance between Pacman and the closest dot
                 float(each[5]) if 1 == self.grazing_label[index][2] else np.min([float(each[4]), float(each[5])])# combined distance
             ]
@@ -291,12 +291,14 @@ class SplitAnalyzer:
                 integrated_dist = np.min([float(each[4]), float(each[5])])
             elif hunt1_flag and not hunt2_flag:
                 integrated_dist = float(each[4])
-            else:
+            elif not hunt1_flag and hunt2_flag:
                 integrated_dist = float(each[5])
+            else:
+                integrated_dist = np.mean([float(each[4]), float(each[5])])
             temp = [
-                # float(each[4]), # Distance betweeen Pacman and ghost 1
-                # float(each[5]), # Distance between Pacman and ghost 2
-                float(each[6]), # Distance between Pacman and the closest dot
+                float(each[4]), # Distance betweeen Pacman and ghost 1
+                float(each[5]), # Distance between Pacman and ghost 2
+                # float(each[6]), # Distance between Pacman and the closest dot
                 integrated_dist
             ]
             preprocessed_data.append(temp)
@@ -403,7 +405,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_1','D_1', 'D_C'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_2', 'D_C'])
         with open('G2H1_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -414,7 +416,7 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_1','D_1', 'D_C'],
+                                    feature_names=['D_2', 'D_C'],
                                     class_names=['Hunting 1', 'Grazing'],
                                     filled = True,
                                     proportion = True)
@@ -488,7 +490,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_1','D_1', 'D_C'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_1','D_C'])
         with open('G2H2_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -499,7 +501,7 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_1','D_1', 'D_C'],
+                                    feature_names=['D_1','D_C'],
                                     class_names=['Hunting 2', 'Grazing'],
                                     filled = True,
                                     proportion = True)
@@ -565,9 +567,9 @@ class SplitAnalyzer:
         # Because after preprocessing, class 0 stands for grazing, thus, need reversed.
         testing_label = 1 - testing_label
         # Train the decision classification tree
-        model = DecisionTreeClassifier(criterion = 'gini',
+        model = DecisionTreeClassifier(criterion = 'entropy',
                                        # random_state = 0,
-                                       max_depth = 3)
+                                       max_depth = 4)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
@@ -579,7 +581,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_d', 'D_I'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_1', 'D_2','D_C'])
         with open('G2HIntegrate_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -590,7 +592,7 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_d', 'D_I'],
+                                    feature_names=['D_1', 'D_2','D_C'],
                                     class_names=['Hunting', 'Grazing'],
                                     filled = True,
                                     proportion = True)
@@ -614,5 +616,5 @@ if __name__ == '__main__':
     # a.G2IntegrateHAnalyzeLogistic()
 
     # a.G2H1AnalyzeDTree()
-    a.G2H2AnalyzeDTree()
-    # a.G2IntegrateHAnalyzeDTree()
+    # a.G2H2AnalyzeDTree()
+    a.G2IntegrateHAnalyzeDTree()
