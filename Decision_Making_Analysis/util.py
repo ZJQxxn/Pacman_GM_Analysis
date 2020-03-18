@@ -154,3 +154,10 @@ def computeLocDis(map_distance, pacman_loc, other_loc):
             distance.append(map_distance[pacman_loc][other_loc[index]])
     return distance
 
+def str2List(the_str):
+    if '' == the_str:
+        res = []
+    else:
+        res = the_str.replace('[','').replace(']','').replace('(','').replace(')','').split(',')
+        res = [(res[index], res[index+1]) for index in range(len(res)-1)]
+    return res
