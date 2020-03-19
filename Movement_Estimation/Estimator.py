@@ -2,7 +2,7 @@
 Description:
     The abstract class for estimator of all conditions.
 
-uthor:
+Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
@@ -52,21 +52,21 @@ class Estimator(ABC):
         '''
         pass
 
-    @abstractmethod
-    def localEstimation(self):
-        '''
-        The estimation process with local features.
-        :return: Correct rate (float).
-        '''
-        pass
-
-    @abstractmethod
-    def globalEstimation(self):
-        '''
-        The estimation process with global features.
-        :return: Correct rate (float).
-        '''
-        pass
+    # @abstractmethod
+    # def localEstimation(self):
+    #     '''
+    #     The estimation process with local features.
+    #     :return: Correct rate (float).
+    #     '''
+    #     pass
+    #
+    # @abstractmethod
+    # def globalEstimation(self):
+    #     '''
+    #     The estimation process with global features.
+    #     :return: Correct rate (float).
+    #     '''
+    #     pass
 
     @abstractmethod
     def plotRes(self):
