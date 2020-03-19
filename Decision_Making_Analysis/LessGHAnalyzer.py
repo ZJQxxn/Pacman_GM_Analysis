@@ -68,6 +68,7 @@ class LessGHAnalyzer:
         self.labels = np.array(self.labels)
         self.modes = np.array(self.modes)
 
+
     # ======================================
     #           PREPROCESSING
     # ======================================
@@ -101,10 +102,13 @@ class LessGHAnalyzer:
                 combined_dist = ghost2_dist
             elif 'hunting_all' == this_label:
                 #TODO: min or mean? (min is better)
-                # combined_dist = np.mean([ghost1_dist, ghost2_dist])
-                combined_dist = np.min([ghost1_dist, ghost2_dist])
+                combined_dist = np.mean([ghost1_dist, ghost2_dist])
+                # combined_dist = np.min([ghost1_dist, ghost2_dist])
             else:
-                combined_dist = np.min([ghost1_dist, ghost2_dist])
+                # TODO: min or mean? (min is better)
+                combined_dist = np.mean([ghost1_dist, ghost2_dist])
+                # combined_dist = np.min([ghost1_dist, ghost2_dist])
+
             temp = [
                 combined_dist,
                 dot_distance
@@ -194,7 +198,7 @@ class LessGHAnalyzer:
         testing_label = 1 - testing_label
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion='gini',
-                                       max_depth=4)
+                                       max_depth=3)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
