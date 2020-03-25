@@ -102,7 +102,7 @@ def tuple_list(l):
     return [tuple(a) for a in l]
 
     
-
+# TODO(Q): what is df_restart
 def is_corner(df_restart, map_info):
     map_info["is_corner"] = (
         map_info.loc[:, ["Next1Pos2", "Next2Pos2", "Next3Pos2", "Next4Pos2"]]
@@ -148,14 +148,14 @@ symbols = dict(
     ghost="\uf6e2", cookie="\uf563", cat="\uf6be", eye="\uf06e", monkey="\uf6fb", fix="\uf648"
 )
 
-suicide_df = pd.read_csv("suicide_point.csv", delimiter=",")
-map_info = pd.read_csv("map_info_brian.csv")
+suicide_df = pd.read_csv("../common_data/suicide_point.csv", delimiter=",")
+map_info = pd.read_csv("../common_data/map_info_brian.csv")
 map_info['pos'] = map_info['pos'].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
 map_info["pos_global"] = [
     determine_centroid(poly_ext, pos) for pos in map_info.pos.values
 ]    
 
-
+#TODO: the position of T-juntino (take out this part)
 t_junction_pos = (
     map_info[
         ((map_info.Pos1 == 2) | (map_info.Pos1 == 27))
@@ -171,10 +171,10 @@ t_junction_pos = (
 pos_cnts = map_info[map_info.iswall == 0].pos_global.value_counts().sort_index().reset_index()
 pos_cnts = pos_cnts.assign(region="region_" + pos_cnts.index.astype(str))
 
-pos_cnts.columns = ["pos", "pos_count",'region']
+pos_cnts.columns = ["pos", "pos_count",'region'] #TODO(Q): with shape of (11, 3)
 
 
-
+#TODO: need cross part?
 cross_pos = map_info[map_info.NextNum >= 3].pos.values
 cross_pos = list(
     set(cross_pos)
@@ -202,7 +202,7 @@ cross_road = tuple_list(
 )
 
 # pos1 is pacmanPos, pos2 is beans
-locs_df = pd.read_csv("dij_distance_map.csv")
+locs_df = pd.read_csv("../common_data/dij_distance_map.csv")
 locs_df.pos1, locs_df.pos2, locs_df.path = (
     locs_df.pos1.apply(eval),
     locs_df.pos2.apply(eval),
@@ -211,7 +211,7 @@ locs_df.pos1, locs_df.pos2, locs_df.path = (
 handler_text2num = {"up": 1, "down": 2, "left": 3, "right": 4, "None": 0}
 
 
-adjacent_cross = pd.read_csv("adjacent_cross.csv")
+adjacent_cross = pd.read_csv("../common_data/adjacent_cross.csv")
 for c in ["pos1", "pos2", "no_cross_path"]:
     adjacent_cross[c] = adjacent_cross[c].map(eval)
 
@@ -1271,7 +1271,7 @@ def from_dict2df(ten_points_pac):
     return pd.DataFrame({"file": idx_l, "index": item_l})
 
 
-with open("ten_points_pac.json", "r") as f:
+with open("../common_data/ten_points_pac.json", "r") as f:
     ten_points_pac = json.load(f)
 ten_points_df = from_dict2df(ten_points_pac)
 
