@@ -9,11 +9,11 @@ Date:
     2020/3/19
 '''
 import numpy as np
-import networkx as nx
 import pandas as pd
-import itertools
-from Movement_Estimation.EstimationUtils import *
-from EstimationUtils.utils import *
+import sys
+
+sys.path.append('./')
+from EstimationUtils import *
 
 
 # =====================================
@@ -135,7 +135,6 @@ def localEnergizerDir(all_data):
     return energizer_dir
 
 
-
 # =====================================
 #          Global Features
 # =====================================
@@ -164,7 +163,7 @@ def _countBeans(each_data, region_info):
 
 def globalBeanNum(all_data):
     # Find all the relative regions of the Pacman
-    all_data = all_data.iloc[:500,:] #TODO: for saving time
+    # all_data = all_data.iloc[:500,:] #TODO: for saving time
     region_info = map_info[["pos", "region_index"]]
     pacman_region = all_data[["file", "index", "pacmanPos", "beans"]].merge(
         region_info[["pos", "region_index"]],
@@ -250,9 +249,85 @@ def globalGhostDir(all_data):
     return ghosts_dir
 
 
-def globalEnergizerDir(all_data):
+def globalNearestEnergizerDir(all_data):
+    # Find the nearest energizer
+    path_data = all_data[["file", "index", "pacmanPos", "energizers"]].merge(
+        locs_df[["pos1", "pos2", "dis"]],
+        left_on="pacmanPos",
+        right_on="pos1",
+        how="left"
+    ).drop(columns=["pos1"]).rename(columns={"pos2": "destination_pos"})
+    # Take out distance of energizers
+    all_energizers = path_data.assign(
+        is_energizer=path_data.apply(
+            lambda x: x.destination_pos in x.energizers if not isinstance(x.energizers, float) else False,
+            axis=1)
+    )
+    all_energizers = (
+        all_energizers.loc[all_energizers.is_energizer == True, :]
+            .drop(columns=["energizers", "is_energizer"])
+            .rename(columns = {"destination_pos": "energizer_pos"})
+    )
+    # Find out the nearest energizer
+    nearest_energizer = (
+        all_energizers.groupby(["file", "index", "pacmanPos"])
+            .apply(lambda x: x.energizer_pos.iloc[np.argmin(x.dis.values)])
+            .reset_index()
+    ).rename(columns={0: "nearest_energizer_pos"})
+    # Determine the region of the nearest energizer
     region_info = map_info[["pos", "region_index", "pos_global"]]
+    nearest_energizer_region_pos = (
+        nearest_energizer.merge(
+            region_info,
+            left_on = ["nearest_energizer_pos"],
+            right_on = ["pos"],
+            how = "left"
+        )
+            .drop(columns = ["pos", "region_index", "nearest_energizer_pos"])
+            .rename(columns = {"pos_global": "nearest_energizer_region_pos"})
+    )
+    # Determine the region of the Pacman
+    pacman_region_pos = (
+        nearest_energizer.merge(
+            region_info,
+            left_on=["pacmanPos"],
+            right_on=["pos"],
+            how="left"
+        )
+            .drop(columns=["pos", "region_index", "nearest_energizer_pos"])
+            .rename(columns={"pos_global": "pacman_region_pos"})
+    )
+    # Compute the direction of the region of nearest energizer
+    integrate_data = (
+        nearest_energizer_region_pos.merge(
+            pacman_region_pos,
+            on=["file", "index", "pacmanPos"],
+            how="left"
 
+        )[["file", "index", "pacman_region_pos", "nearest_energizer_region_pos"]]
+    )
+    nearest_energizer_dir = (
+        integrate_data.assign(
+            global_energizer_dir = integrate_data.apply(
+                lambda x: relative_dir(x.nearest_energizer_region_pos, x.pacman_region_pos)
+                if not pd.isna(x.nearest_energizer_region_pos) and not pd.isna(x.pacman_region_pos) else np.nan,
+                axis = 1
+            )
+        )[["file", "index", "global_energizer_dir"]]
+    )
+    nearest_energizer_dir = all_data[["file", "index"]].merge(
+        nearest_energizer_dir,
+        on = ["file", "index"],
+        how = "left"
+    ).drop(columns = ["pacman_region_pos", "nearest_energizer_region_pos"])
+    return nearest_energizer_dir
+
+
+def globalAllEnergizerDir(all_data):
+    #TODO: how to represent all the energizers
+    # Determin the region of all the energizers
+    region_info = map_info[["pos", "region_index", "pos_global"]]
+    # Determine the energizer direction
 
 
 # =====================================
@@ -282,15 +357,169 @@ def readData(filename):
 
 # MAIN FUNCTION
 if __name__ == '__main__':
-    print('Start reading data...')
+    print("Finished all the initialization!")
+    print("="*20, "ALL NORMAL", "="*20)
+    # Extract features for all normal data
+    print('Start reading all normal data...')
     all_normal_data = readData('./extracted_data/normal_all_data.csv')
     print('Size of the data', all_normal_data.shape)
     # # Extract local features
-    # local_bean_num = localBeanNum(all_normal_data)
-    # local_ghost_dir = localGhostDir(all_normal_data)\
-    # local_energizer_dir = localEnergizerDir(all_normal_data)
-
+    local_bean_num = localBeanNum(all_normal_data)
+    print("Finished bean num...")
+    local_ghost_dir = localGhostDir(all_normal_data)
+    print("Finished ghost dir...")
+    local_energizer_dir = localEnergizerDir(all_normal_data)
+    print("Finished energizer dir...")
+    all_local_feature = local_bean_num.merge(
+        local_ghost_dir,
+        on = ["file", "index"],
+        how = "left"
+    ).merge(
+        local_energizer_dir,
+        on = ["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/normal_local_features.csv')
+    print("Finished saving local features!")
     # Extract global features
-    # global_bean_num = globalBeanNum(all_normal_data)
-    # global_ghost_dir = globalGhostDir(all_normal_data)
-    global_energizer_dir = globalEnergizerDir(all_normal_data)
+    global_bean_num = globalBeanNum(all_normal_data)
+    print("Finished bean num...")
+    global_ghost_dir = globalGhostDir(all_normal_data)
+    print("Finished ghost dir...")
+    global_energizer_dir = globalNearestEnergizerDir(all_normal_data)
+    print("Finished energizer dir...")
+    all_global_feature = global_bean_num.merge(
+        global_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        global_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/normal_global_features.csv')
+    print("Finished saving global features!")
+
+    # ===============================================
+    # ===============================================
+
+    print("="*20, "END GAME", "="*20)
+    # Extract features for end-game data
+    print('Start reading end-game data...')
+    end_game_data = readData('./extracted_data/end_game_data.csv')
+    print('Size of the data', end_game_data.shape)
+    # # Extract local features
+    local_bean_num = localBeanNum(end_game_data)
+    print("Finished bean num...")
+    local_ghost_dir = localGhostDir(end_game_data)
+    print("Finished ghost dir...")
+    local_energizer_dir = localEnergizerDir(end_game_data)
+    print("Finished energizer dir...")
+    all_local_feature = local_bean_num.merge(
+        local_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        local_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/end_game_local_features.csv')
+    print("Finished saving local features!")
+    # Extract global features
+    global_bean_num = globalBeanNum(end_game_data)
+    print("Finished bean num...")
+    global_ghost_dir = globalGhostDir(end_game_data)
+    print("Finished ghost dir...")
+    global_energizer_dir = globalNearestEnergizerDir(end_game_data)
+    print("Finished energizer dir...")
+    all_global_feature = global_bean_num.merge(
+        global_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        global_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/end_game_global_features.csv')
+
+    # ===============================================
+    # ===============================================
+
+    print("=" * 20, "T JUNCTION", "=" * 20)
+    # Extract features for end-game data
+    print('Start reading T-junction data...')
+    T_junction_data = readData('./extracted_data/T_junction_data.csv')
+    print('Size of the data', T_junction_data.shape)
+    # # Extract local features
+    local_bean_num = localBeanNum(T_junction_data)
+    print("Finished bean num...")
+    local_ghost_dir = localGhostDir(T_junction_data)
+    print("Finished ghost dir...")
+    local_energizer_dir = localEnergizerDir(T_junction_data)
+    print("Finished energizer dir...")
+    all_local_feature = local_bean_num.merge(
+        local_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        local_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/T_junction_local_features.csv')
+    print("Finished saving local features!")
+    # Extract global features
+    global_bean_num = globalBeanNum(T_junction_data)
+    print("Finished bean num...")
+    global_ghost_dir = globalGhostDir(T_junction_data)
+    print("Finished ghost dir...")
+    global_energizer_dir = globalNearestEnergizerDir(T_junction_data)
+    print("Finished energizer dir...")
+    all_global_feature = global_bean_num.merge(
+        global_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        global_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/T_junction_global_features.csv')
+
+    # ===============================================
+    # ===============================================
+
+    print("=" * 20, "ENERGIZER", "=" * 20)
+    # Extract features for end-game data
+    print('Start reading energizer data...')
+    energizer_data = readData('./extracted_data/energizer_data.csv')
+    print('Size of the data', energizer_data.shape)
+    # # Extract local features
+    local_bean_num = localBeanNum(energizer_data)
+    print("Finished bean num...")
+    local_ghost_dir = localGhostDir(energizer_data)
+    print("Finished ghost dir...")
+    local_energizer_dir = localEnergizerDir(energizer_data)
+    print("Finished energizer dir...")
+    all_local_feature = local_bean_num.merge(
+        local_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        local_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/energizer_local_features.csv')
+    print("Finished saving local features!")
+    # Extract global features
+    global_bean_num = globalBeanNum(energizer_data)
+    print("Finished bean num...")
+    global_ghost_dir = globalGhostDir(energizer_data)
+    print("Finished ghost dir...")
+    global_energizer_dir = globalNearestEnergizerDir(energizer_data)
+    print("Finished energizer dir...")
+    all_global_feature = global_bean_num.merge(
+        global_ghost_dir,
+        on=["file", "index"],
+        how="left"
+    ).merge(
+        global_energizer_dir,
+        on=["file", "index"]
+    )
+    all_local_feature.to_csv('./extracted_data/energizer_global_features.csv')

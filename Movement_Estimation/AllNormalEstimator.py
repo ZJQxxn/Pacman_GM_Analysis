@@ -15,8 +15,7 @@ from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.tree.export import export_text, export_graphviz
 
 from Estimator import Estimator
-from Estimator import oneHot
-from Estimator import locs_df
+from EstimationUtils import oneHot
 
 class AllNormalEstimatior(Estimator):
 

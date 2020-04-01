@@ -36,6 +36,7 @@ class Estimator(ABC):
         '''
         super(Estimator, self).__init__()
         self.data = pd.read_csv(filename)
+        #TODO: change this eval procedure
         for c in [
             "ghost1Pos",
             "ghost2Pos",
@@ -50,15 +51,7 @@ class Estimator(ABC):
             "energizers",
             "nearrwdPos",
             "ghost1_wrt_pacman",
-            "beans",
-            # "nearbean_dir_big",
-            # "energizer_dirs",
-            # "energizer_dirs_big",
-            # "next_possible_dir",
-            # "next_cross",
-            # "nearbean_dir_global",
-            # "energizer_dirs_global",
-            # "ghost_in_cross",
+            "beans"
         ]:
             self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
         print("Finished initialization!")

@@ -162,6 +162,7 @@ def selectEnergizerData(feature_filename):
         energizer_data.apply(lambda x: x.name in x[0] and len(x[0]) > 15, 1)
     ]
     print("The shape of energizer data is ", energizer_data.shape, "\n")
+    energizer_data.to_csv("./extracted_data/energizer_data.csv")
 
 
 def _from_dict2df(ten_points_pac):
