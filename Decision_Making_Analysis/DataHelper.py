@@ -9,6 +9,8 @@ Date:
     2020/3/5
 '''
 import csv
+import pandas as pd
+import numpy as np
 from util import str2List
 
 
@@ -272,6 +274,77 @@ def whichGHMode(time_step_data):
             mode = [0, 0, 0, 'escaping']
     return mode
 
+# ==================================================================
+#               EXTRACT DATA FROM PRE-HUNT TO HUNT
+# ==================================================================
+def extractPreHuntData(feature_filename):
+    data = pd.read_csv('../common_data/df_total_GM.csv')
+
+    # import seaborn as sns
+    # import matplotlib.pyplot as plt
+    # sns.distplot(
+    #     data.loc[:, ['distance1', 'distance2']].mean(axis = 1), color="#1BA3F9")
+    # plt.xlabel('Average Ghosts Distance', fontsize=30)
+    # plt.xticks(fontsize=20)
+    # plt.ylabel('count', fontsize=30)
+    # plt.yticks(fontsize=20)
+    # plt.show()
+    # plt.clf()
+    # sns.distplot(
+    #     data.loc[data.rwd_pac_distance <= 5, ['rwd_pac_distance']], color="#1BA3F9")
+    # plt.xlabel('Nerest Beans Distance', fontsize=30)
+    # plt.xticks(fontsize=20)
+    # plt.ylabel('count', fontsize=30)
+    # plt.yticks(fontsize=20)
+    # plt.show()
+
+    scared_time = max(data.remain_scared_time1.max(),data.remain_scared_time2.max())
+    prehunt_data = data.groupby(by = 'file').apply(
+        lambda x: filterPrehunt(x, scared_time)
+    ).loc[:,['mean_ghost1_distance', 'mean_ghost2_distance', 'mean_rwd_distance', 'total_scared_time']]
+    prehunt_data.to_csv(feature_filename)
+    print('The shape of pre-hunt data is ', prehunt_data.shape)
+
+
+def filterPrehunt(trial_data, total_scared_time):
+    step_num = trial_data.shape[0]
+    energizer_point = []
+    for index in range(step_num - 1):
+        step_data = trial_data.iloc[index]
+        next_step_data = trial_data.iloc[index + 1]
+        if pd.isna(step_data.energizers) or pd.isna(next_step_data.energizers) or 0 == len(step_data.energizers):
+            break
+        if len(next_step_data.energizers) < len(step_data.energizers):
+            energizer_point.append(index)
+    if 0 == len(energizer_point):
+        return pd.DataFrame()
+    else:
+        energizer_point = [each for each in energizer_point
+                           if not pd.isna(trial_data.remain_scared_time1.iloc[each])
+                           and not pd.isna(trial_data.remain_scared_time2.iloc[each])]
+        offset = 3
+        start_index = [each - offset if each - offset > 0 else 0 for each in energizer_point]
+        if 0 in start_index:
+            start_index.remove(0)
+        # Select pre-hunt data
+        if len(start_index) == 0:
+            return pd.DataFrame()
+        else:
+            prehunt_data = pd.DataFrame()
+            for each in start_index:
+                mean_ghost1_dist = trial_data.distance1.iloc[range(each, each+offset)].mean()
+                mean_ghost2_dist = trial_data.distance1.iloc[range(each, each+offset)].mean()
+                mean_rwd_dist = trial_data.rwd_pac_distance.iloc[range(each, each+offset)].mean()
+                temp_prehunt = pd.DataFrame(
+                    pd.DataFrame([mean_ghost1_dist, mean_ghost2_dist, mean_rwd_dist, total_scared_time]).values.T
+                )
+                temp_prehunt.columns = ['mean_ghost1_distance', 'mean_ghost2_distance',
+                                        'mean_rwd_distance', 'total_scared_time']
+                # if trial_data.status_h1.iloc[each+offset] == 1 or trial_data.status_h2.iloc[each+offset] == 1:
+                if trial_data.status_g.iloc[each + offset] == 1 \
+                        and (trial_data.status_h1.iloc[each+offset] == 1 or trial_data.status_h2.iloc[each+offset] == 1):
+                    prehunt_data = prehunt_data.append(temp_prehunt)
+            return prehunt_data
 
 if __name__ == '__main__':
     filename = 'extracted_data/extract_feature.csv'
@@ -280,6 +353,7 @@ if __name__ == '__main__':
     less_feature_filename = 'extracted_data/less_G2H_feature.csv'
     less_label_filename = 'extracted_data/less_G2H_label.csv'
     less_mode_filename = 'extracted_data/less_G2H_mode.csv'
+    prehunt_feature_filename = 'extracted_data/prehunt_G2H_feature.csv'
 
     # # Extract features
     # extractData(filename)
@@ -290,4 +364,8 @@ if __name__ == '__main__':
     # # Determine modes based for the current time step
     # determineMode(filename, mode_filename)
 
-    extractGHData(less_feature_filename, less_label_filename, less_mode_filename)
+    # # Extract useful G2H data
+    # extractGHData(less_feature_filename, less_label_filename, less_mode_filename)
+
+    # Extract only pre-hunt data
+    extractPreHuntData(prehunt_feature_filename)

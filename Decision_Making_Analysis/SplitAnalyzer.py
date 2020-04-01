@@ -20,6 +20,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.tree.export import export_text, export_graphviz
 import matplotlib.pyplot as plt
+import seaborn as sns
 import graphviz
 import random
 
@@ -52,7 +53,7 @@ class SplitAnalyzer:
         self.labels = []
         self.modes = []
         # Map info
-        self.locs_df = pd.read_csv("data/dij_distance_map.csv")
+        self.locs_df = pd.read_csv("../common_data/dij_distance_map.csv")
         self.locs_df.pos1, self.locs_df.pos2 = (
             self.locs_df.pos1.apply(eval),
             self.locs_df.pos2.apply(eval),
@@ -288,7 +289,7 @@ class SplitAnalyzer:
 
             integrated_dist = None
             if not hunt1_flag and not hunt2_flag:
-                integrated_dist = np.min([float(each[4]), float(each[5])])
+                integrated_dist = np.mean([float(each[4]), float(each[5])])
             elif hunt1_flag and not hunt2_flag:
                 integrated_dist = float(each[4])
             elif not hunt1_flag and hunt2_flag:
@@ -296,9 +297,9 @@ class SplitAnalyzer:
             else:
                 integrated_dist = np.mean([float(each[4]), float(each[5])])
             temp = [
-                float(each[4]), # Distance betweeen Pacman and ghost 1
-                float(each[5]), # Distance between Pacman and ghost 2
-                # float(each[6]), # Distance between Pacman and the closest dot
+                # float(each[4]), # Distance betweeen Pacman and ghost 1
+                # float(each[5]), # Distance between Pacman and ghost 2
+                float(each[6]), # Distance between Pacman and the closest dot
                 integrated_dist
             ]
             preprocessed_data.append(temp)
@@ -315,7 +316,8 @@ class SplitAnalyzer:
         shuffled_index = np.arange(0, sample_num)
         np.random.shuffle(shuffled_index)
         training_index = shuffled_index[:training_num]
-        testing_index = shuffled_index[training_num:]
+        # testing_index = shuffled_index[training_num:]
+        testing_index = np.arange(0, sample_num)
         g2h_training_data = preprocessed_data[training_index, :]
         g2h_testing_data = preprocessed_data[testing_index, :]
         # Convert label to a 2-d array because we only have two classes here; [1, 0] for grazing and [0,1] for hunting.
@@ -567,12 +569,13 @@ class SplitAnalyzer:
         # Because after preprocessing, class 0 stands for grazing, thus, need reversed.
         testing_label = 1 - testing_label
         # Train the decision classification tree
-        model = DecisionTreeClassifier(criterion = 'entropy',
+        model = DecisionTreeClassifier(criterion = 'gini',
                                        # random_state = 0,
-                                       max_depth = 4)
+                                       max_depth = 3)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
+        pred_ind_label = trained_tree.predict(testing_data)
         estimation_loss = binaryClassError(pred_label, testing_label)
         correct_rate = np.sum(trained_tree.predict(testing_data) == testing_ind_label) / len(testing_ind_label)
         auc = AUC(pred_label, testing_label)
@@ -581,7 +584,7 @@ class SplitAnalyzer:
         print('AUC {}'.format(auc))
         # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
-        tree_structure =  export_text(trained_tree, feature_names = ['D_1', 'D_2','D_C'])
+        tree_structure =  export_text(trained_tree, feature_names = ['D_d','D_C'])
         with open('G2HIntegrate_tree_structure.txt', 'w') as file:
             file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
@@ -592,12 +595,79 @@ class SplitAnalyzer:
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file = None,
-                                    feature_names=['D_1', 'D_2','D_C'],
+                                    feature_names=['D_d','D_C'],
                                     class_names=['Hunting', 'Grazing'],
                                     filled = True,
                                     proportion = True)
         graph = graphviz.Source(node_data)
-        graph.render('G2HIntegrate_trained_tree_structure', view = False)
+        # graph.render('G2HIntegrate_trained_tree_structure', view = False)
+        # Collect data
+        testing_data = pd.DataFrame(testing_data)
+        testing_data.columns = ['closest_dot_dist', 'combined_dist']
+        pred_ind_label = pd.DataFrame(pred_ind_label)
+        testing_ind_label = pd.DataFrame(testing_ind_label)
+        is_correct = (pred_ind_label == testing_ind_label)
+        is_correct.columns = ['is_correct']
+        is_hunting = pd.DataFrame(1 - testing_ind_label.values)
+        is_hunting.columns = ['is_hunting']
+        testing_result = pd.concat([testing_data, is_correct, is_hunting], axis=1)
+        # The overall hunting rate and huntign correct rate
+        print('Hunting rate:{}'.format(len(np.where(is_hunting.is_hunting == 1)[0]) / testing_data.shape[0]))
+        cr_index = np.where(is_correct.is_correct == True)
+        hunt_index = np.where(is_hunting.is_hunting == True)
+        inter = np.intersect1d(cr_index, hunt_index)
+        print('Hunting correct rate:{}'.format(len(inter) / len(np.where(is_hunting.is_hunting == 1)[0])))
+        # Plot estimation accuracy heat map
+        # plt.figure(figsize=(15,10))
+        ax = sns.heatmap(
+            testing_result.pivot_table(
+                index="closest_dot_dist",
+                columns="combined_dist",
+                values="is_correct",
+                aggfunc=lambda x: sum(x) / len(x),
+            )[
+            ::-1
+            ],
+            cmap="coolwarm",
+            square=True,
+            cbar_kws={'shrink': 0.5}
+        )
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=15)
+        bottom, top = plt.gca().get_ylim()
+        plt.title('G2H Correct Rate', fontsize=20)
+        plt.xlabel("Combined Ghosts Distance", fontsize=20)
+        plt.xticks(fontsize=15)
+        plt.ylabel("Nearest Dot Distance", fontsize=20)
+        plt.yticks(plt.yticks()[0][::3], plt.yticks()[1][::3], fontsize=15)
+        plt.gca().set_ylim(bottom + 0.5, top - 0.5)
+        plt.show()
+        # Plot transfer rate heat map
+        plt.clf()
+        # plt.figure(figsize=(15, 10))
+        ax = sns.heatmap(
+            testing_result.pivot_table(
+                index="closest_dot_dist",
+                columns="combined_dist",
+                values="is_hunting",
+                aggfunc=lambda x: sum(x) / len(x),
+            )[
+            ::-1
+            ],
+            cmap="coolwarm",
+            square=True,
+            cbar_kws={'shrink': 0.5}
+        )
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=15)
+        bottom, top = plt.gca().get_ylim()
+        plt.title('G2H Transfer Rate', fontsize=20)
+        plt.xlabel("Combined Ghosts Distance", fontsize=20)
+        plt.xticks(fontsize=15)
+        plt.ylabel("Nearest Dot Distance", fontsize=20)
+        plt.yticks(plt.yticks()[0][::3], plt.yticks()[1][::3], fontsize=15)
+        plt.gca().set_ylim(bottom + 0.5, top - 0.5)
+        plt.show()
 
 
 if __name__ == '__main__':
@@ -605,9 +675,9 @@ if __name__ == '__main__':
     # torch.set_num_threads(4)
     # torch.set_num_interop_threads(4)
 
-    feature_filename = 'data/extract_feature.csv'
-    label_filename = 'data/split_all_labels.csv'
-    mode_filename = 'data/split_all_modes.csv'
+    feature_filename = 'extracted_data/extract_feature.csv'
+    label_filename = 'extracted_data/split_all_labels.csv'
+    mode_filename = 'extracted_data/split_all_modes.csv'
     a = SplitAnalyzer(feature_filename, label_filename, mode_filename)
     # # Analyze grazing to hunting
 

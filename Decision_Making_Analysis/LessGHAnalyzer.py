@@ -8,8 +8,6 @@ Author:
 Date:
     2020/3/6
 '''
-import torch
-import torch.nn as nn
 import numpy as np
 import pandas as pd
 import copy
@@ -19,14 +17,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.tree.export import export_text, export_graphviz
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+import seaborn as sns
 import graphviz
 import random
 
-from Hunt2GrazeModel import Hunt2Graze
-from Graze2HuntModel import Graze2Hunt
 from evaluation import binaryClassError, correctRate, AUC
-from util import tensor2np, oneHot
-from util import estimateGhostLocation, future_position, computeLocDis
 
 
 class LessGHAnalyzer:
@@ -101,11 +97,9 @@ class LessGHAnalyzer:
             elif 'hunting2' == this_label:
                 combined_dist = ghost2_dist
             elif 'hunting_all' == this_label:
-                #TODO: min or mean? (min is better)
                 combined_dist = np.mean([ghost1_dist, ghost2_dist])
                 # combined_dist = np.min([ghost1_dist, ghost2_dist])
             else:
-                # TODO: min or mean? (min is better)
                 combined_dist = np.mean([ghost1_dist, ghost2_dist])
                 # combined_dist = np.min([ghost1_dist, ghost2_dist])
 
@@ -129,13 +123,14 @@ class LessGHAnalyzer:
                 preprocessed_data[:, col_index] = (preprocessed_data[:, col_index] - np.nanmean(
                     preprocessed_data[:, col_index])) / np.nanstd(preprocessed_data[:, col_index])
         # Split into training and testing sets(60% for training and 40% for testing) for each mode
-        training_ratio = 0.8
+        training_ratio = 0.6
         sample_num = preprocessed_data.shape[0] - 1
         training_num = int(training_ratio * sample_num)
         shuffled_index = np.arange(0, sample_num)
         np.random.shuffle(shuffled_index)
         training_index = shuffled_index[:training_num]
-        testing_index = shuffled_index[training_num:]
+        # testing_index = shuffled_index[training_num:]
+        testing_index = np.arange(0, sample_num)
         g2h_training_data = preprocessed_data[training_index, :]
         g2h_training_label = preprocessed_labels[training_index, :]
         g2h_testing_data = preprocessed_data[testing_index, :]
@@ -202,6 +197,7 @@ class LessGHAnalyzer:
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
+        pred_ind_label = trained_tree.predict(testing_data)
         # estimation_loss = binaryClassError(pred_label, testing_label)
         correct_rate = np.sum(trained_tree.predict(testing_data) == testing_ind_label) / len(testing_ind_label)
         auc = AUC(pred_label, testing_label)
@@ -227,6 +223,73 @@ class LessGHAnalyzer:
                                     proportion=True)
         graph = graphviz.Source(node_data)
         graph.render('G2H_selected_trained_tree_structure', view=False)
+        # Collect data
+        testing_data = pd.DataFrame(testing_data)
+        testing_data.columns = ['combined_dist', 'closest_dot_dist']
+        pred_ind_label = pd.DataFrame(pred_ind_label)
+        testing_ind_label = pd.DataFrame(testing_ind_label)
+        is_correct = (pred_ind_label == testing_ind_label)
+        is_correct.columns = ['is_correct']
+        is_hunting = pd.DataFrame(1 - testing_ind_label.values)
+        is_hunting.columns = ['is_hunting']
+        testing_result = pd.concat([testing_data, is_correct, is_hunting], axis = 1)
+        # The overall hunting rate and huntign correct rate
+        print('Hunting rate:{}'.format(len(np.where(is_hunting.is_hunting == 1)[0]) / testing_data.shape[0]))
+        cr_index = np.where(is_correct.is_correct == True)
+        hunt_index = np.where(is_hunting.is_hunting== True)
+        inter = np.intersect1d(cr_index,hunt_index)
+        print('Hunting correct rate:{}'.format(len(inter) / len(np.where(is_hunting.is_hunting == 1)[0])))
+        # Plot estimation accuracy heat map
+        # plt.figure(figsize=(15,10))
+        ax = sns.heatmap(
+            testing_result.pivot_table(
+                index="closest_dot_dist",
+                columns="combined_dist",
+                values="is_correct",
+                aggfunc=lambda x: sum(x) / len(x),
+            )[
+            ::-1
+            ],
+            cmap="coolwarm",
+            square = True,
+            cbar_kws = {'shrink':0.5}
+        )
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize = 15)
+        bottom, top = plt.gca().get_ylim()
+        plt.title('G2H Correct Rate', fontsize = 20)
+        plt.xlabel("Combined Ghosts Distance", fontsize = 20)
+        plt.xticks(fontsize = 15)
+        plt.ylabel("Nearest Dot Distance", fontsize = 20)
+        plt.yticks(plt.yticks()[0][::3],plt.yticks()[1][::3],fontsize = 15)
+        plt.gca().set_ylim(bottom + 0.5, top - 0.5)
+        plt.show()
+        # Plot transfer rate heat map
+        plt.clf()
+        # plt.figure(figsize=(15, 10))
+        ax = sns.heatmap(
+            testing_result.pivot_table(
+                index="closest_dot_dist",
+                columns="combined_dist",
+                values="is_hunting",
+                aggfunc=lambda x: sum(x) / len(x),
+            )[
+            ::-1
+            ],
+            cmap="coolwarm",
+            square=True,
+            cbar_kws={'shrink': 0.5}
+        )
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=15)
+        bottom, top = plt.gca().get_ylim()
+        plt.title('G2H Transfer Rate', fontsize=20)
+        plt.xlabel("Combined Ghosts Distance", fontsize=20)
+        plt.xticks(fontsize=15)
+        plt.ylabel("Nearest Dot Distance", fontsize=20)
+        plt.yticks(plt.yticks()[0][::3], plt.yticks()[1][::3], fontsize=15)
+        plt.gca().set_ylim(bottom + 0.5, top - 0.5)
+        plt.show()
 
 
 
@@ -237,5 +300,5 @@ if __name__ == '__main__':
     mode_filename = 'extracted_data/less_G2H_mode.csv'
     a = LessGHAnalyzer(feature_filename, label_filename, mode_filename)
 
-    a.G2HAnalyzeLogistic()
-    # a.G2HAnalyzeDTree()
+    # a.G2HAnalyzeLogistic()
+    a.G2HAnalyzeDTree()

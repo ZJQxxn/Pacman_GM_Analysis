@@ -10,6 +10,7 @@ Date:
 '''
 from abc import ABC, abstractmethod
 import pandas as pd
+import numpy as np
 
 
 class Estimator(ABC):
@@ -35,6 +36,32 @@ class Estimator(ABC):
         '''
         super(Estimator, self).__init__()
         self.data = pd.read_csv(filename)
+        for c in [
+            "ghost1Pos",
+            "ghost2Pos",
+            "pacmanPos",
+            "previousPos",
+            "possible_dirs",
+            "before_last",
+            "after_first",
+            "pos",
+            "next_eat_rwd",
+            "nearbean_dir",
+            "energizers",
+            "nearrwdPos",
+            "ghost1_wrt_pacman",
+            "beans",
+            # "nearbean_dir_big",
+            # "energizer_dirs",
+            # "energizer_dirs_big",
+            # "next_possible_dir",
+            # "next_cross",
+            # "nearbean_dir_global",
+            # "energizer_dirs_global",
+            # "ghost_in_cross",
+        ]:
+            self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
+        print("Finished initialization!")
 
     @abstractmethod
     def _extractLocalFeature(self):

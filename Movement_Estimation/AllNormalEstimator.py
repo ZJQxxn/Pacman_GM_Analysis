@@ -15,9 +15,8 @@ from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.tree.export import export_text, export_graphviz
 
 from Estimator import Estimator
-from util import oneHot
-from evaluation import correctRate, AUC
-
+from Estimator import oneHot
+from Estimator import locs_df
 
 class AllNormalEstimatior(Estimator):
 
@@ -27,12 +26,14 @@ class AllNormalEstimatior(Estimator):
         self.labels = self.data.pacman_dir.fillna('stay')
         self.labels = self.labels.map(lambda x : oneHot(x, self.class_list)).values
 
+
     def _extractLocalFeature(self):
         '''
         Extract local features.
         :return: Local features (pandas.DataFrame)
         '''
-        #TODO: for now, choose raw data and make no preprocessing
+        # local_bean_num = localBeanNum(self.data)
+        print("Finished extracting the number of local beans.")
         self.local_features = self.data.loc[:, ['distance1', 'distance2']].values
         # Split into training and testing sets(60% for training and 40% for testing) for each mode
         training_ratio = 0.6
@@ -193,10 +194,12 @@ if __name__ == '__main__':
     estimator = AllNormalEstimatior('./extracted_data/normal_all_data.csv')
     print('Size of the data', estimator.data.shape)
 
+    estimator._extractLocalFeature()
+
     # # Estimation with local features
     # estimator.localEstimationLogistic()
     # estimator.localEstimationDTree()
 
     # Estimation with global features
-    estimator.globalEstimationLogistic()
-    estimator.globalEstimationDTree()
+    # estimator.globalEstimationLogistic()
+    # estimator.globalEstimationDTree()
