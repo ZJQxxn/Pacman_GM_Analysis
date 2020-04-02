@@ -127,9 +127,9 @@ def localEnergizerDir(all_data):
             .apply(lambda x: x.relative_dir.iloc[np.argmin(x.dis.values)])
             .reset_index()
     ).rename(columns = {0:"local_nearest_energizer_dir"})
-    energizer_dir = all_data[["file", "index", "pacmanPos"]].merge(
+    energizer_dir = all_data[["file", "index"]].merge(
         nearest_energizer,
-        on = ["file", "index", "pacmanPos"],
+        on = ["file", "index"],
         how = "left"
     )
     return energizer_dir
@@ -186,7 +186,7 @@ def globalBeanNum(all_data):
     # Count the number of beans in the near regions
     print("Counting the number of beans in near regions...")
     near_region_bean_count = pacman_region.apply(lambda x: _countBeans(x, region_info), axis = 1)
-    near_region_bean_count = near_region_bean_count[['file', "idnex", "pacmanPos",
+    near_region_bean_count = near_region_bean_count[['file', "index", "pacmanPos","pacman_region",
                                                      "left_count", "right_count", "up_count", "down_count"]]
     return near_region_bean_count
 
@@ -319,7 +319,7 @@ def globalNearestEnergizerDir(all_data):
         nearest_energizer_dir,
         on = ["file", "index"],
         how = "left"
-    ).drop(columns = ["pacman_region_pos", "nearest_energizer_region_pos"])
+    )
     return nearest_energizer_dir
 
 
@@ -354,15 +354,16 @@ def readData(filename):
         data[c] = data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
     return data
 
-
-# MAIN FUNCTION
-if __name__ == '__main__':
-    print("Finished all the initialization!")
-    print("="*20, "ALL NORMAL", "="*20)
+# =====================================
+# Extract Features for Different Conditions
+# =====================================
+def extractNormalFeatures(feature_file):
+    print("=" * 20, "ALL NORMAL", "=" * 20)
     # Extract features for all normal data
     print('Start reading all normal data...')
-    all_normal_data = readData('./extracted_data/normal_all_data.csv')
+    all_normal_data = readData(feature_file)
     print('Size of the data', all_normal_data.shape)
+    # Extract features for all normal data
     # # Extract local features
     local_bean_num = localBeanNum(all_normal_data)
     print("Finished bean num...")
@@ -395,18 +396,16 @@ if __name__ == '__main__':
         global_energizer_dir,
         on=["file", "index"]
     )
-    all_local_feature.to_csv('./extracted_data/normal_global_features.csv')
+    all_global_feature.to_csv('./extracted_data/normal_global_features.csv')
     print("Finished saving global features!")
 
-    # ===============================================
-    # ===============================================
-
-    print("="*20, "END GAME", "="*20)
+def extractEndGameFeatures(feature_file):
+    print("=" * 20, "END GAME", "=" * 20)
     # Extract features for end-game data
     print('Start reading end-game data...')
-    end_game_data = readData('./extracted_data/end_game_data.csv')
+    end_game_data = readData(feature_file)
     print('Size of the data', end_game_data.shape)
-    # # Extract local features
+    # Extract local features
     local_bean_num = localBeanNum(end_game_data)
     print("Finished bean num...")
     local_ghost_dir = localGhostDir(end_game_data)
@@ -438,15 +437,13 @@ if __name__ == '__main__':
         global_energizer_dir,
         on=["file", "index"]
     )
-    all_local_feature.to_csv('./extracted_data/end_game_global_features.csv')
+    all_global_feature.to_csv('./extracted_data/end_game_global_features.csv')
 
-    # ===============================================
-    # ===============================================
-
+def extractTJunctionFeatures(feature_file):
     print("=" * 20, "T JUNCTION", "=" * 20)
     # Extract features for end-game data
     print('Start reading T-junction data...')
-    T_junction_data = readData('./extracted_data/T_junction_data.csv')
+    T_junction_data = readData(feature_file)
     print('Size of the data', T_junction_data.shape)
     # # Extract local features
     local_bean_num = localBeanNum(T_junction_data)
@@ -480,15 +477,13 @@ if __name__ == '__main__':
         global_energizer_dir,
         on=["file", "index"]
     )
-    all_local_feature.to_csv('./extracted_data/T_junction_global_features.csv')
+    all_global_feature.to_csv('./extracted_data/T_junction_global_features.csv')
 
-    # ===============================================
-    # ===============================================
-
+def extractEnergizerFeatures(feature_file):
     print("=" * 20, "ENERGIZER", "=" * 20)
     # Extract features for end-game data
     print('Start reading energizer data...')
-    energizer_data = readData('./extracted_data/energizer_data.csv')
+    energizer_data = readData(feature_file)
     print('Size of the data', energizer_data.shape)
     # # Extract local features
     local_bean_num = localBeanNum(energizer_data)
@@ -522,4 +517,12 @@ if __name__ == '__main__':
         global_energizer_dir,
         on=["file", "index"]
     )
-    all_local_feature.to_csv('./extracted_data/energizer_global_features.csv')
+    all_global_feature.to_csv('./extracted_data/energizer_global_features.csv')
+
+# MAIN FUNCTION
+if __name__ == '__main__':
+    print("Finished all the initialization!")
+    # extractNormalFeatures('./extracted_data/normal_all_data.csv')
+    extractEndGameFeatures('./extracted_data/end_game_data.csv')
+    # extractTJunctionFeatures('./extracted_data/T_junction_data.csv')
+    # extractEnergizerFeatures('./extracted_data/energizer_data.csv')

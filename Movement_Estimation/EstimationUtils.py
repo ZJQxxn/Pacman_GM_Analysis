@@ -13,6 +13,46 @@ import pandas as pd
 import networkx as nx
 from shapely.geometry import Polygon, Point
 
+
+# ==================================================
+#            All the Util Functions
+# ==================================================
+def tuple_list(l):
+    return [tuple(a) for a in l]
+
+def oneHot(val,val_list):
+    onehot_vec = [0. for each in val_list]
+    onehot_vec[val_list.index(val)] = 1
+    return np.array(onehot_vec)
+
+def relative_dir(destination_pos, pacman_pos):
+    '''
+    Determine the direction of "destination_pos" with respect to "pacman_pos".
+    :param destination_pos: A 2-tuple denoting the position of destination.
+    :param pacman_pos: A 2-tuple denoting the Pacman position.
+    :return: A list denoting the direction. Specially, for global direction, "same" denotes two positions are 
+             located in the same region. 
+    '''
+    l = []
+    dir_array = np.array(destination_pos) - np.array(pacman_pos)
+    if 0 == dir_array[0] and 0 == dir_array[1]:
+        l.append("same")
+        return l
+    if dir_array[0] > 0:
+        l.append("right")
+    elif dir_array[0] < 0:
+        l.append("left")
+    else:
+        pass
+    if dir_array[1] > 0:
+        l.append("down")
+    elif dir_array[1] < 0:
+        l.append("up")
+    else:
+        pass
+    return l
+
+
 # ==================================================
 #            All the Initializations
 # ==================================================
@@ -79,7 +119,7 @@ map_info["region_index"] = [
     determine_region(poly_ext, pos) for pos in map_info.pos.values
 ]
 # map_info = map_info[["pos", "pos_global", "region_index"]]
-
+#TODO: need size of each region 
 
 # ====================================================================
 locs_df = pd.read_csv("../common_data/dij_distance_map.csv")
@@ -90,6 +130,7 @@ locs_df.pos1, locs_df.pos2, locs_df.path = (
 )
 
 #======================================================================
+#TODO: delete this part
 d = dict(
     zip(
         map_info.pos,
@@ -110,6 +151,7 @@ d = dict(
 
 
 #======================================================================
+#TODO: delete this part
 G = nx.DiGraph()
 G.add_nodes_from(d.keys())
 for k, v in d.items():
@@ -117,6 +159,7 @@ for k, v in d.items():
 
 
 #======================================================================
+#TODO: delete this part
 forbidden_pos = list(map(lambda x: (x, 18), list(range(7)) + list(range(23, 30))))
 def global_pos(pos):
     if not isinstance(pos, float) and pos not in forbidden_pos and pos is not None:
@@ -126,43 +169,4 @@ def global_pos(pos):
         )
     else:
         return np.nan
-
-
-# ==================================================
-#            All the Util Functions
-# ==================================================
-def tuple_list(l):
-    return [tuple(a) for a in l]
-
-def oneHot(val,val_list):
-    onehot_vec = [0. for each in val_list]
-    onehot_vec[val_list.index(val)] = 1
-    return np.array(onehot_vec)
-
-def relative_dir(destination_pos, pacman_pos):
-    '''
-    Determine the direction of "destination_pos" with respect to "pacman_pos".
-    :param destination_pos: A 2-tuple denoting the position of destination.
-    :param pacman_pos: A 2-tuple denoting the Pacman position.
-    :return: A list denoting the direction. Specially, for global direction, "same" denotes two positions are 
-             located in the same region. 
-    '''
-    l = []
-    dir_array = np.array(destination_pos) - np.array(pacman_pos)
-    if 0 == dir_array[0] and 0 == dir_array[1]:
-        l.append("same")
-        return l
-    if dir_array[0] > 0:
-        l.append("right")
-    elif dir_array[0] < 0:
-        l.append("left")
-    else:
-        pass
-    if dir_array[1] > 0:
-        l.append("down")
-    elif dir_array[1] < 0:
-        l.append("up")
-    else:
-        pass
-    return l
 
