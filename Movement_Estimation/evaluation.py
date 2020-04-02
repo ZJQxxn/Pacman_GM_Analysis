@@ -50,17 +50,17 @@ def correctRate(pred_label, true_label):
     :param true_label: True labels with shape of (number of samples, 5).
     :return: Correct rate.
     '''
-    processed_pred_label = []
-    class_num = len(pred_label[0])
-    for each in pred_label:
-        temp = np.zeros(class_num)
-        temp[np.argmax(each)] = 1
-        processed_pred_label.append(temp)
-    pred_label = np.array(processed_pred_label, dtype = np.int)
-    true_label = np.array(true_label, dtype = np.int)
-    total_count = len(true_label)
-    correct_count = 0
-    for index in range(total_count):
-        if np.all(pred_label[index] == true_label[index]):
-            correct_count += 1
-    return correct_count / total_count
+    # processed_pred_label = []
+    # class_num = len(pred_label[0])
+    # for each in pred_label:
+    #     temp = np.zeros(class_num)
+    #     temp[np.argmax(each)] = 1
+    #     processed_pred_label.append(temp)
+    # pred_label = np.array(processed_pred_label, dtype = np.int)
+    # true_label = np.array(true_label, dtype = np.int)
+    # total_count = len(true_label)
+    # correct_count = 0
+    # for index in range(total_count):
+    #     if np.all(pred_label[index] == true_label[index]):
+    #         correct_count += 1
+    return np.sum(pred_label == true_label) / len(pred_label)

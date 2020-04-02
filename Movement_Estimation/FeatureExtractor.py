@@ -354,6 +354,7 @@ def readData(filename):
         data[c] = data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
     return data
 
+
 # =====================================
 # Extract Features for Different Conditions
 # =====================================
@@ -399,6 +400,7 @@ def extractNormalFeatures(feature_file):
     all_global_feature.to_csv('./extracted_data/normal_global_features.csv')
     print("Finished saving global features!")
 
+
 def extractEndGameFeatures(feature_file):
     print("=" * 20, "END GAME", "=" * 20)
     # Extract features for end-game data
@@ -410,16 +412,18 @@ def extractEndGameFeatures(feature_file):
     print("Finished bean num...")
     local_ghost_dir = localGhostDir(end_game_data)
     print("Finished ghost dir...")
-    local_energizer_dir = localEnergizerDir(end_game_data)
-    print("Finished energizer dir...")
+    #TODO: no energizers
+    # local_energizer_dir = localEnergizerDir(end_game_data)
+    # print("Finished energizer dir...")
     all_local_feature = local_bean_num.merge(
         local_ghost_dir,
         on=["file", "index"],
         how="left"
-    ).merge(
-        local_energizer_dir,
-        on=["file", "index"]
     )
+    #     .merge(
+    #     local_energizer_dir,
+    #     on=["file", "index"]
+    # )
     all_local_feature.to_csv('./extracted_data/end_game_local_features.csv')
     print("Finished saving local features!")
     # Extract global features
@@ -427,17 +431,19 @@ def extractEndGameFeatures(feature_file):
     print("Finished bean num...")
     global_ghost_dir = globalGhostDir(end_game_data)
     print("Finished ghost dir...")
-    global_energizer_dir = globalNearestEnergizerDir(end_game_data)
-    print("Finished energizer dir...")
+    # global_energizer_dir = globalNearestEnergizerDir(end_game_data)
+    # print("Finished energizer dir...")
     all_global_feature = global_bean_num.merge(
         global_ghost_dir,
         on=["file", "index"],
         how="left"
-    ).merge(
-        global_energizer_dir,
-        on=["file", "index"]
     )
+    #     .merge(
+    #     global_energizer_dir,
+    #     on=["file", "index"]
+    # )
     all_global_feature.to_csv('./extracted_data/end_game_global_features.csv')
+
 
 def extractTJunctionFeatures(feature_file):
     print("=" * 20, "T JUNCTION", "=" * 20)
@@ -479,6 +485,7 @@ def extractTJunctionFeatures(feature_file):
     )
     all_global_feature.to_csv('./extracted_data/T_junction_global_features.csv')
 
+
 def extractEnergizerFeatures(feature_file):
     print("=" * 20, "ENERGIZER", "=" * 20)
     # Extract features for end-game data
@@ -519,10 +526,12 @@ def extractEnergizerFeatures(feature_file):
     )
     all_global_feature.to_csv('./extracted_data/energizer_global_features.csv')
 
+
+
 # MAIN FUNCTION
 if __name__ == '__main__':
     print("Finished all the initialization!")
     # extractNormalFeatures('./extracted_data/normal_all_data.csv')
-    extractEndGameFeatures('./extracted_data/end_game_data.csv')
+    # extractEndGameFeatures('./extracted_data/end_game_data.csv')
     # extractTJunctionFeatures('./extracted_data/T_junction_data.csv')
     # extractEnergizerFeatures('./extracted_data/energizer_data.csv')

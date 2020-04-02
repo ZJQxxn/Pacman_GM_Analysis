@@ -1,6 +1,6 @@
 ''''
 Description:
-    The movement estimation for T-junction data. 
+    The movement estimation for energizer data. 
 
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -21,11 +21,11 @@ from Estimator import Estimator
 from evaluation import AUC, correctRate
 from EstimationUtils import oneHot
 
-class TJunctionEstimatior(Estimator):
+class EnergizerEstimatior(Estimator):
 
     def __init__(self, all_feature_file, local_feature_file, global_feature_file, eval_list):
         print("Start reading data...")
-        super(TJunctionEstimatior, self).__init__(all_feature_file, local_feature_file, global_feature_file, eval_list)
+        super(EnergizerEstimatior, self).__init__(all_feature_file, local_feature_file, global_feature_file, eval_list)
         # Select only useful features; convert directions to vectors
         self.dir_list = ["up", "down", "left", "right"] #TODO: what about "same"?
         self.local_features = self.local_features[
@@ -232,10 +232,10 @@ if __name__ == '__main__':
         "global":["ghost1_global_dir", "ghost2_global_dir", "global_energizer_dir"],
         "local": ["local_ghost1_dir", "local_ghost2_dir", "local_nearest_energizer_dir"]
     }
-    estimator = TJunctionEstimatior(
-        './extracted_data/T_junction_data.csv',
-        './extracted_data/T_junction_local_features.csv',
-        './extracted_data/T_junction_global_features.csv',
+    estimator = EnergizerEstimatior(
+        './extracted_data/energizer_data.csv',
+        './extracted_data/energizer_local_features.csv',
+        './extracted_data/energizer_global_features.csv',
         eval_list)
     print('Size of local features', estimator.local_features.shape)
     print('Size of global features', estimator.global_features.shape)

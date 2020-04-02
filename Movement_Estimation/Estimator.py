@@ -11,7 +11,10 @@ Date:
 from abc import ABC, abstractmethod
 import pandas as pd
 import numpy as np
+import sys
 
+sys.path.append('./')
+from EstimationUtils import oneHot
 
 class Estimator(ABC):
     '''
@@ -29,48 +32,27 @@ class Estimator(ABC):
          plotRes (abstract): Plot the estimation on the map.
     '''
 
-    def __init__(self, filename):
+    def __init__(self, all_feature_file, local_feature_file, global_feature_file, eval_list):
         '''
         The class initialization. Read data from the corresponding csv file.
         :param filename: CSV filename.
         '''
         super(Estimator, self).__init__()
-        self.data = pd.read_csv(filename)
-        #TODO: change this eval procedure
-        for c in [
-            "ghost1Pos",
-            "ghost2Pos",
-            "pacmanPos",
-            "previousPos",
-            "possible_dirs",
-            "before_last",
-            "after_first",
-            "pos",
-            "next_eat_rwd",
-            "nearbean_dir",
-            "energizers",
-            "nearrwdPos",
-            "ghost1_wrt_pacman",
-            "beans"
-        ]:
-            self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
+        self.local_features = pd.read_csv(local_feature_file)
+        self.global_features = pd.read_csv(global_feature_file)
+        for c in eval_list["local"]:
+            self.local_features[c] = self.local_features[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
+        for c in eval_list["global"]:
+            self.global_features[c] = self.global_features[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
+        self.labels = pd.read_csv(all_feature_file).merge(
+            self.local_features,
+            on = ["file", "index"],
+            how = "right"
+        )[["pacman_dir"]]
+        self.labels = self.labels.fillna('stay')
+        self.class_list = ['up', 'down', 'left', 'right', 'stay']
+        self.labels = self.labels.apply(lambda x : oneHot(x.values.item(), self.class_list), axis = 1)
         print("Finished initialization!")
-
-    @abstractmethod
-    def _extractLocalFeature(self):
-        '''
-        Extract local features.
-        :return: Local features (pandas.DataFrame)
-        '''
-        pass
-
-    @abstractmethod
-    def _extractGlobalFeature(self):
-        '''
-        Extract global features.
-        :return: Global features (pandas.DataFrame)
-        '''
-        pass
 
     # @abstractmethod
     # def localEstimation(self):

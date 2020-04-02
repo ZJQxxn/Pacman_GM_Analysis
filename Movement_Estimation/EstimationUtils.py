@@ -10,7 +10,6 @@ Date:
 '''
 import numpy as np
 import pandas as pd
-import networkx as nx
 from shapely.geometry import Polygon, Point
 
 
@@ -21,8 +20,15 @@ def tuple_list(l):
     return [tuple(a) for a in l]
 
 def oneHot(val,val_list):
+    # TODO: explanations
     onehot_vec = [0. for each in val_list]
-    onehot_vec[val_list.index(val)] = 1
+    if isinstance(val, list):
+        for each in val:
+            if each in val_list:
+                onehot_vec[val_list.index(each)] = 1
+    else:
+        if val in val_list:
+            onehot_vec[val_list.index(val)] = 1
     return np.array(onehot_vec)
 
 def relative_dir(destination_pos, pacman_pos):
@@ -128,45 +134,4 @@ locs_df.pos1, locs_df.pos2, locs_df.path = (
     locs_df.pos2.apply(eval),
     locs_df.path.apply(eval)
 )
-
-#======================================================================
-#TODO: delete this part
-d = dict(
-    zip(
-        map_info.pos,
-        list(
-            zip(
-                *[
-                    tuple_list(
-                        map_info[
-                            ["Next" + str(i) + "Pos1", "Next" + str(i) + "Pos2"]
-                        ].values
-                    )
-                    for i in range(1, 5)
-                ]
-            )
-        ),
-    )
-)
-
-
-#======================================================================
-#TODO: delete this part
-G = nx.DiGraph()
-G.add_nodes_from(d.keys())
-for k, v in d.items():
-    G.add_edges_from(([(k, t) for t in v if t != (0, 0)]))
-
-
-#======================================================================
-#TODO: delete this part
-forbidden_pos = list(map(lambda x: (x, 18), list(range(7)) + list(range(23, 30))))
-def global_pos(pos):
-    if not isinstance(pos, float) and pos not in forbidden_pos and pos is not None:
-        return (
-            pd.Series(pd.cut([pos[0]], xedges)).replace(dictx).values[0][0],
-            pd.Series(pd.cut([pos[1]], yedges)).replace(dicty).values[0][0],
-        )
-    else:
-        return np.nan
 

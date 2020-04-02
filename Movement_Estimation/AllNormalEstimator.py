@@ -11,175 +11,213 @@ Date:
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.tree.export import export_text, export_graphviz
+import sys
 
+sys.path.append('./')
 from Estimator import Estimator
+from evaluation import AUC, correctRate
 from EstimationUtils import oneHot
 
 class AllNormalEstimatior(Estimator):
 
-    def __init__(self, filename):
-        super(AllNormalEstimatior, self).__init__(filename)
-        self.class_list = ['up', 'down', 'left', 'right', 'stay']
-        self.labels = self.data.pacman_dir.fillna('stay')
-        self.labels = self.labels.map(lambda x : oneHot(x, self.class_list)).values
-
-
-    def _extractLocalFeature(self):
-        '''
-        Extract local features.
-        :return: Local features (pandas.DataFrame)
-        '''
-        # local_bean_num = localBeanNum(self.data)
-        print("Finished extracting the number of local beans.")
-        self.local_features = self.data.loc[:, ['distance1', 'distance2']].values
-        # Split into training and testing sets(60% for training and 40% for testing) for each mode
-        training_ratio = 0.6
-        sample_num = self.local_features.shape[0]
+    def __init__(self, all_feature_file, local_feature_file, global_feature_file, eval_list):
+        print("Start reading data...")
+        super(AllNormalEstimatior, self).__init__(all_feature_file, local_feature_file, global_feature_file, eval_list)
+        # Select only useful features; convert directions to vectors
+        self.dir_list = ["up", "down", "left", "right"] #TODO: what about "same"?
+        self.local_features = self.local_features[
+            ["local_bean_num_left",
+             "local_bean_num_right",
+             "local_bean_num_up",
+             "local_bean_num_down",
+             "local_ghost1_dir",
+             "local_ghost2_dir",
+             "local_nearest_energizer_dir"]
+        ]
+        #TODO: how to deal with nan? Currently, set to an empty vector
+        self.local_features.local_ghost1_dir= self.local_features.local_ghost1_dir.apply(
+            lambda x: oneHot(x, self.dir_list))
+        self.local_features.local_ghost2_dir= self.local_features.local_ghost2_dir.apply(
+            lambda x: oneHot(x, self.dir_list)
+        )
+        self.local_features.local_nearest_energizer_dir= self.local_features.local_nearest_energizer_dir.apply(
+            lambda x: oneHot(x, self.dir_list)
+        )
+        self.global_features = self.global_features[
+            ["left_count",
+             "right_count",
+             "up_count",
+             "down_count",
+             "ghost1_global_dir",
+             "ghost2_global_dir",
+             "global_energizer_dir"]
+        ]
+        self.global_features.ghost1_global_dir = self.global_features.ghost1_global_dir.apply(
+            lambda x: oneHot(x, self.dir_list)
+        )
+        self.global_features.ghost2_global_dir = self.global_features.ghost2_global_dir.apply(
+            lambda x: oneHot(x, self.dir_list)
+        )
+        self.global_features.global_energizer_dir = self.global_features.global_energizer_dir.apply(
+            lambda x: oneHot(x, self.dir_list)
+        )
+        # Indices of training and testing data
+        training_ratio = 0.8
+        sample_num = self.labels.shape[0]
         training_num = int(training_ratio * sample_num)
         shuffled_index = np.arange(0, sample_num)
         np.random.shuffle(shuffled_index)
         training_index = shuffled_index[:training_num]
         testing_index = shuffled_index[training_num:]
-        local_training_data = self.local_features[training_index, :]
-        local_training_label = self.labels[training_index]
-        local_testing_data = self.local_features[testing_index, :]
-        local_testing_label = self.labels[testing_index]
-        return local_training_data, local_training_label, local_testing_data, local_testing_label
+        # Split local features into training and testing set
+        self.local_train_features = self.local_features.iloc[training_index, :]
+        self.local_train_labels = self.labels.iloc[training_index]
+        self.local_test_features = self.local_features.iloc[testing_index, :]
+        self.local_test_labels = self.labels.iloc[testing_index]
+        # Split global features into training and testing set
+        self.global_train_features = self.global_features.iloc[training_index, :]
+        self.global_train_labels = self.labels.iloc[training_index]
+        self.global_test_features = self.global_features.iloc[testing_index, :]
+        self.global_test_labels = self.labels.iloc[testing_index]
 
-    def _extractGlobalFeature(self):
+    def _df2Vec(self, df_data):
         '''
-        Extract global features.
-        :return: Global features (pandas.DataFrame)
+        Concate all the columns into a vector.
+        :param df_data: Data with the type pf pandas.DataFrame
+        :return: A 2-d numpy.ndarray data.
         '''
-        # TODO: for now, choose raw data and make no preprocessing
-        self.global_features = self.data.loc[:, ['distance1', 'distance2']].values
-        # Split into training and testing sets(60% for training and 40% for testing) for each mode
-        training_ratio = 0.6
-        sample_num = self.global_features.shape[0]
-        training_num = int(training_ratio * sample_num)
-        shuffled_index = np.arange(0, sample_num)
-        np.random.shuffle(shuffled_index)
-        training_index = shuffled_index[:training_num]
-        testing_index = shuffled_index[training_num:]
-        global_training_data = self.global_features[training_index, :]
-        global_training_label = self.labels[training_index]
-        global_testing_data = self.global_features[testing_index, :]
-        global_testing_label = self.labels[testing_index]
-        return global_training_data, global_training_label, global_testing_data, global_testing_label
+        columns_name = df_data.columns.values
+        res =  df_data[[columns_name[0]]].values
+        for each_col in columns_name[1:]:
+            res = np.hstack(
+                (res,
+                 df_data[[each_col]].values if not isinstance(df_data[[each_col]].values[0,0], np.ndarray) # scalars
+                 else [each for each in df_data[[each_col]].values[:,0]]# vectors
+                 )
+            )
+        return res
 
     def localEstimationLogistic(self):
         '''
         The estimation process with local features.
         :return: Correct rate (float).
         '''
-        print('='*20, 'Local Estimation','='*20)
-        print('Start preprocessing...')
-        train_data, train_label, testing_data, testing_label = self._extractLocalFeature()
-        print('...Finished preprocessing!\n')
-        train_ind_label = np.array([list(each).index(1) for each in train_label])
-        testing_label = np.array([list(each) for each in testing_label], dtype = np.int)
+        print('='*20, 'Local Estimation (Logistic)','='*20)
+        train_data = self._df2Vec(self.local_train_features)
+        testing_data = self._df2Vec(self.local_test_features)
+        train_ind_label = self.local_train_labels.apply(lambda x: list(x).index(1)).values
+        testing_ind_label = self.local_test_labels.apply(lambda x: list(x).index(1)).values
         # Train a Logistic Model
         model = LogisticRegression(
-            penalty='elasticnet',
-            random_state=0,
+            penalty='l1',
+            tol = 1e-5,
             solver='saga',
-            l1_ratio=0.5,
             fit_intercept=True,
             multi_class='multinomial')
         model.fit(train_data, train_ind_label)
         # Testing
-        pred_label = model.predict_proba(testing_data)
+        pred_label_prob = model.predict_proba(testing_data)
+        pred_label = model.predict(testing_data)
         # estimation_loss = binaryClassError(pred_label, testing_label)
-        correct_rate = correctRate(pred_label, testing_label)
-        auc = AUC(pred_label, testing_label)
-        # print('BCE Loss after training {}'.format(estimation_loss))
+        correct_rate = correctRate(pred_label, testing_ind_label)
         print('Classification correct rate {}'.format(correct_rate))
-        print('AUC {}'.format(auc))
-        print(
-            model.coef_,
-            model.intercept_
-        )
 
     def localEstimationDTree(self):
-        print('=' * 20, 'Local Estimation', '=' * 20)
-        print('Start preprocessing...')
-        train_data, train_label, testing_data, testing_label = self._extractGlobalFeature()
-        print('...Finished preprocessing!\n')
-        train_ind_label = np.array([list(each).index(1) for each in train_label])
-        testing_ind_label = np.array([list(each).index(1) for each in testing_label])
-        testing_label = np.array([list(each) for each in testing_label], dtype = np.int)
+        print('=' * 20, 'Local Estimation (DTree)', '=' * 20)
+        train_data = self._df2Vec(self.local_train_features)
+        testing_data = self._df2Vec(self.local_test_features)
+        train_ind_label = self.local_train_labels.apply(lambda x: list(x).index(1)).values
+        testing_ind_label = self.local_test_labels.apply(lambda x: list(x).index(1)).values
         # testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion='entropy',
-                                       random_state=0,
-                                       max_depth=4)
+                                       max_depth=10)
         trained_tree = model.fit(train_data, train_ind_label)
         # Testing
-        pred_label = trained_tree.predict_proba(testing_data)
-        correct_rate = np.sum(trained_tree.predict(testing_data) == testing_ind_label) / len(testing_ind_label)
-        auc = AUC(pred_label, testing_label)
+        pred_label_prob = model.predict_proba(testing_data)
+        pred_label = model.predict(testing_data)
+        # estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_ind_label)
         print('Classification correct rate {}'.format(correct_rate))
-        print('AUC {}'.format(auc))
-        # Store tree features as txt file
-        print('Feature Importances:', trained_tree.feature_importances_)
+
+    def localEstimationSVM(self):
+        print('=' * 20, 'Local Estimation (SVM)', '=' * 20)
+        train_data = self._df2Vec(self.local_train_features)
+        testing_data = self._df2Vec(self.local_test_features)
+        train_ind_label = self.local_train_labels.apply(lambda x: list(x).index(1)).values
+        testing_ind_label = self.local_test_labels.apply(lambda x: list(x).index(1)).values
+        # testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
+        # Train the decision classification tree
+        model = SVC(gamma = "auto", decision_function_shape = "ovo")
+        model.fit(train_data, train_ind_label)
+        # Testing
+        # pred_label_prob = model.predict_proba(testing_data)
+        pred_label = model.predict(testing_data)
+        # estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_ind_label)
+        print('Classification correct rate {}'.format(correct_rate))
 
     def globalEstimationLogistic(self):
         '''
         The estimation process with global features.
         :return: Correct rate (float).
         '''
-        print('=' * 20, 'Global Estimation', '=' * 20)
-        print('Start preprocessing...')
-        train_data, train_label, testing_data, testing_label = self._extractLocalFeature()
-        print('...Finished preprocessing!\n')
-        train_ind_label = np.array([list(each).index(1) for each in train_label])
-        testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
+        print('=' * 20, 'Global Estimation (Logistic)', '=' * 20)
+        train_data = self._df2Vec(self.global_train_features)
+        testing_data = self._df2Vec(self.global_test_features)
+        train_ind_label = self.global_train_labels.apply(lambda x: list(x).index(1)).values
+        testing_ind_label = self.global_test_labels.apply(lambda x: list(x).index(1)).values
         # Train a Logistic Model
         model = LogisticRegression(
-            penalty='elasticnet',
-            random_state=0,
+            penalty='l1',
+            tol=1e-5,
             solver='saga',
-            l1_ratio=0.5,
             fit_intercept=True,
             multi_class='multinomial')
         model.fit(train_data, train_ind_label)
         # Testing
-        pred_label = model.predict_proba(testing_data)
+        pred_label_prob = model.predict_proba(testing_data)
+        pred_label = model.predict(testing_data)
         # estimation_loss = binaryClassError(pred_label, testing_label)
-        correct_rate = correctRate(pred_label, testing_label)
-        auc = AUC(pred_label, testing_label)
-        # print('BCE Loss after training {}'.format(estimation_loss))
+        correct_rate = correctRate(pred_label, testing_ind_label)
         print('Classification correct rate {}'.format(correct_rate))
-        print('AUC {}'.format(auc))
-        print(
-            model.coef_,
-            model.intercept_
-        )
 
     def globalEstimationDTree(self):
-        print('=' * 20, 'Global Estimation', '=' * 20)
-        print('Start preprocessing...')
-        train_data, train_label, testing_data, testing_label = self._extractGlobalFeature()
-        print('...Finished preprocessing!\n')
-        train_ind_label = np.array([list(each).index(1) for each in train_label])
-        testing_ind_label = np.array([list(each).index(1) for each in testing_label])
-        testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
+        print('=' * 20, 'Global Estimation (DTree)', '=' * 20)
+        train_data = self._df2Vec(self.global_train_features)
+        testing_data = self._df2Vec(self.global_test_features)
+        train_ind_label = self.global_train_labels.apply(lambda x: list(x).index(1)).values
+        testing_ind_label = self.global_test_labels.apply(lambda x: list(x).index(1)).values
         # testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion='entropy',
-                                       random_state=0,
-                                       max_depth=4)
+                                       max_depth=10)
         trained_tree = model.fit(train_data, train_ind_label)
         # Testing
-        pred_label = trained_tree.predict_proba(testing_data)
-        correct_rate = np.sum(trained_tree.predict(testing_data) == testing_ind_label) / len(testing_ind_label)
-        auc = AUC(pred_label, testing_label)
+        pred_label_prob = model.predict_proba(testing_data)
+        pred_label = model.predict(testing_data)
+        # estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_ind_label)
         print('Classification correct rate {}'.format(correct_rate))
-        print('AUC {}'.format(auc))
-        # Store tree features as txt file
-        print('Feature Importances:', trained_tree.feature_importances_)
+
+    def globalEstimationSVM(self):
+        print('=' * 20, 'Global Estimation (SVM)', '=' * 20)
+        train_data = self._df2Vec(self.global_train_features)
+        testing_data = self._df2Vec(self.global_test_features)
+        train_ind_label = self.global_train_labels.apply(lambda x: list(x).index(1)).values
+        testing_ind_label = self.global_test_labels.apply(lambda x: list(x).index(1)).values
+        # testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
+        # Train the decision classification tree
+        model = SVC(gamma = "auto", decision_function_shape = "ovo")
+        model.fit(train_data, train_ind_label)
+        # Testing
+        pred_label = model.predict(testing_data)
+        # estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_ind_label)
+        print('Classification correct rate {}'.format(correct_rate))
 
     def plotRes(self):
         '''
@@ -190,15 +228,24 @@ class AllNormalEstimatior(Estimator):
 
 
 if __name__ == '__main__':
-    estimator = AllNormalEstimatior('./extracted_data/normal_all_data.csv')
-    print('Size of the data', estimator.data.shape)
+    eval_list = {
+        "global":["ghost1_global_dir", "ghost2_global_dir", "global_energizer_dir"],
+        "local": ["local_ghost1_dir", "local_ghost2_dir", "local_nearest_energizer_dir"]
+    }
+    estimator = AllNormalEstimatior(
+        './extracted_data/normal_all_data.csv',
+        './extracted_data/normal_local_features.csv',
+        './extracted_data/normal_global_features.csv',
+        eval_list)
+    print('Size of local features', estimator.local_features.shape)
+    print('Size of global features', estimator.global_features.shape)
 
-    estimator._extractLocalFeature()
-
-    # # Estimation with local features
-    # estimator.localEstimationLogistic()
-    # estimator.localEstimationDTree()
+    # Estimation with local features
+    estimator.localEstimationLogistic()
+    estimator.localEstimationDTree()
+    estimator.localEstimationSVM()
 
     # Estimation with global features
-    # estimator.globalEstimationLogistic()
-    # estimator.globalEstimationDTree()
+    estimator.globalEstimationLogistic()
+    estimator.globalEstimationDTree()
+    estimator.globalEstimationSVM()

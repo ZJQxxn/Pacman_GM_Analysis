@@ -1,6 +1,6 @@
 ''''
 Description:
-    The movement estimation for T-junction data. 
+    The movement estimation for end-game data. 
 
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -21,11 +21,11 @@ from Estimator import Estimator
 from evaluation import AUC, correctRate
 from EstimationUtils import oneHot
 
-class TJunctionEstimatior(Estimator):
+class EndGameEstimatior(Estimator):
 
     def __init__(self, all_feature_file, local_feature_file, global_feature_file, eval_list):
         print("Start reading data...")
-        super(TJunctionEstimatior, self).__init__(all_feature_file, local_feature_file, global_feature_file, eval_list)
+        super(EndGameEstimatior, self).__init__(all_feature_file, local_feature_file, global_feature_file, eval_list)
         # Select only useful features; convert directions to vectors
         self.dir_list = ["up", "down", "left", "right"] #TODO: what about "same"?
         self.local_features = self.local_features[
@@ -34,16 +34,12 @@ class TJunctionEstimatior(Estimator):
              "local_bean_num_up",
              "local_bean_num_down",
              "local_ghost1_dir",
-             "local_ghost2_dir",
-             "local_nearest_energizer_dir"]
+             "local_ghost2_dir"]
         ]
         #TODO: how to deal with nan? Currently, set to an empty vector
         self.local_features.local_ghost1_dir= self.local_features.local_ghost1_dir.apply(
             lambda x: oneHot(x, self.dir_list))
         self.local_features.local_ghost2_dir= self.local_features.local_ghost2_dir.apply(
-            lambda x: oneHot(x, self.dir_list)
-        )
-        self.local_features.local_nearest_energizer_dir= self.local_features.local_nearest_energizer_dir.apply(
             lambda x: oneHot(x, self.dir_list)
         )
         self.global_features = self.global_features[
@@ -52,16 +48,12 @@ class TJunctionEstimatior(Estimator):
              "up_count",
              "down_count",
              "ghost1_global_dir",
-             "ghost2_global_dir",
-             "global_energizer_dir"]
+             "ghost2_global_dir"]
         ]
         self.global_features.ghost1_global_dir = self.global_features.ghost1_global_dir.apply(
             lambda x: oneHot(x, self.dir_list)
         )
         self.global_features.ghost2_global_dir = self.global_features.ghost2_global_dir.apply(
-            lambda x: oneHot(x, self.dir_list)
-        )
-        self.global_features.global_energizer_dir = self.global_features.global_energizer_dir.apply(
             lambda x: oneHot(x, self.dir_list)
         )
         # Indices of training and testing data
@@ -229,13 +221,13 @@ class TJunctionEstimatior(Estimator):
 
 if __name__ == '__main__':
     eval_list = {
-        "global":["ghost1_global_dir", "ghost2_global_dir", "global_energizer_dir"],
-        "local": ["local_ghost1_dir", "local_ghost2_dir", "local_nearest_energizer_dir"]
+        "global":["ghost1_global_dir", "ghost2_global_dir"],
+        "local": ["local_ghost1_dir", "local_ghost2_dir"]
     }
-    estimator = TJunctionEstimatior(
-        './extracted_data/T_junction_data.csv',
-        './extracted_data/T_junction_local_features.csv',
-        './extracted_data/T_junction_global_features.csv',
+    estimator = EndGameEstimatior(
+        './extracted_data/end_game_data.csv',
+        './extracted_data/end_game_local_features.csv',
+        './extracted_data/end_game_global_features.csv',
         eval_list)
     print('Size of local features', estimator.local_features.shape)
     print('Size of global features', estimator.global_features.shape)
