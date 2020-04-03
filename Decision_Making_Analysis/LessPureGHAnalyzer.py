@@ -25,7 +25,7 @@ import random
 from evaluation import binaryClassError, correctRate, AUC
 
 
-class LessGHAnalyzer:
+class LessPureGHAnalyzer:
     '''
     Description:
 
@@ -193,7 +193,7 @@ class LessGHAnalyzer:
         testing_label = 1 - testing_label
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion='gini',
-                                       max_depth=3)
+                                       max_depth=5)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
@@ -204,16 +204,16 @@ class LessGHAnalyzer:
         # print('BCE Loss after training {}'.format(estimation_loss))
         print('Classification correct rate {}'.format(correct_rate))
         print('AUC {}'.format(auc))
-        # Store tree features as txt file
         print('Feature Importances:', trained_tree.feature_importances_)
+        # # Store tree features as txt file
         tree_structure = export_text(trained_tree, feature_names=['D_C', 'D_d'])
         # with open('G2H_tree_structure.txt', 'w') as file:
         #     file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
-        # Store hunting rate
-        with open('DTree_selected_grazing2hunting_rate.csv', 'w') as file:
-            writer = csv.writer(file)
-            writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1, 1)))))
+        # # Store hunting rate
+        # with open('DTree_less_pure_grazing2hunting_rate.csv', 'w') as file:
+        #     writer = csv.writer(file)
+        #     writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1, 1)))))
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file=None,
@@ -222,7 +222,7 @@ class LessGHAnalyzer:
                                     filled=True,
                                     proportion=True)
         graph = graphviz.Source(node_data)
-        graph.render('G2H_selected_trained_tree_structure', view=False)
+        graph.render('G2H_less_pure_trained_tree_structure', view=False)
         # Collect data
         testing_data = pd.DataFrame(testing_data)
         testing_data.columns = ['combined_dist', 'closest_dot_dist']
@@ -295,10 +295,10 @@ class LessGHAnalyzer:
 
 
 if __name__ == '__main__':
-    feature_filename = 'extracted_data/less_G2H_feature.csv'
-    label_filename = 'extracted_data/less_G2H_label.csv'
-    mode_filename = 'extracted_data/less_G2H_mode.csv'
-    a = LessGHAnalyzer(feature_filename, label_filename, mode_filename)
+    feature_filename = 'extracted_data/less_pure_G2H_feature.csv'
+    label_filename = 'extracted_data/less_pure_G2H_label.csv'
+    mode_filename = 'extracted_data/less_pure_G2H_mode.csv'
+    a = LessPureGHAnalyzer(feature_filename, label_filename, mode_filename)
 
     # a.G2HAnalyzeLogistic()
     a.G2HAnalyzeDTree()

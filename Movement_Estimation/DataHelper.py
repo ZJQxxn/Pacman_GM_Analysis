@@ -13,6 +13,9 @@ import pandas as pd
 import numpy as np
 import json
 from ast import literal_eval
+from more_itertools import consecutive_groups
+import sys
+
 
 
 def selectAllNormalData(feature_filename):
@@ -176,6 +179,7 @@ def _from_dict2df(ten_points_pac):
 
 if __name__ == '__main__':
     all_data_filename = '../common_data/df_total.csv'
+    new_data_file = '../common_data/df_total_new.csv'
     selectAllNormalData(all_data_filename)
     selectEndGameData(all_data_filename)
     selectEnergizerData(all_data_filename)

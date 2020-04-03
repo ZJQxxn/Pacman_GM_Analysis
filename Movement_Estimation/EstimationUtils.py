@@ -1,6 +1,6 @@
 '''
 Description:
-    Some utility functions for the package "FeatureExtractor".
+    Some utility functions for the movement estimation.
     
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -92,6 +92,7 @@ region_relation = {
     10: {"up": [6, 7], "down": np.nan, "left": [9], "right": [11]},
     11: {"up": [7], "down": np.nan, "left": [10], "right": np.nan}
 }
+
 
 def determine_centroid(poly_list, pos):
     '''

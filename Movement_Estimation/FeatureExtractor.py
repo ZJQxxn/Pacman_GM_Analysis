@@ -111,7 +111,7 @@ def localEnergizerDir(all_data):
         right_on="pos1",
         how="left"
     ).drop(columns = ["pos1"]).rename(columns = {"pos2": "near_pos"})
-    # Determin whethr the near position is an energizer
+    # Determin whether the near position is an energizer
     all_near_energizer = path_data.assign(
         is_energizer=path_data.apply(
             lambda x: x.near_pos in x.energizers if not isinstance(x.energizers, float) else False,

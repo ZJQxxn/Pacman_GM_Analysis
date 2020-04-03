@@ -1,3 +1,5 @@
+#TODO: some undefined variables
+
 energizer_data = (
     df_total.reset_index()
     .merge(energizer_data, on=["file", "next_eat_energizer"])
