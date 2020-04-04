@@ -184,10 +184,48 @@ def extractGHData(feature_filename, label_filename, mode_filename):
         writer = csv.writer(file)
         writer.writerows(selected_mode)
 
+def extractGHWihtoutFailData(feature_filename, label_filename, mode_filename):
+    '''
+    Extract data that grazing first and then hunting after has eaten an energizer.
+    :param filename: Feature filename.
+    :return: VOID
+    '''
+    data = {}
+    mode = {}
+    with open('../common_data/df_total_new.csv', 'r') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            trial_name = row['file']
+            if trial_name not in data:
+                data[trial_name] = []
+                mode[trial_name] = []
+            data[trial_name].append(row)
+            mode[trial_name].append(whichNewGHMode(row))
+    selected_data = []
+    selected_label = []
+    selected_mode = []
+    for each_trial in data:
+        trial_data, trial_label, trial_mode = filterWihtoutFailDirectHunting(data[each_trial], mode[each_trial])
+        selected_data.extend(trial_data)
+        selected_label.extend(trial_label)
+        selected_mode.extend(trial_mode)
+    # Save features, labels, and modes
+    with open(feature_filename, 'w', newline = '') as file:
+        writer = csv.DictWriter(file, fieldnames = [each for each in selected_data[0].keys()])
+        writer.writeheader()
+        writer.writerows(selected_data)
+    with open(label_filename, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(selected_label)
+    with open(mode_filename, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerows(selected_mode)
+
 def filterDirectHunting(trial_data, trial_mode):
     '''
     Filter out data that directly hunting after energizers, for each trial.
     :param trial_data: A dict of trial data.
+    :param need_fail: Whether need the hunting failure data.
     :return: Processed trial data.
     '''
     # The Pacman is not escaping denotes it has eaten energizers.
@@ -248,9 +286,81 @@ def filterDirectHunting(trial_data, trial_mode):
                 if 'escaping' != blk_label[index][inner_idnex][3] \
                         and 'escaping' != blk_mode[index][inner_idnex][3] \
                         and 'grazing' == blk_mode[index][inner_idnex][3]:
-                    processed_data.append(blk_data[index][inner_idnex])
-                    processed_label.append(blk_label[index][inner_idnex])
-                    processed_mode.append(blk_mode[index][inner_idnex])
+                        processed_data.append(blk_data[index][inner_idnex])
+                        processed_label.append(blk_label[index][inner_idnex])
+                        processed_mode.append(blk_mode[index][inner_idnex])
+        return processed_data, processed_label, processed_mode
+
+def filterWihtoutFailDirectHunting(trial_data, trial_mode):
+    '''
+    Filter out data that directly hunting after energizers, for each trial.
+    :param trial_data: A dict of trial data.
+    :param need_fail: Whether need the hunting failure data.
+    :return: Processed trial data.
+    '''
+    # The Pacman is not escaping denotes it has eaten energizers.
+    step_num = len(trial_data)
+    # Find out the time step where energizers are eaten
+    energizer_point = []
+    for index in range(step_num-1):
+        step_data = trial_data[index]
+        next_step_data = trial_data[index + 1]
+        if 0 == len(str2List(step_data['energizers'])):
+            break
+        if len(str2List(next_step_data['energizers'])) < len(str2List(step_data['energizers'])):
+            energizer_point.append(index)
+     # Split data and filter out directly hunting time
+    if 0 == len(energizer_point):
+        return [], [], []
+    else:
+        # Take scared data after each generizer point (block data)
+        energizer_point.append(step_num - 1) # discard the last time step
+        blk_data = {}
+        blk_label = {}
+        blk_mode = {}
+        for index in range(len(energizer_point) - 1):
+            blk_data[index] = trial_data[
+                                energizer_point[index]:energizer_point[index+1]
+                              ]
+            blk_label[index] = trial_mode[
+                                energizer_point[index] + 1:energizer_point[index + 1] + 1
+                              ]
+            blk_mode[index] = trial_mode[
+                                energizer_point[index]:energizer_point[index + 1]
+                              ]
+        # Filter out data that directly hunting after energizer
+        processed_data = []
+        processed_label = []
+        processed_mode = []
+        for index in range(len(energizer_point) - 1):
+            start_index = 0
+            end_index = 0
+            step = 0
+            # Find where the pure grazing starts
+            while ('1' == blk_data[index][step]['status_h1']
+                or '1' == blk_data[index][step]['status_h2']):
+                step += 1
+                if (step >= len(blk_data[index])):
+                    break
+            start_index = step
+            step += 1
+            # Find where the hunting ends (i.e., ghosts becomes normal or dead)
+            while step < len(blk_data[index]) \
+                    and ('' != blk_data[index][step]['remain_scared_time1']
+                    or '' != blk_data[index][step]['remain_scared_time2']):
+                step += 1
+            end_index = step
+
+            # Select out data between this phase. And filter out escaping data, if any
+            for inner_idnex in range(start_index, end_index if end_index <= len(blk_data[index]) else len(blk_data[index])):
+                if 'escaping' != blk_label[index][inner_idnex][3] \
+                        and 'escaping' != blk_mode[index][inner_idnex][3] \
+                        and 'grazing' == blk_mode[index][inner_idnex][3]:
+                    if  "2.0" != blk_data[index][inner_idnex]['status_h1'] or \
+                        "2.0" != blk_data[index][inner_idnex]['status_h2']:
+                        processed_data.append(blk_data[index][inner_idnex])
+                        processed_label.append(blk_label[index][inner_idnex])
+                        processed_mode.append(blk_mode[index][inner_idnex])
         return processed_data, processed_label, processed_mode
 
 def whichGHMode(time_step_data):
@@ -259,6 +369,27 @@ def whichGHMode(time_step_data):
     status_h2 = int(float(time_step_data['status_h2']))
     mode = None
     if 1 == status_h1 or 1 == status_h2:
+        if 0 == status_h1:
+            mode = [0, 0, 1, 'hunting2']
+        elif 0 == status_h2:
+            mode = [0, 1, 0, 'hunting1']
+        else:
+            mode = [0, 1, 1, 'hunting_all']
+    else:
+        if 1 == status_g:
+            mode = [1, 0, 0, 'grazing']
+        else:
+            mode = [0, 0, 0, 'escaping']
+    return mode
+
+def whichNewGHMode(time_step_data):
+    status_g = int(float(time_step_data['status_g']))
+    status_h1 = int(float(time_step_data['status_h1'])) if time_step_data['status_h1'] != "prehunt" else 0
+    status_h2 = int(float(time_step_data['status_h2'])) if time_step_data['status_h2'] != "prehunt" else 0
+    status_h1 = 1 if status_h1 >= 1 else status_h1
+    status_h2 = 1 if status_h2 >= 1 else status_h2
+    mode = None
+    if  1 == status_h1 or  1 == status_h2:
         if 0 == status_h1:
             mode = [0, 0, 1, 'hunting2']
         elif 0 == status_h2:
@@ -474,6 +605,10 @@ if __name__ == '__main__':
     less_pure_label_filename = 'extracted_data/less_pure_G2H_label.csv'
     less_pure_mode_filename = 'extracted_data/less_pure_G2H_mode.csv'
 
+    without_fail_feature_filename = 'extracted_data/without_fail_G2H_feature.csv'
+    without_fail_label_filename = 'extracted_data/without_fail_G2H_label.csv'
+    without_fail_mode_filename = 'extracted_data/without_fail_G2H_mode.csv'
+
     # # Extract features
     # extractData(filename)
 
@@ -485,10 +620,11 @@ if __name__ == '__main__':
 
     # # Extract useful G2H data
     # extractGHData(less_feature_filename, less_label_filename, less_mode_filename)
+    extractGHWihtoutFailData(without_fail_feature_filename, without_fail_label_filename, without_fail_mode_filename)
 
     # # Extract only pre-hunt data
     # extractPreHuntData(prehunt_feature_filename)
 
     # # Extract less pure-graze to hunt data
-    extractLessPureGHData(less_pure_feature_filename, less_pure_label_filename, less_pure_mode_filename)
+    # extractLessPureGHData(less_pure_feature_filename, less_pure_label_filename, less_pure_mode_filename)
 
