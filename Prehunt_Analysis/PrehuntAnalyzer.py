@@ -29,6 +29,12 @@ class PrehuntAnalyzer:
         :param feature_file: Filename for features. 
         '''
         self.data = pd.read_csv(feature_file)
+        for c in [
+            "pacmanPos",
+            "energizers",
+            "beans"
+        ]:
+            self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
         # Only take data with normal ghosts.
         # Because we want to analyze why the Pacman choose to eat the energizer when ghosts are normal
         self.data = self.data[(self.data.ifscared1 <= 2) & (self.data.ifscared2 <= 2)]
@@ -45,6 +51,7 @@ class PrehuntAnalyzer:
                 .reset_index()
         )
         # The number of cross passed on the path from Pacman to the energizer
+        #TODO: analyze whether change the direction
         is_pass_cross = path_data.move_path.apply(
                 lambda x: [each in cross_pos for each in x]
         ).rename("is_pass_cross")
@@ -168,12 +175,12 @@ class PrehuntAnalyzer:
 
 
     def analyzeNoBeans(self):
-        for c in [
-            "pacmanPos",
-            "energizers",
-            "beans"
-        ]:
-            self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
+        # for c in [
+        #     "pacmanPos",
+        #     "energizers",
+        #     "beans"
+        # ]:
+        #     self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
         # The bean data
         bean_data = self.data[["file", "index", "pacmanPos", "beans"]]
         bean_data = bean_data.assign(
