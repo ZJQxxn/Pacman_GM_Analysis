@@ -49,9 +49,15 @@ class Estimator(ABC):
             on = ["file", "index"],
             how = "right"
         )[["pacman_dir"]]
+        self.labels = self.labels.shift(-1) # The pacman position
         self.labels = self.labels.fillna('stay')
-        self.class_list = ['up', 'down', 'left', 'right', 'stay']
-        self.labels = self.labels.apply(lambda x : oneHot(x.values.item(), self.class_list), axis = 1)
+        move_index = np.where(self.labels.pacman_dir != "stay")
+        # self.class_list = ['up', 'down', 'left', 'right', 'stay']
+        self.class_list = ['up', 'down', 'left', 'right']
+        self.labels = self.labels.iloc[move_index].apply(lambda x : oneHot(x.values.item(), self.class_list), axis = 1)
+        self.local_features = self.local_features.iloc[move_index]
+        self.global_features = self.global_features.iloc[move_index]
+        self.global_features = self.global_features.rename(columns = {"pacmanPos_x": "pacmanPos"})
         print("Finished initialization!")
 
     # @abstractmethod

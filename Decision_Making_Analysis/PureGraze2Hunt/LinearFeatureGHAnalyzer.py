@@ -1,13 +1,12 @@
 '''
 Description:
     Analyze the transitive probability from grazing to hunting. Using data that first grazing and then hunting. 
-    Discard hunting failure data.
 
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
-    2020/3/6
+    2020/4/9
 '''
 import numpy as np
 import pandas as pd
@@ -22,11 +21,14 @@ from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 import graphviz
 import random
+import sys
 
+sys.path.append('../')
+sys.path.append('./')
 from evaluation import binaryClassError, correctRate, AUC
+from AnalysisUtils import locs_df
 
-
-class PureGHWihtoutFailAnalyzer:
+class LinearFeatureGHAnalyzer:
     '''
     Description:
 
@@ -43,25 +45,26 @@ class PureGHWihtoutFailAnalyzer:
         :param mode_file: Filename for modes.
         '''
         random.seed(a=None)
-        self.data = []
-        self.labels =[]
-        self.modes = []
         # Read features
-        with open(feature_file, 'r') as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                self.data.append(row)
+        self.data = pd.read_csv(feature_file)
+        for c in [
+            "pacmanPos",
+            "beans"
+        ]:
+            self.data[c] = self.data[c].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
         # Read labels
+        self.labels =[]
         with open(label_file, 'r') as file:
             reader = csv.reader(file)
             for row in reader:
                 self.labels.append(row)
         # Read modes
+        self.modes = []
         with open(mode_file, 'r') as file:
             reader = csv.reader(file)
             for row in reader:
                 self.modes.append(row)
-        self.data = np.array(self.data)
+        # self.data = np.array(self.data)
         self.labels = np.array(self.labels)
         self.modes = np.array(self.modes)
 
@@ -69,6 +72,55 @@ class PureGHWihtoutFailAnalyzer:
     # ======================================
     #           PREPROCESSING
     # ======================================
+    def _localBeanNum(self, all_data):
+        # Find all the paths with length of 5
+        path_data = all_data[["file", "index", "pacmanPos", "beans"]].merge(
+            locs_df.loc[locs_df.dis == 5, ["pos1", "path"]],
+            left_on="pacmanPos",
+            right_on="pos1",
+            how="left",
+        )
+        # Construct path with length no more than 5
+        path_data = (
+            path_data.assign(
+                pos2=path_data.path.apply(lambda x: x[0][1]),  # TODO: why not [0][-1]?
+                pos1=path_data.path.apply(lambda x: x[0][0]),
+            )
+                .merge(
+                locs_df[["pos2", "pos1", "relative_dir"]].rename(
+                    columns={"relative_dir": "local_feature_dir"}
+                ),
+                on=["pos2", "pos1"],
+                how="left",
+            )
+                .drop(columns=["pos1", "pos2"])
+        )
+        # Find the number of beans on each path
+        path_data["beans_in_local"] = path_data.apply(
+            lambda x: sum([len(set(p) & set(x.beans)) / 5 for p in x.path]), 1
+        )
+        # Compute the number of beans for each direction
+        local_bean_num = (
+            path_data.groupby(["file", "index", "pacmanPos", "local_feature_dir"])
+                .apply(lambda x: x.beans_in_local.sum() / x.path.map(len).sum())
+                .rename("beans_in_local")
+                .reset_index()
+                .pivot_table(
+                index="local_feature_dir",
+                columns=["file", "index", "pacmanPos"],
+                values="beans_in_local",
+                aggfunc="max"  # maximal number of beans on paths of each direction
+            ).T.fillna(-1)
+        )
+        local_bean_num.columns = ["local_bean_num_" + each.strip("['").strip("']") for each in
+                                  local_bean_num.columns.values]
+        # Match with the index
+        all_data[["pacmanPos", "index", "file"]].merge(
+            local_bean_num.reset_index(), on=["pacmanPos", "index", "file"], how="left"
+        )
+        return local_bean_num
+
+
     def _G2HPreprocess(self, need_stan=False):
         '''
         Preprocessing data for analyzing grazing to hunting.
@@ -84,13 +136,20 @@ class PureGHWihtoutFailAnalyzer:
             - g2h_testing_data: Features in testing set for graze2hunt analyzing
             - g2h_testing_label: Labels in testing set for graze2hunt analyzing
         '''
+        # compute local bean num
+        local_bean_num = self._localBeanNum(self.data)
+        local_bean_num[local_bean_num == -1] = 0
+        local_bean_num = local_bean_num.apply(
+            lambda x: np.sum(x.values), axis = 1
+        )
+        local_bean_num = local_bean_num.round(decimals=1)
         # Extract useful features
         preprocessed_data = []
-        for index, each in enumerate(self.data):
+        for index, each in enumerate(self.data[["file", "index", "distance1", "distance2","rwd_pac_distance"]].values):
             combined_dist = None
-            ghost1_dist = float(each['distance1'])
-            ghost2_dist = float(each['distance2'])
-            dot_distance = float(each['rwd_pac_distance'])
+            ghost1_dist = each[2]
+            ghost2_dist = each[3]
+            dot_distance = each[4]
             # Compute the combined distance
             this_label = self.labels[index, 3]
             if 'hunting1' == this_label:
@@ -105,8 +164,8 @@ class PureGHWihtoutFailAnalyzer:
                 # combined_dist = np.min([ghost1_dist, ghost2_dist])
 
             temp = [
-                combined_dist,
-                dot_distance
+                combined_dist - dot_distance,
+                local_bean_num.values[index]
             ]
             preprocessed_data.append(temp)
         preprocessed_data = np.array(preprocessed_data)
@@ -118,6 +177,7 @@ class PureGHWihtoutFailAnalyzer:
             else:
                 preprocessed_labels.append([1, 0])
         preprocessed_labels = np.array(preprocessed_labels)
+
         # Standardization
         if need_stan:
             for col_index in range(preprocessed_data.shape[1]):
@@ -141,6 +201,42 @@ class PureGHWihtoutFailAnalyzer:
     # ======================================
     #           ANALYZING G2H
     # ======================================
+    def G2HAnalyzeLogistic(self):
+        '''
+        Grazing to hunting rate analysis with the logistic regression.
+        :return: VOID
+        '''
+        print('Start preprocessing...')
+        training_data, training_label, testing_data, testing_label = self._G2HPreprocess(need_stan = False)
+        print('...Finished preprocessing!\n')
+        # Label: 0 for hunting and 1 for grazing
+        training_ind_label = np.array([list(each).index(0) for each in training_label])
+        testing_label = 1 - testing_label  # To satisfy the prediction of logistic regression TODO: more explanation
+        # Train a Logistic Model
+        model = LogisticRegression(
+            penalty='elasticnet',
+            random_state=0,
+            solver='saga',
+            l1_ratio=0.5,
+            fit_intercept=True)
+        model.fit(training_data, training_ind_label)
+        # Testing
+        pred_label = model.predict_proba(testing_data)
+        # estimation_loss = binaryClassError(pred_label, testing_label)
+        correct_rate = correctRate(pred_label, testing_label)
+        auc = AUC(pred_label, testing_label)
+        # print('BCE Loss after training {}'.format(estimation_loss))
+        print('Classification correct rate {}'.format(correct_rate))
+        print('AUC {}'.format(auc))
+        print(
+            model.coef_,
+            model.intercept_
+        )
+        # Save tranferring rate
+        with open('Logistic_selected_grazing2hunting_rate (ENet).csv', 'w') as file:
+            writer = csv.writer(file)
+            writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1, 1)))))
+
     def G2HAnalyzeDTree(self):
         '''
         Grazing to hunting rate analysis with the decision tree.
@@ -158,7 +254,7 @@ class PureGHWihtoutFailAnalyzer:
         testing_label = 1 - testing_label
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion='gini',
-                                       max_depth=3)
+                                       max_depth=5)
         trained_tree = model.fit(training_data, training_ind_label)
         # Testing
         pred_label = trained_tree.predict_proba(testing_data)
@@ -176,21 +272,21 @@ class PureGHWihtoutFailAnalyzer:
         #     file.write(tree_structure)
         print('Decision Rule:\n', tree_structure)
         # # Store hunting rate
-        # with open('DTree_selected_grazing2hunting_rate.csv', 'w') as file:
+        # with open('DTree_less_pure_grazing2hunting_rate.csv', 'w') as file:
         #     writer = csv.writer(file)
         #     writer.writerows(np.hstack((testing_data, pred_label[:, 0].reshape((-1, 1)))))
         # Plot the trained tree
         node_data = export_graphviz(trained_tree,
                                     out_file=None,
-                                    feature_names=['D_C', 'D_d'],
+                                    feature_names=['D_C - D_d', '#Bean'],
                                     class_names=['Hunting', 'Grazing'],
                                     filled=True,
                                     proportion=True)
         graph = graphviz.Source(node_data)
-        graph.render('G2H_wihtout_fail_trained_tree_structure', view=False)
+        graph.render('G2H_linear_feature_trained_tree_structure', view=False)
         # Collect data
         testing_data = pd.DataFrame(testing_data)
-        testing_data.columns = ['combined_dist', 'closest_dot_dist']
+        testing_data.columns = ['comb_dot_diff', 'nearby_bean_num']
         pred_ind_label = pd.DataFrame(pred_ind_label)
         testing_ind_label = pd.DataFrame(testing_ind_label)
         is_correct = (pred_ind_label == testing_ind_label)
@@ -206,10 +302,18 @@ class PureGHWihtoutFailAnalyzer:
         print('Hunting correct rate:{}'.format(len(inter) / len(np.where(is_hunting.is_hunting == 1)[0])))
         # Plot estimation accuracy heat map
         # plt.figure(figsize=(15,10))
+        testing_result = testing_result.assign(
+            bin_comb_dot_diff = pd.cut(testing_result.comb_dot_diff, bins=30).astype(str).apply(
+                lambda x: np.round(eval(x.replace("(","["))[0], decimals = 1)
+            ),
+            bin_nearby_bean_num = pd.cut(testing_result.nearby_bean_num, bins=10).astype(str).apply(
+                lambda x: np.round(eval(x.replace("(","["))[0], decimals = 0)
+            )
+        )
         ax = sns.heatmap(
             testing_result.pivot_table(
-                index="closest_dot_dist",
-                columns="combined_dist",
+                columns="bin_comb_dot_diff",
+                index="nearby_bean_num",
                 values="is_correct",
                 aggfunc=lambda x: sum(x) / len(x),
             )[
@@ -223,10 +327,10 @@ class PureGHWihtoutFailAnalyzer:
         cbar.ax.tick_params(labelsize = 15)
         bottom, top = plt.gca().get_ylim()
         plt.title('G2H Correct Rate', fontsize = 20)
-        plt.xlabel("Combined Ghosts Distance", fontsize = 20)
+        plt.ylabel("# Nearby Beans", fontsize = 20)
         plt.xticks(fontsize = 15)
-        plt.ylabel("Nearest Dot Distance", fontsize = 20)
-        plt.yticks(plt.yticks()[0][::3],plt.yticks()[1][::3],fontsize = 15)
+        plt.xlabel("Combined Ghosts Distance - Nearest Dot Distance", fontsize = 20)
+        plt.yticks(plt.yticks()[0][::2],plt.yticks()[1][::2],fontsize = 15)
         plt.gca().set_ylim(bottom + 0.5, top - 0.5)
         plt.show()
         # Plot transfer rate heat map
@@ -234,8 +338,8 @@ class PureGHWihtoutFailAnalyzer:
         # plt.figure(figsize=(15, 10))
         ax = sns.heatmap(
             testing_result.pivot_table(
-                index="closest_dot_dist",
-                columns="combined_dist",
+                columns="bin_comb_dot_diff",
+                index="nearby_bean_num",
                 values="is_hunting",
                 aggfunc=lambda x: sum(x) / len(x),
             )[
@@ -249,10 +353,10 @@ class PureGHWihtoutFailAnalyzer:
         cbar.ax.tick_params(labelsize=15)
         bottom, top = plt.gca().get_ylim()
         plt.title('G2H Transfer Rate', fontsize=20)
-        plt.xlabel("Combined Ghosts Distance", fontsize=20)
+        plt.ylabel("# Nearby Beans", fontsize=20)
         plt.xticks(fontsize=15)
-        plt.ylabel("Nearest Dot Distance", fontsize=20)
-        plt.yticks(plt.yticks()[0][::3], plt.yticks()[1][::3], fontsize=15)
+        plt.xlabel("Combined Ghosts Distance - Nearest Dot Distance", fontsize=20)
+        plt.yticks(plt.yticks()[0][::2], plt.yticks()[1][::2], fontsize=15)
         plt.gca().set_ylim(bottom + 0.5, top - 0.5)
         plt.show()
 
@@ -260,10 +364,10 @@ class PureGHWihtoutFailAnalyzer:
 
 
 if __name__ == '__main__':
-    feature_filename = 'extracted_data/without_fail_G2H_feature.csv'
-    label_filename = 'extracted_data/without_fail_G2H_label.csv'
-    mode_filename = 'extracted_data/without_fail_G2H_mode.csv'
-    a = PureGHWihtoutFailAnalyzer(feature_filename, label_filename, mode_filename)
+    feature_filename = '../extracted_data/less_pure_G2H_feature.csv'
+    label_filename = '../extracted_data/less_pure_G2H_label.csv'
+    mode_filename = '../extracted_data/less_pure_G2H_mode.csv'
+    a = LinearFeatureGHAnalyzer(feature_filename, label_filename, mode_filename)
 
     # a.G2HAnalyzeLogistic()
     a.G2HAnalyzeDTree()

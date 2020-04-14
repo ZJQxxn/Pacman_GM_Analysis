@@ -420,6 +420,7 @@ def extractEndGameFeatures(feature_file):
         on=["file", "index"],
         how="left"
     )
+    all_local_feature = all_local_feature.assign(pacmanPos = end_game_data.pacmanPos)
     #     .merge(
     #     local_energizer_dir,
     #     on=["file", "index"]
@@ -532,6 +533,6 @@ def extractEnergizerFeatures(feature_file):
 if __name__ == '__main__':
     print("Finished all the initialization!")
     # extractNormalFeatures('./extracted_data/normal_all_data.csv')
-    # extractEndGameFeatures('./extracted_data/end_game_data.csv')
+    extractEndGameFeatures('./extracted_data/end_game_data.csv')
     # extractTJunctionFeatures('./extracted_data/T_junction_data.csv')
     # extractEnergizerFeatures('./extracted_data/energizer_data.csv')

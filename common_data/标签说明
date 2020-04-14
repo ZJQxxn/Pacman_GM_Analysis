@@ -1,0 +1,35 @@
+status_h1/2中，
+1代表hunt success mode（最后吃到鬼了）（肯定在hunt），
+2代表hunt failure mode（最后没吃到鬼）情况下在hunt的label，我们利用的是轨迹中的吃点效率不能高于hunt success轨迹中的吃点效率。
+0代表所有scared ghost情境下的没有hunting的label，
+‘prehunt’代表normal ghost下的prehunt label
+
+================================================
+
+dots奖赏3，big dots4，水果从3到7分别是3，5，8，12，17
+
+reward: 1 dots, 2 big dots, 3 cherry, 4 strawberry, 5 orange, 6 apple, 7 melon
+
+ifscared1/2： 1 chasing pacman, 2 going corner, 3 dead ghosts (include ghosts are being eaten), 4 scared ghosts, 5 flash scared ghosts
+ifscared1/2是内置鬼的状态，标注他是在追pacman还是在跑回自己的领地：going corner（这只有黄鬼会这样，红鬼永远在追pacman）
+
+pacman_dir: 从上一个位置到这一个位置，Pacman移动的方向
+
+==================================================
+Suicide: And
+--The ghost to Pacman distance is decreasing by 2 at each time point
+--No dots on the route from Pacman to ghost
+Evade: And
+--Ghost is not scared
+--G-P distance <= 15
+--G-P distance keeps the same during evading
+--Before evading, G-P distance is decreasing
+--Ghost is ”following” Pacman
+Hunt: And
+--G-P distance is decreasing
+--Pacman is ”following” ghost
+Graze: Or
+--Distance to the closest bean is decreasing
+--Pacman has eaten the closest bean
+--The closest bean is changing (Pacman switches from chasing bean A to bean B)
+

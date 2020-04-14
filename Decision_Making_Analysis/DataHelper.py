@@ -388,6 +388,7 @@ def whichNewGHMode(time_step_data):
     status_h2 = int(float(time_step_data['status_h2'])) if time_step_data['status_h2'] != "prehunt" else 0
     status_h1 = 1 if status_h1 >= 1 else status_h1
     status_h2 = 1 if status_h2 >= 1 else status_h2
+
     mode = None
     if  1 == status_h1 or  1 == status_h2:
         if 0 == status_h1:
@@ -415,7 +416,7 @@ def extractLessPureGHData(feature_filename, label_filename, mode_filename):
     '''
     data = {}
     mode = {}
-    with open('../common_data/df_total_GM.csv', 'r') as file:
+    with open('../common_data/df_total_new.csv', 'r') as file:
         reader = csv.DictReader(file)
         for row in reader:
             trial_name = row['file']
@@ -423,7 +424,7 @@ def extractLessPureGHData(feature_filename, label_filename, mode_filename):
                 data[trial_name] = []
                 mode[trial_name] = []
             data[trial_name].append(row)
-            mode[trial_name].append(whichGHMode(row))
+            mode[trial_name].append(whichNewGHMode(row))
     selected_data = []
     selected_label = []
     selected_mode = []
@@ -505,91 +506,25 @@ def filterLessPureDirectHunting(trial_data, trial_mode):
                     if step >= len(blk_data[index]):
                         break
                 pure_graze_end_index = step
-                step += 1
             else:
                 pure_graze_end_index = step
-            # Find where the hunting ends (i.e., ghosts becomes normal or dead)
-            if step < len(blk_data[index]):
-                while step < len(blk_data[index]) \
-                        and ('' != blk_data[index][step]['remain_scared_time1']
-                             or '' != blk_data[index][step]['remain_scared_time2']):
-                    step += 1
-                    if step >= len(blk_data[index]):
-                        break
-                end_index = step
-            else:
-                end_index = step
-            # Select out data between this phase. And filter out escaping data, if any
-            for inner_index in \
-                            list(
-                                range(
-                                        pure_graze_end_index - 3 if pure_graze_end_index - 3 > start_index else start_index,
-                                       pure_graze_end_index if not pure_graze_end_index > len(blk_label[index]) else len(blk_label[index]))
-                            ) \
-                            + list(
-                                range(pure_graze_end_index,
-                                     end_index if not end_index > len(blk_label[index]) else len(blk_label[index]))
-                            ):
+            # Select out data between 3 step before and 3 steps after the pure graze end point.
+            # And filter out escaping data, if any
+            for inner_index in range(
+                pure_graze_end_index - 3 if pure_graze_end_index - 3 >= 0 else 0,
+                pure_graze_end_index + 3 if pure_graze_end_index + 3 <= len(blk_data[index]) else len(blk_data[index])
+            ):
                 if 'escaping' != blk_label[index][inner_index][3] \
                         and 'escaping' != blk_mode[index][inner_index][3] \
-                        and 'grazing' == blk_mode[index][inner_index][3]:
+                        and 'grazing' == blk_mode[index][inner_index][3] \
+                        and float(blk_data[index][inner_index]["distance1"]) < 34 \
+                        and float(blk_data[index][inner_index]["distance2"]) < 34:
                     processed_data.append(blk_data[index][inner_index])
                     processed_label.append(blk_label[index][inner_index])
                     processed_mode.append(blk_mode[index][inner_index])
         return processed_data, processed_label, processed_mode
 
-# ==================================================================
-#               EXTRACT DATA FROM PRE-HUNT TO HUNT
-# ==================================================================
-def extractPreHuntData(feature_filename):
-    data = pd.read_csv('../common_data/df_total_GM.csv')
-    scared_time = max(data.remain_scared_time1.max(),data.remain_scared_time2.max())
-    prehunt_data = data.groupby(by = 'file').apply(
-        lambda x: filterPrehunt(x, scared_time)
-    ).loc[:,['mean_ghost1_distance', 'mean_ghost2_distance', 'mean_rwd_distance', 'total_scared_time']]
-    prehunt_data.to_csv(feature_filename)
-    print('The shape of pre-hunt data is ', prehunt_data.shape)
 
-#TODO: useless now
-def filterPrehunt(trial_data, total_scared_time):
-    step_num = trial_data.shape[0]
-    energizer_point = []
-    for index in range(step_num - 1):
-        step_data = trial_data.iloc[index]
-        next_step_data = trial_data.iloc[index + 1]
-        if pd.isna(step_data.energizers) or pd.isna(next_step_data.energizers) or 0 == len(step_data.energizers):
-            break
-        if len(next_step_data.energizers) < len(step_data.energizers):
-            energizer_point.append(index)
-    if 0 == len(energizer_point):
-        return pd.DataFrame()
-    else:
-        energizer_point = [each for each in energizer_point
-                           if not pd.isna(trial_data.remain_scared_time1.iloc[each])
-                           and not pd.isna(trial_data.remain_scared_time2.iloc[each])]
-        offset = 3
-        start_index = [each - offset if each - offset > 0 else 0 for each in energizer_point]
-        if 0 in start_index:
-            start_index.remove(0)
-        # Select pre-hunt data
-        if len(start_index) == 0:
-            return pd.DataFrame()
-        else:
-            prehunt_data = pd.DataFrame()
-            for each in start_index:
-                mean_ghost1_dist = trial_data.distance1.iloc[range(each, each+offset)].mean()
-                mean_ghost2_dist = trial_data.distance1.iloc[range(each, each+offset)].mean()
-                mean_rwd_dist = trial_data.rwd_pac_distance.iloc[range(each, each+offset)].mean()
-                temp_prehunt = pd.DataFrame(
-                    pd.DataFrame([mean_ghost1_dist, mean_ghost2_dist, mean_rwd_dist, total_scared_time]).values.T
-                )
-                temp_prehunt.columns = ['mean_ghost1_distance', 'mean_ghost2_distance',
-                                        'mean_rwd_distance', 'total_scared_time']
-                # if trial_data.status_h1.iloc[each+offset] == 1 or trial_data.status_h2.iloc[each+offset] == 1:
-                if trial_data.status_g.iloc[each + offset] == 1 \
-                        and (trial_data.status_h1.iloc[each+offset] == 1 or trial_data.status_h2.iloc[each+offset] == 1):
-                    prehunt_data = prehunt_data.append(temp_prehunt)
-            return prehunt_data
 
 if __name__ == '__main__':
     # Filenames
@@ -620,11 +555,8 @@ if __name__ == '__main__':
 
     # # Extract useful G2H data
     # extractGHData(less_feature_filename, less_label_filename, less_mode_filename)
-    extractGHWihtoutFailData(without_fail_feature_filename, without_fail_label_filename, without_fail_mode_filename)
-
-    # # Extract only pre-hunt data
-    # extractPreHuntData(prehunt_feature_filename)
+    # extractGHWihtoutFailData(without_fail_feature_filename, without_fail_label_filename, without_fail_mode_filename)
 
     # # Extract less pure-graze to hunt data
-    # extractLessPureGHData(less_pure_feature_filename, less_pure_label_filename, less_pure_mode_filename)
+    extractLessPureGHData(less_pure_feature_filename, less_pure_label_filename, less_pure_mode_filename)
 

@@ -6,7 +6,7 @@ Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
-    2020/3/6
+    2020/4/9
 '''
 import numpy as np
 import pandas as pd
@@ -21,11 +21,13 @@ from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 import graphviz
 import random
+import sys
 
+sys.path.append('../')
 from evaluation import binaryClassError, correctRate, AUC
 
 
-class LessPureGHAnalyzer:
+class AroundKeyPointGHAnalyzer:
     '''
     Description:
 
@@ -241,10 +243,18 @@ class LessPureGHAnalyzer:
         print('Hunting correct rate:{}'.format(len(inter) / len(np.where(is_hunting.is_hunting == 1)[0])))
         # Plot estimation accuracy heat map
         # plt.figure(figsize=(15,10))
+        testing_result = testing_result.assign(
+            bin_combined_dist=pd.cut(testing_result.combined_dist, bins=40).astype(str).apply(
+                lambda x: np.round(eval(x.replace("(", "["))[0], decimals=1)
+            ),
+            bin_closest_dot_dist=pd.cut(testing_result.closest_dot_dist, bins=20).astype(str).apply(
+                lambda x: np.round(eval(x.replace("(", "["))[0], decimals=1)
+            )
+        )
         ax = sns.heatmap(
             testing_result.pivot_table(
                 index="closest_dot_dist",
-                columns="combined_dist",
+                columns="bin_combined_dist",
                 values="is_correct",
                 aggfunc=lambda x: sum(x) / len(x),
             )[
@@ -261,7 +271,7 @@ class LessPureGHAnalyzer:
         plt.xlabel("Combined Ghosts Distance", fontsize = 20)
         plt.xticks(fontsize = 15)
         plt.ylabel("Nearest Dot Distance", fontsize = 20)
-        plt.yticks(plt.yticks()[0][::3],plt.yticks()[1][::3],fontsize = 15)
+        plt.yticks(plt.yticks()[0][::2],plt.yticks()[1][::2],fontsize = 15)
         plt.gca().set_ylim(bottom + 0.5, top - 0.5)
         plt.show()
         # Plot transfer rate heat map
@@ -270,7 +280,7 @@ class LessPureGHAnalyzer:
         ax = sns.heatmap(
             testing_result.pivot_table(
                 index="closest_dot_dist",
-                columns="combined_dist",
+                columns="bin_combined_dist",
                 values="is_hunting",
                 aggfunc=lambda x: sum(x) / len(x),
             )[
@@ -287,7 +297,7 @@ class LessPureGHAnalyzer:
         plt.xlabel("Combined Ghosts Distance", fontsize=20)
         plt.xticks(fontsize=15)
         plt.ylabel("Nearest Dot Distance", fontsize=20)
-        plt.yticks(plt.yticks()[0][::3], plt.yticks()[1][::3], fontsize=15)
+        plt.yticks(plt.yticks()[0][::2], plt.yticks()[1][::2], fontsize=15)
         plt.gca().set_ylim(bottom + 0.5, top - 0.5)
         plt.show()
 
@@ -295,10 +305,10 @@ class LessPureGHAnalyzer:
 
 
 if __name__ == '__main__':
-    feature_filename = 'extracted_data/less_pure_G2H_feature.csv'
-    label_filename = 'extracted_data/less_pure_G2H_label.csv'
-    mode_filename = 'extracted_data/less_pure_G2H_mode.csv'
-    a = LessPureGHAnalyzer(feature_filename, label_filename, mode_filename)
+    feature_filename = '../extracted_data/less_pure_G2H_feature.csv'
+    label_filename = '../extracted_data/less_pure_G2H_label.csv'
+    mode_filename = '../extracted_data/less_pure_G2H_mode.csv'
+    a = AroundKeyPointGHAnalyzer(feature_filename, label_filename, mode_filename)
 
     # a.G2HAnalyzeLogistic()
     a.G2HAnalyzeDTree()

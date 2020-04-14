@@ -35,7 +35,8 @@ class AllNormalEstimatior(Estimator):
              "local_bean_num_down",
              "local_ghost1_dir",
              "local_ghost2_dir",
-             "local_nearest_energizer_dir"]
+             # "local_nearest_energizer_dir",
+             "pacmanPos"]
         ]
         #TODO: how to deal with nan? Currently, set to an empty vector
         self.local_features.local_ghost1_dir= self.local_features.local_ghost1_dir.apply(
@@ -43,9 +44,16 @@ class AllNormalEstimatior(Estimator):
         self.local_features.local_ghost2_dir= self.local_features.local_ghost2_dir.apply(
             lambda x: oneHot(x, self.dir_list)
         )
-        self.local_features.local_nearest_energizer_dir= self.local_features.local_nearest_energizer_dir.apply(
-            lambda x: oneHot(x, self.dir_list)
+        #TODO: need dir?
+        # self.local_features.local_nearest_energizer_dir= self.local_features.local_nearest_energizer_dir.apply(
+        #     lambda x: oneHot(x, self.dir_list)
+        # )
+        self.local_features.pacmanPos = self.local_features.pacmanPos.apply(lambda x: eval(x))
+        self.local_features = self.local_features.assign(
+            pos_x = self.local_features.pacmanPos.apply(lambda x: x[0]),
+            pos_y = self.local_features.pacmanPos.apply(lambda x: x[1])
         )
+        self.local_features = self.local_features.drop(columns = ["pacmanPos"])
         self.global_features = self.global_features[
             ["left_count",
              "right_count",
@@ -53,7 +61,8 @@ class AllNormalEstimatior(Estimator):
              "down_count",
              "ghost1_global_dir",
              "ghost2_global_dir",
-             "global_energizer_dir"]
+             "global_energizer_dir",
+             "pacmanPos"]
         ]
         self.global_features.ghost1_global_dir = self.global_features.ghost1_global_dir.apply(
             lambda x: oneHot(x, self.dir_list)
@@ -64,6 +73,12 @@ class AllNormalEstimatior(Estimator):
         self.global_features.global_energizer_dir = self.global_features.global_energizer_dir.apply(
             lambda x: oneHot(x, self.dir_list)
         )
+        self.global_features.pacmanPos = self.global_features.pacmanPos.apply(lambda x: eval(x))
+        self.global_features = self.global_features.assign(
+            pos_x=self.global_features.pacmanPos.apply(lambda x: x[0]),
+            pos_y=self.global_features.pacmanPos.apply(lambda x: x[1])
+        )
+        self.global_features = self.global_features.drop(columns=["pacmanPos"])
         # Indices of training and testing data
         training_ratio = 0.8
         sample_num = self.labels.shape[0]
@@ -243,9 +258,9 @@ if __name__ == '__main__':
     # Estimation with local features
     estimator.localEstimationLogistic()
     estimator.localEstimationDTree()
-    estimator.localEstimationSVM()
+    # estimator.localEstimationSVM()
 
     # Estimation with global features
     estimator.globalEstimationLogistic()
     estimator.globalEstimationDTree()
-    estimator.globalEstimationSVM()
+    # estimator.globalEstimationSVM()

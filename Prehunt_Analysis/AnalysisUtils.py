@@ -32,19 +32,6 @@ polys = [
 poly_ext = [Polygon(p).buffer(0.001) for p in polys]
 
 # The number of cross in each region
-region_cross_num = {
-    1: 6,
-    2: 8,
-    3: 8,
-    4: 6,
-    5: 3,
-    6: 9,
-    7: 3,
-    8: 6,
-    9: 9,
-    10: 9,
-    11: 6
-}
 
 def determine_region(poly_list, pos):
     '''
