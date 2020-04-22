@@ -14,6 +14,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.tree.export import export_text, export_graphviz
+import graphviz
 import sys
 
 sys.path.append('./')
@@ -149,7 +150,7 @@ class AllNormalEstimatior(Estimator):
         # testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
         # Train the decision classification tree
         model = DecisionTreeClassifier(criterion='entropy',
-                                       max_depth=10)
+                                       max_depth=5)
         trained_tree = model.fit(train_data, train_ind_label)
         # Testing
         pred_label_prob = model.predict_proba(testing_data)
@@ -157,6 +158,17 @@ class AllNormalEstimatior(Estimator):
         # estimation_loss = binaryClassError(pred_label, testing_label)
         correct_rate = correctRate(pred_label, testing_ind_label)
         print('Classification correct rate {}'.format(correct_rate))
+        # Plot the trained tree
+        node_data = export_graphviz(trained_tree,
+                                    out_file=None,
+                                    feature_names=['B_L', 'B_R', 'B_U', 'B_D', 'G_1d_1','G_1d_2','G_1d_3','G_1d_4',
+                                                   'G_2d_1','G_2d_2','G_2d_3','G_2d_4', 'x', 'y'],
+                                    class_names=['Left', 'Right', 'Up', 'Down'],
+                                    filled=True,
+                                    proportion=True)
+        graph = graphviz.Source(node_data)
+        graph.render('All_normal_local_features', view=False)
+
 
     def localEstimationSVM(self):
         print('=' * 20, 'Local Estimation (SVM)', '=' * 20)
@@ -208,8 +220,8 @@ class AllNormalEstimatior(Estimator):
         testing_ind_label = self.global_test_labels.apply(lambda x: list(x).index(1)).values
         # testing_label = np.array([list(each) for each in testing_label], dtype=np.int)
         # Train the decision classification tree
-        model = DecisionTreeClassifier(criterion='entropy',
-                                       max_depth=10)
+        model = DecisionTreeClassifier(criterion='gini',
+                                       max_depth=5)
         trained_tree = model.fit(train_data, train_ind_label)
         # Testing
         pred_label_prob = model.predict_proba(testing_data)
@@ -217,6 +229,18 @@ class AllNormalEstimatior(Estimator):
         # estimation_loss = binaryClassError(pred_label, testing_label)
         correct_rate = correctRate(pred_label, testing_ind_label)
         print('Classification correct rate {}'.format(correct_rate))
+        # Plot the trained tree
+        node_data = export_graphviz(trained_tree,
+                                    out_file=None,
+                                    feature_names=['B_L', 'B_R', 'B_U', 'B_D', 'G_1d_1','G_1d_2','G_1d_3','G_1d_4',
+                                                   'G_2d_1','G_2d_2','G_2d_3','G_2d_4', 'E_D_1','E_D_2','E_D_3',
+                                                   'E_D_4', 'x', 'y'],
+                                    class_names=['Left', 'Right', 'Up', 'Down'],
+                                    filled=True,
+                                    proportion=True)
+        graph = graphviz.Source(node_data)
+        graph.render('All_normal_global_features', view=False)
+
 
     def globalEstimationSVM(self):
         print('=' * 20, 'Global Estimation (SVM)', '=' * 20)
@@ -256,11 +280,11 @@ if __name__ == '__main__':
     print('Size of global features', estimator.global_features.shape)
 
     # Estimation with local features
-    estimator.localEstimationLogistic()
+    # estimator.localEstimationLogistic()
     estimator.localEstimationDTree()
     # estimator.localEstimationSVM()
 
     # Estimation with global features
-    estimator.globalEstimationLogistic()
+    # estimator.globalEstimationLogistic()
     estimator.globalEstimationDTree()
     # estimator.globalEstimationSVM()

@@ -16,6 +16,7 @@ ifscared1/2是内置鬼的状态，标注他是在追pacman还是在跑回自己
 pacman_dir: 从上一个位置到这一个位置，Pacman移动的方向
 
 ==================================================
+
 Suicide: And
 --The ghost to Pacman distance is decreasing by 2 at each time point
 --No dots on the route from Pacman to ghost
@@ -33,3 +34,13 @@ Graze: Or
 --Pacman has eaten the closest bean
 --The closest bean is changing (Pacman switches from chasing bean A to bean B)
 
+==================================================
+
+map axis：
+position (x_pos, y_pos)
+
+｜--------→ x
+｜
+｜
+｜
+↓y
