@@ -38,6 +38,7 @@ class PrehuntAnalyzer:
         # Only take data with normal ghosts.
         # Because we want to analyze why the Pacman choose to eat the energizer when ghosts are normal
         self.data = self.data[(self.data.ifscared1 <= 2) & (self.data.ifscared2 <= 2)]
+        print("Finished initialization!")
 
 
     def _TurnRatio(self, trial_data, cross_pos):
@@ -66,6 +67,36 @@ class PrehuntAnalyzer:
                     turn_num += 1
             pre_dir = cur_dir
         return turn_num / is_pass_cross.sum()
+
+
+    def _pathBean(self, trial_data):
+        '''
+        Compute the nearby bean number for the starting point and energizer point of a pre-hunt path.
+        :param trial_data: The data of a a trial (file).
+        :return: A 2D matrix where the first row denotes the starting point bean number and the second row denotes 
+                 the energizer point bean number, the third row represents the pre-hunt mode of each path.
+        '''
+        path_pos = [0]
+        path_end_point = list(np.where(np.diff(trial_data.time_step.values) > 1)[0])
+        # The trial has only one pre-hunt path
+        if len(path_end_point) == 0:
+            pass
+        else:
+            for each in path_end_point:
+                path_pos.extend([each, each + 1])
+        path_pos.extend([trial_data.shape[0]])
+        start_point_bean_num = []
+        energizer_point_bean_num = []
+        modes = []
+        for i in range(len(path_pos) // 2):
+            if trial_data.after_energizer_mode.values[i] == "hunt":
+                mode = "hunt"
+            else:
+                mode = "graze"
+            start_point_bean_num.append(trial_data.near_bean_num.values[path_pos[i]])
+            energizer_point_bean_num.append(trial_data.near_bean_num.values[path_pos[i+1] - 1])
+            modes.append(mode)
+        return np.array([start_point_bean_num, energizer_point_bean_num, modes])
 
 
     def analyzeInertia(self):
@@ -222,9 +253,91 @@ class PrehuntAnalyzer:
         plt.show()
 
 
+    def compareEscaping2Walk(self):
+        # TODO: Two cases: Pacman escaping and Pacman normal; compare pre-hunt ratio, ghost distance, nearby bean number
+        # TODO: because the Pacman might have different DM policies for different conditions
+        # Compute the nearest ghost distance
+        all_data = pd.read_csv("../common_data/df_total_new.csv")
+        all_data_nearest_ghost_dist = all_data[["distance1", "distance2"]].apply(
+            lambda x: np.min([x.distance1, x.distance2]),
+            axis=1
+        )
+        prehunt_nearest_ghost_dist = self.data[["distance1", "distance2"]].apply(
+            lambda x: np.min([x.distance1, x.distance2]),
+            axis=1
+        )
+        pre_hunt_data = self.data.assign(
+            nearest_ghost_dist=prehunt_nearest_ghost_dist
+        )
+        # Compute the nearby bean number
+        pre_hunt_data = pre_hunt_data.assign(
+            bean_distance=pre_hunt_data[["pacmanPos", "beans"]].apply(
+                lambda x: [len(dijkstra_distance(x.pacmanPos, each)) for each in x.beans],
+                axis=1
+            )
+        )
+        pre_hunt_data = pre_hunt_data.assign(
+            near_bean_num=pre_hunt_data[["bean_distance"]].apply(
+                lambda x: np.sum(np.array(x.bean_distance) <= 5),
+                axis=1
+            )
+        )
+        # Escaping Pacman data
+        escaping_data = pre_hunt_data[(pre_hunt_data.status_e1 == 1) | (pre_hunt_data.status_e2 == 1)]
+        # Normal Pacman data
+        normal_data = pre_hunt_data[(pre_hunt_data.status_e1 == 0) & (pre_hunt_data.status_e2 == 0)]
+        # Compute chi-square
+        all_hist = np.histogram(all_data_nearest_ghost_dist, density=True)
+        escaping_hist = np.histogram(
+            escaping_data.nearest_ghost_dist,
+            bins=all_hist[1],
+            density=True)
+        normal_hist = np.histogram(
+            normal_data.nearest_ghost_dist,
+            bins=all_hist[1],
+            density=True)
+        escaping_chi2_stat = chisquare(
+            escaping_hist[0] / np.sum(escaping_hist[0]),
+            all_hist[0] / np.sum(all_hist[0])
+        )
+        normal_chi2_stat = chisquare(
+            normal_hist[0] / np.sum(normal_hist[0]),
+            all_hist[0] / np.sum(all_hist[0])
+        )
+        # Plot the histogram of nearest ghost distance
+        plt.figure(figsize=(25, 10))
+        plt.subplot(1, 3, 1)
+        plt.title("All Data", fontsize=20)
+        sns.distplot(all_data_nearest_ghost_dist, kde=True, color="#1BA3F9")
+        plt.xlabel('Nearest Ghosts Distance', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Gaussian KDE', fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.subplot(1, 3, 2)
+        plt.title("Escaping Pacman [$\\chi^2$ = {}]".format(str(escaping_chi2_stat[1])[:5]), fontsize=20)
+        sns.distplot(escaping_data.nearest_ghost_dist, kde=False,
+                     color="#1BA3F9")
+        plt.fill_between([34, 40], 0, 250, color='#f26755', alpha=0.2, hatch='\\', edgecolor='w')
+        plt.xlabel('Nearest Ghosts Distance', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Count', fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.subplot(1, 3, 3)
+        plt.title("Normal Pacman [$\\chi^2$ = {}]".format(str(normal_chi2_stat[1])[:5]), fontsize=20)
+        sns.distplot(normal_data.nearest_ghost_dist, kde=False,
+                     color="#1BA3F9")
+        plt.fill_between([34, 40], 0, 140, color='#f26755', alpha=0.2, hatch='\\', edgecolor='w')
+        plt.xlabel('Nearest Ghosts Distance', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Count', fontsize=20)
+        plt.yticks(np.arange(0, 141, 20), np.arange(0, 141, 20), fontsize=20)
+        plt.savefig("escaping-2cases-ghost-distance-analysis.pdf")
+        plt.show()
+
+
     def analyzeNoBeans(self):
         # The bean data
-        bean_data = self.data[["file", "pacmanPos", "beans", "after_energizer_mode"]]
+        bean_data = self.data[["file", "time_step", "pacmanPos", "beans", "after_energizer_mode"]]
         bean_data = bean_data.assign(
             bean_distance=bean_data[["pacmanPos", "beans"]].apply(
                 lambda x: [len(dijkstra_distance(x.pacmanPos, each)) for each in x.beans],
@@ -237,12 +350,37 @@ class PrehuntAnalyzer:
                 axis=1
             )
         )
-        # Plot near bean nums
+        # The nearby bean number at the pre-hunt starting point and energizer point
+        bean_data = (
+            bean_data.groupby(['file']).apply(
+                lambda x: self._pathBean(x)
+            )
+                .rename("path_nearby_bean_num")
+                .reset_index()
+        )
+        # Collect data
+        hunt_start_data = []
+        hunt_energizer_data = []
+        graze_start_data = []
+        graze_energizer_data = []
+        for each in bean_data.path_nearby_bean_num.values:
+            for point_index in range(each.shape[1]):
+                if each[2, point_index] == "hunt":
+                    hunt_start_data.append(int(each[0, point_index]))
+                    hunt_energizer_data.append(int(each[1, point_index]))
+                else:
+                    graze_start_data.append(int(each[0, point_index]))
+                    graze_energizer_data.append(int(each[1, point_index]))
+        all_start_data = hunt_start_data
+        all_start_data.extend(graze_start_data)
+        all_energizer_data = hunt_energizer_data
+        all_energizer_data.extend(graze_energizer_data)
+        # Plot near bean nums for different time points
         plt.figure(figsize=(15,10))
         plt.subplot(1, 2, 1)
-        plt.title("Directly Hunt", fontsize = 20)
+        plt.title("Starting Point", fontsize = 20)
         sns.distplot(
-            bean_data[bean_data.after_energizer_mode == "hunt"].near_bean_num,
+            all_start_data,
             kde = False,
             color="#1BA3F9",
             bins = 8
@@ -251,11 +389,10 @@ class PrehuntAnalyzer:
         plt.xticks(fontsize=20)
         plt.ylabel('Count', fontsize=20)
         plt.yticks(fontsize=20)
-
         plt.subplot(1, 2, 2)
-        plt.title("Graze Firstly", fontsize=20)
+        plt.title("Energizer Point", fontsize=20)
         sns.distplot(
-            bean_data[bean_data.after_energizer_mode == "graze"].near_bean_num,
+            all_energizer_data,
             kde=False,
             color="#1BA3F9",
             bins=8
@@ -264,9 +401,67 @@ class PrehuntAnalyzer:
         plt.xticks(fontsize=20)
         plt.ylabel('Count', fontsize=20)
         plt.yticks(fontsize=20)
-        plt.savefig("nearby_bean_analysis.pdf")
+        plt.savefig("path_2points_nearby_bean_analysis.pdf")
         plt.show()
 
+        # Plot near bean nums for each path
+        plt.figure(figsize=(25, 20))
+        # For directly hunt
+        plt.subplot(2, 2, 1)
+        plt.title("Directly Hunt [starting point]", fontsize=20)
+        sns.distplot(
+            hunt_start_data,
+            kde=False,
+            color="#1BA3F9",
+            bins=8
+        )
+        plt.xlabel('Nearby Bean Num', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Count', fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.subplot(2, 2, 2)
+        plt.title("Directly Hunt [energizer point]", fontsize=20)
+        sns.distplot(
+            hunt_energizer_data,
+            kde=False,
+            color="#1BA3F9",
+            bins=8
+        )
+        plt.xlabel('Nearby Bean Num', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Count', fontsize=20)
+        plt.yticks(fontsize=20)
+        # For graze firstly
+        plt.subplot(2, 2, 3)
+        plt.title("Graze Firstly [starting point]", fontsize=20)
+        sns.distplot(
+            graze_start_data,
+            kde=False,
+            color="#1BA3F9",
+            bins=8
+        )
+        plt.xlabel('Nearby Bean Num', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Count', fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.subplot(2, 2, 4)
+        plt.title("Graze Firstly [energizer point]", fontsize=20)
+        sns.distplot(
+            graze_energizer_data,
+            kde=False,
+            color="#1BA3F9",
+            bins=8
+        )
+        plt.xlabel('Nearby Bean Num', fontsize=20)
+        plt.xticks(fontsize=20)
+        plt.ylabel('Count', fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.savefig("path_4case_nearby_bean_analysis.pdf")
+        plt.show()
+
+
+    # =============================================================
+    # =============================================================
 
     def _lookRatio(self, eye_region, energizer_region):
         count = 0
@@ -313,7 +508,8 @@ class PrehuntAnalyzer:
 
 if __name__ == '__main__':
     analyzer = PrehuntAnalyzer("extracted_data/all_prehunt_data.csv")
-    analyzer.analyzeInertia()
+    # analyzer.analyzeInertia()
     # analyzer.analyzeEscaping()
     # analyzer.analyzeNoBeans()
     # analyzer.decisionPoint()
+    analyzer.compareEscaping2Walk()

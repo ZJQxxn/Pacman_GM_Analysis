@@ -46,12 +46,17 @@ for y in range(positions.shape[0]):
             adjacent_dict[cur_pos]["up"] = positions[y - 1, x] if y - 1 > up_bound and not is_wall[y - 1, x]  else None
             adjacent_dict[cur_pos]["down"] = positions[y + 1, x] if y + 1 < low_bound and not is_wall[y + 1, x]  else None
 
-# Convert to pd.Dataframe and save
-adjacent_df = pd.DataFrame(adjacent_dict.items(), columns = ["pos", "adjacent"])
-adjacent_df = adjacent_df.assign(
-    left = adjacent_df.adjacent.apply(lambda x : x['left']),
-    right = adjacent_df.adjacent.apply(lambda x: x['right']),
-    up = adjacent_df.adjacent.apply(lambda x: x['up']),
-    down = adjacent_df.adjacent.apply(lambda x: x['down'])
-).drop(columns = ['adjacent'])
-adjacent_df.to_csv("extracted_data/adjacent_map.csv")
+# # Convert to pd.Dataframe and save
+# adjacent_df = pd.DataFrame(adjacent_dict.items(), columns = ["pos", "adjacent"])
+# adjacent_df = adjacent_df.assign(
+#     left = adjacent_df.adjacent.apply(lambda x : x['left']),
+#     right = adjacent_df.adjacent.apply(lambda x: x['right']),
+#     up = adjacent_df.adjacent.apply(lambda x: x['up']),
+#     down = adjacent_df.adjacent.apply(lambda x: x['down'])
+# ).drop(columns = ['adjacent'])
+# adjacent_df.to_csv("extracted_data/adjacent_map.csv")
+
+for key in adjacent_dict.keys():
+    adjacent_dict[str(key)] = adjacent_dict.pop(key)
+with open("extracted_data/adjacent_map.json", 'w') as file:
+    json.dump(adjacent_dict, file)
