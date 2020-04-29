@@ -13,15 +13,17 @@ import pandas as pd
 import numpy as np
 import pickle
 
+# Read all the data
+all_data = None
+with open("../common_data/df_total_with_reward.pkl", 'rb') as file:
+    all_data = pickle.load(file)
+# all_data = all_data[['file', 'index', 'Reward', 'fruitPos']]
+# all_data.Reward = all_data.Reward.apply(lambda x: int(x) if not np.isnan(x) else np.nan)
+
 # Read the map adjacent dict
 adjacent_data = pd.read_csv("extracted_data/adjacent_map.csv")
 for each in ['pos', 'left', 'right', 'up', 'down']:
     adjacent_data[each] = adjacent_data[each].apply(lambda x : eval(x) if not isinstance(x, float) else np.nan)
-
-# Read in all data
-all_data = pd.read_csv("../common_data/df_total_new.csv")
-for each in ['pacmanPos']:
-    all_data[each] = all_data[each].apply(lambda x: eval(x) if not isinstance(x, float) else np.nan)
 
 # The distance between two positions on the map
 locs_df = pd.read_csv("../common_data/dij_distance_map.csv")[["pos1", "pos2", "dis"]]
@@ -29,6 +31,18 @@ locs_df.pos1, locs_df.pos2= (
     locs_df.pos1.apply(eval),
     locs_df.pos2.apply(eval)
 )
+
+# Reward amount
+reward_amount = {
+    1:3,
+    2:4,
+    3:3,
+    4:5,
+    5:8,
+    6:12,
+    7:17
+}
+
 
 # =========================================
 #           Tool Functions

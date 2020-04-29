@@ -47,4 +47,17 @@ position (x_pos, y_pos)
 
 =========================================
 
-Reward, fruitPos
+Fruit相关数据：(df_total_with_reward.pkl)
+每一局游戏只有一个水果。
+
+Reward: 表示水果的种类； 1 dots, 2 big dots, 3 cherry, 4 strawberry, 5 orange, 6 apple, 7 melon
+fruitPos： 表示水果的位置； nan表示水果已经吃完
+
+鬼的reward是 8
+不同奖励量：dots奖赏3，big dots的奖励是4，水果从3到7的奖励量分别是3，5，8，12，17
+
+=========================================
+
+RT（控制杆）数据：
+
+handler： 0表示手柄没动；1,2,3,4分别表示上下左右

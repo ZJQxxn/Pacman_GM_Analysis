@@ -17,7 +17,7 @@ from collections import deque
 import sys
 
 sys.path.append('./')
-from TreeAnalysisUtils import adjacent_data, all_data, locs_df
+from TreeAnalysisUtils import adjacent_data, locs_df, reward_amount
 from TreeAnalysisUtils import unitStepFunc
 
 
@@ -27,7 +27,6 @@ class PathTree:
     def __init__(self, root, path_data, depth = 10, energizer_tradeoff = 0.5,
                  weight = {"bean": 1},
                  threshold = {"ghost_dist_thr": 34, "fruit_attractive_thr": 10, "ghost_repulsive_thr": 10}):
-        # TODO: path_data? not all the data is required by the tree
         # The root node is the path starting point.
         # Other tree nodes should contain:
         #   (1) location
@@ -54,11 +53,12 @@ class PathTree:
         self.energizer_data = path_data.energizers.values[0]
         self.bean_data = path_data.beans.values[0]
         self.ghost_data = np.array([path_data.distance1.values[0], path_data.distance2.values[0]])
-        # TODO: For now, take the true starting distance as the ghost distance
-        self.fruit_data = list(set(path_data["next_eat_rwd"].dropna().values)) # TODO: no fruit position now
-        # A list of moving directions of the path with the highest utility
-        self.best_path = [self.root]
-        self.best_flag = False
+        # Fruit data
+        self.reward_type = path_data.Reward.values
+        self.fruit_pos = path_data.fruitPos.values
+        # # A list of moving directions of the path with the highest utility
+        # self.best_path = [self.root]
+        # self.best_flag = False
         # Pre-defined weights and thresholds for utility computation
         self.weight = weight
         self.energizer_tradeoff = energizer_tradeoff
@@ -69,7 +69,7 @@ class PathTree:
         # Construct a tree
         # construct the layer 1 first (depth = 1)
         self._attachNode(depth = 1) # children of the root (depth = 1)
-        self.best_flag = False
+        # self.best_flag = False
         self.node_queue.append(None) # the end of layer with depth = 1
         self.node_queue.popleft()
         self.current_node = self.node_queue.popleft()
@@ -80,7 +80,7 @@ class PathTree:
                 self._attachNode(depth = cur_depth)
                 self.current_node = self.node_queue.popleft()
             self.node_queue.append(None)
-            self.best_flag = False
+            # self.best_flag = False
             #
             if 0 == len(self.node_queue):
                 break
@@ -103,7 +103,7 @@ class PathTree:
             else:
                 # Compute utility
                 cur_pos = tmp_data[each].values.item()
-                cur_reward = self._computeReward(cur_pos)
+                cur_reward = self._computeReward(cur_pos, depth)
                 cur_risk = self._computeRisk(depth)
                 # Construct the new node
                 new_node = anytree.Node(
@@ -118,21 +118,20 @@ class PathTree:
                         cumulative_risk = self.current_node.cumulative_risk + cur_risk
                         )
                 self.node_queue.append(new_node)
-                # Find the path with the biggest utility value
-                if not self.best_flag:
-                    self.best_path.append(new_node)
-                    self.best_flag = True
-                else:
-                    if new_node.cumulative_utility > self.best_path[-1].cumulative_utility:
-                        self.best_path[-1] = new_node
+                # # Find the path with the biggest utility value
+                # if not self.best_flag:
+                #     self.best_path.append(new_node)
+                #     self.best_flag = True
+                # else:
+                #     if new_node.cumulative_utility > self.best_path[-1].cumulative_utility:
+                #         self.best_path[-1] = new_node
 
 
-
-    def _computeReward(self, cur_position):
+    def _computeReward(self, cur_position, depth):
         reward = 0
         # Bean reward
         if cur_position in self.bean_data:
-            reward += 1
+            reward += reward_amount[1]
             self.bean_data.remove(cur_position)
         else:
             reward += 0
@@ -140,41 +139,47 @@ class PathTree:
         if isinstance(self.energizer_data, float) or cur_position not in self.energizer_data:
             reward += 0
         else:
-            reward += (self.energizer_tradeoff * unitStepFunc(min(self.ghost_data) - self.threshold['ghost_dist_thr'])
-                       + (1 - self.energizer_tradeoff) * unitStepFunc(self.threshold['ghost_dist_thr'] - min(self.ghost_data)))
+            reward += reward_amount[2] * unitStepFunc(min(self.ghost_data) - self.threshold['ghost_dist_thr'])
         # Ghost reward
-        #TODO: if ghosts are scared, get 5 score if capturing a ghost
+        ifscared1 = self.path_data.iloc[depth].ifscared1 if not isinstance(self.path_data.iloc[depth].ifscared1, float) else 0
+        ifscared2 = self.path_data.iloc[depth].ifscared2 if not isinstance(self.path_data.iloc[depth].ifscared2, float) else 0
+        if 4 == ifscared1 or 4 == ifscared2: # ghosts are scared
+            ghost_dist = min(self.ghost_data)
+            if ghost_dist < self.threshold['ghost_dist_thr']:
+                reward += 8 * (1 / (self.threshold["ghost_dist_thr"] - ghost_dist))
         # Fruit reward
-        # fruit_dist = [
-        #     locs_df[(locs_df.pos1 == cur_position) & (locs_df.pos2 == each)].dis.values.item()
-        #     for each in self.fruit_data
-        # ]
-        # min_fruit_dist = min(fruit_dist)
-        # # TODO: can get the position of different type of fruit?
-        # attractive_force = 1 if min_fruit_dist <= self.threshold['fruit_attractive_thr'] else 1
-        # reward += attractive_force
+        if not isinstance(self.fruit_pos[depth], float):
+            if np.all(np.array(cur_position) == np.array(self.fruit_pos[depth])):
+                reward += reward_amount[int(self.reward_type[depth])]
+            else:
+                fruit_dist = locs_df[(locs_df.pos1 == cur_position) & (locs_df.pos2 == self.fruit_pos[depth])].dis.values.item()
+                if fruit_dist < self.threshold["fruit_attractive_thr"]:
+                    reward += reward_amount[int(self.reward_type[depth])] * \
+                            (1 / (self.threshold["fruit_attractive_thr"] - fruit_dist))
         return reward
 
 
     def _computeRisk(self, depth):
-        # Ghost risk when ghosts are scared
-        # TODO: how to get the current ghost position and ghost status?
-        ifscared1 = self.path_data.iloc[depth].ifscared1.values.item() if not isinstance(self.path_data.iloc[depth].ifscared1, float) else 0
-        ifscared2 = self.path_data.iloc[depth].ifscared2.values.item() if not isinstance(self.path_data.iloc[depth].ifscared2, float) else 0
-        if 1 == ifscared1 and 1 == ifscared2:
-            ghost_dist = min(self.ghost_data )
-        elif 1 == ifscared1:
-            ghost_dist = self.ghost_data[0]
+        # Compute ghost risk when ghosts are normal
+        ifscared1 = self.path_data.iloc[depth].ifscared1 if not isinstance(self.path_data.iloc[depth].ifscared1, float) else 0
+        ifscared2 = self.path_data.iloc[depth].ifscared2 if not isinstance(self.path_data.iloc[depth].ifscared2, float) else 0
+        if 1 == ifscared1 and 1 == ifscared2: # ghosts are normal
+            ghost_dist = min(self.ghost_data)
+            # TODO: difficult to directly use repulsive
+            repulsive = - (1 / ghost_dist ** 2) * \
+                            (1 / self.threshold['ghost_repulsive_thr'] - 1 / min(self.ghost_data))
+            if ghost_dist < self.threshold['ghost_repulsive_thr']:
+                risk = 8 * 1 / (self.threshold['ghost_repulsive_thr'] - ghost_dist)
+            else:
+                risk = 0
         else:
-            ghost_dist = self.ghost_data[1]
-        repulsive_force = - (1 / ghost_dist ** 2) * \
-                        (1 / self.threshold['ghost_repulsive_thr'] - 1 / min(self.ghost_data))
-        return repulsive_force
+            risk = 0
+        return risk
 
 
 
 if __name__ == '__main__':
-    tree = PathTree(root = (10, 24), path_data = [], depth = 5)
+    tree = PathTree(root = (10, 24), path_data = [], depth = 10)
     tree.construct()
     print(anytree.RenderTree(tree.root))
     print(tree.best_path[-1])
