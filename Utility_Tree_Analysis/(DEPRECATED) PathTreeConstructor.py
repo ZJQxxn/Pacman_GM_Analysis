@@ -6,8 +6,10 @@ Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
-    Apr. 30 2020
+    Apr. 21 2020
 '''
+
+#TODO: deprecated for multi-agents; only used for analyzing current data
 
 
 import pandas as pd
@@ -18,14 +20,15 @@ from collections import deque
 import sys
 
 sys.path.append('./')
+from TreeAnalysisUtils import adjacent_data, locs_df, reward_amount
 from TreeAnalysisUtils import unitStepFunc
 
 
 
 class PathTree:
 
-    def __init__(self, adjacent_data, locs_df, reward_amount, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status,
-                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
+    def __init__(self, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, depth = 10,
+                 ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
         '''
         Initialization.
         :param root: The tree root (i.e., the current position with the shape of 2-tuple).
@@ -75,10 +78,6 @@ class PathTree:
         self.ghost_attractive_thr = ghost_attractive_thr
         self.fruit_attractive_thr = fruit_attractive_thr
         self.ghost_repulsive_thr = ghost_repulsive_thr
-        # Other pre-computed data
-        self.adjacent_data = adjacent_data
-        self.locs_df = locs_df
-        self.reward_amount = reward_amount
 
 
     def construct(self):
@@ -87,7 +86,7 @@ class PathTree:
         :return: The tree root node (anytree.Node).
         '''
         # construct the first layer firstly (depth = 1)
-        self._attachNode() # attach all children of the root (depth = 1)
+        self._attachNode(cur_depth = 1) # attach all children of the root (depth = 1)
         self.node_queue.append(None) # the end of layer with depth = 1
         self.node_queue.popleft()
         self.current_node = self.node_queue.popleft()
@@ -95,7 +94,7 @@ class PathTree:
         # construct the other parts
         while cur_depth <= self.depth:
             while None != self.current_node :
-                self._attachNode()
+                self._attachNode(cur_depth = cur_depth)
                 self.current_node = self.node_queue.popleft()
             self.node_queue.append(None)
             if 0 == len(self.node_queue):
@@ -113,9 +112,9 @@ class PathTree:
         return self.root, highest_utility, best_path
 
 
-    def _attachNode(self):
+    def _attachNode(self, cur_depth = 0):
         # Find adjacent positions and the corresponding moving directions for the current node
-        tmp_data = self.adjacent_data[self.adjacent_data.pos == self.current_node.name]
+        tmp_data = adjacent_data[adjacent_data.pos == self.current_node.name]
         for each in tmp_data.columns.values[-4:]:
             # do not walk on the wall or wolk out of boundary
             # do not turn back
@@ -128,8 +127,8 @@ class PathTree:
             else:
                 # Compute utility
                 cur_pos = tmp_data[each].values.item()
-                cur_reward = self._computeReward(cur_pos)
-                cur_risk = self._computeRisk()
+                cur_reward = self._computeReward(cur_pos, cur_depth)
+                cur_risk = self._computeRisk(cur_depth)
                 # Construct the new node
                 new_node = anytree.Node(
                         cur_pos,
@@ -152,11 +151,11 @@ class PathTree:
                 #         self.best_path[-1] = new_node
 
 
-    def _computeReward(self, cur_position):
+    def _computeReward(self, cur_position, cur_depth):
         reward = 0
         # Bean reward
         if cur_position in self.bean_data:
-            reward += self.reward_amount[1]
+            reward += reward_amount[1]
             self.bean_data.remove(cur_position)
         else:
             reward += 0
@@ -164,29 +163,29 @@ class PathTree:
         if isinstance(self.energizer_data, float) or cur_position not in self.energizer_data:
             reward += 0
         else:
-            reward += self.reward_amount[2] * unitStepFunc(self.ghost_attractive_thr - min(self.ghost_data))
+            reward += reward_amount[2] * unitStepFunc(self.ghost_attractive_thr - min(self.ghost_data))
         # Ghost reward
-        ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-        ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
+        ifscared1 = self.ghost_status[cur_depth, 0] if not isinstance(self.ghost_status[cur_depth, 0], float) else 0
+        ifscared2 = self.ghost_status[cur_depth, 1] if not isinstance(self.ghost_status[cur_depth, 1], float) else 0
         if 4 == ifscared1 or 4 == ifscared2: # ghosts are scared
             ghost_dist = min(self.ghost_data)
             if ghost_dist < self.ghost_attractive_thr:
                 reward += 8 * (1 / ghost_dist)
         # Fruit reward
-        if not isinstance(self.fruit_pos, float):
-            if np.all(np.array(cur_position) == np.array(self.fruit_pos)):
-                reward += self.reward_amount[int(self.reward_type)]
+        if not isinstance(self.fruit_pos[cur_depth], float):
+            if np.all(np.array(cur_position) == np.array(self.fruit_pos[cur_depth])):
+                reward += reward_amount[int(self.reward_type[cur_depth])]
             else:
-                fruit_dist = self.locs_df[(self.locs_df.pos1 == cur_position) & (self.locs_df.pos2 == self.fruit_pos)].dis.values.item()
+                fruit_dist = locs_df[(locs_df.pos1 == cur_position) & (locs_df.pos2 == self.fruit_pos[cur_depth])].dis.values.item()
                 if fruit_dist < self.fruit_attractive_thr:
-                    reward += self.reward_amount[int(self.reward_type)] * (1 / fruit_dist)
+                    reward += reward_amount[int(self.reward_type[cur_depth])] * (1 / fruit_dist)
         return reward
 
 
-    def _computeRisk(self):
+    def _computeRisk(self, cur_depth):
         # Compute ghost risk when ghosts are normal
-        ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-        ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
+        ifscared1 = self.ghost_status[cur_depth, 0] if not isinstance(self.ghost_status[cur_depth, 0], float) else 0
+        ifscared2 = self.ghost_status[cur_depth, 1] if not isinstance(self.ghost_status[cur_depth, 1], float) else 0
         if 1 == ifscared1 and 1 == ifscared2: # ghosts are normal
             ghost_dist = min(self.ghost_data)
             # TODO: difficult to directly use repulsive
@@ -203,22 +202,7 @@ class PathTree:
 
 
 if __name__ == '__main__':
-    import pickle
-    from TreeAnalysisUtils import adjacent_data, locs_df, reward_amount
-    # Read data
-    with open("extracted_data/test_data.pkl", 'rb') as file:
-        all_data = pickle.load(file)
-    # Extract features
-    each = all_data.iloc[0]
-    cur_pos = each.pacmanPos
-    energizer_data = each.energizers
-    bean_data = each.beans
-    ghost_data = np.array([each.distance1, each.distance2])
-    ghost_status = each[["ifscared1", "ifscared2"]].values
-    reward_type = int(each.Reward)
-    fruit_pos = each.fruitPos
-    # Construct the utility tree
-    tree = PathTree(adjacent_data, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
-    root, highest_utility, best_path = tree.construct()
-    print(highest_utility)
-    print(best_path)
+    tree = PathTree(root = (10, 24), path_data = [], depth = 10)
+    tree.construct()
+    print(anytree.RenderTree(tree.root))
+    print(tree.best_path[-1])
