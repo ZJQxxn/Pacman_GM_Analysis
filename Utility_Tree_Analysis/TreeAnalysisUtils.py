@@ -1,6 +1,6 @@
 '''
 Description:
-    Utility functions for the utility tree analysis.
+    Functions and some initialization values for the utility tree analysis.
     
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -11,28 +11,23 @@ Date:
 
 import pandas as pd
 import numpy as np
-import pickle
 
-# Read all the data
-all_data = None
-with open("../common_data/df_total_with_reward.pkl", 'rb') as file:
-    all_data = pickle.load(file)
-# all_data = all_data[['file', 'index', 'Reward', 'fruitPos']]
-# all_data.Reward = all_data.Reward.apply(lambda x: int(x) if not np.isnan(x) else np.nan)
 
 # Read the map adjacent dict
+# TODO: recompute for the new map
 adjacent_data = pd.read_csv("extracted_data/adjacent_map.csv")
 for each in ['pos', 'left', 'right', 'up', 'down']:
     adjacent_data[each] = adjacent_data[each].apply(lambda x : eval(x) if not isinstance(x, float) else np.nan)
 
 # The distance between two positions on the map
+# TODO: recompute for the new map
 locs_df = pd.read_csv("../common_data/dij_distance_map.csv")[["pos1", "pos2", "dis"]]
 locs_df.pos1, locs_df.pos2= (
     locs_df.pos1.apply(eval),
     locs_df.pos2.apply(eval)
 )
 
-# Reward amount
+# Reward amount for every type of reward
 reward_amount = {
     1:3,
     2:4,
@@ -52,7 +47,7 @@ def unitStepFunc(x):
     '''
     The unit step function.
     :param x: x
-    :return: function value
+    :return:     If x > 0, return 1; if x < 0, return 0; if x = 0 , return 0.5.
     '''
     if x > 0:
         return 1

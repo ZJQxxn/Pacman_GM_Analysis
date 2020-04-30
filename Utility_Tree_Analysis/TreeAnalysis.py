@@ -1,6 +1,6 @@
 '''
 Description:
-    Path tree analysis
+    Main function for the utility tree analysis.
 
 Author:
     Jiaqi Zhang <zjqseu@gmail.com>
@@ -14,7 +14,6 @@ import numpy as np
 import anytree
 import sys
 import pickle
-import pprint
 
 sys.path.append('./')
 from PathTreeConstructor import PathTree
@@ -31,19 +30,28 @@ class Analyzer:
 
     def analysis(self):
         # TODO: 拿出每一条整个 global graze 的路径来进行分析； fruit， bean按照这个path上的情况来进行计算；鬼的距离怎么确定？
-        tree = PathTree(self.data.pacmanPos.values[0], self.data, depth =15)
-        tree.construct()
-        # print(anytree.RenderTree(tree.root))
-        pprint.pprint([(each.name, each.cumulative_utility) for each in tree.root.leaves])
-        best_leaf = tree.root
-        for leaf in tree.root.leaves:
-            if leaf.cumulative_utility > best_leaf.cumulative_utility:
-                best_leaf = leaf
-        best_path = best_leaf.ancestors
-        print("\n Path with the highest cumulative utility {} is: ".format(best_leaf.cumulative_utility))
-        for each in [each.name for each in best_path]:
-            print(each)
-        print(best_leaf.name)
+        energizer_data = self.data.energizers.values[0]
+        bean_data = self.data.beans.values[0]
+        ghost_data = np.array([self.data.distance1.values[0], self.data.distance2.values[0]])
+        ghost_status = self.data[["ifscared1", "ifscared2"]].values
+        reward_type = self.data.Reward.values
+        fruit_pos = self.data.fruitPos.values
+        tree = PathTree(
+            self.data.pacmanPos.values[0],
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth = 15,
+            ghost_attractive_thr = 34,
+            ghost_repulsive_thr = 10,
+            fruit_attractive_thr = 10
+        )
+        root, highest_utility, best_path = tree.construct()
+        print(highest_utility)
+        print(best_path)
 
 
 if __name__ == '__main__':
