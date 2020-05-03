@@ -18,9 +18,10 @@ Date:
 import numpy as np
 import sys
 import warnings
+import json
 
 sys.path.append('./')
-from TreeAnalysisUtils import adjacent_data, locs_df, reward_amount
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount
 from PathTreeConstructor import PathTree
 from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
@@ -28,13 +29,9 @@ from RandomAgent import RandomAgent
 
 class MultiAgentInteractor:
 
-    def __init__(self, agent_weight = [1, 0, 0, 0],
-                 global_depth = 15, local_depth = 5,
-                 global_ghost_attractive_thr = 34, local_ghost_attractive_thr = 5,
-                 global_ghost_repulsive_thr=34, local_ghost_repulsive_thr = 5,
-                 global_fruit_attractive_thr = 15, local_fruit_attractive_thr = 5):
+    def __init__(self, config_file):
         '''
-        Initialization for the multi-agent interactor.
+        Initialization for the multi-agent interactor.The config_file is a json  file containing all the configurations.
         :param agent_weight: A vector denoting the weight of every agent.
         :param global_depth: The tree depth of global agent. The default is 15.
         :param local_depth: The tree depth of local agent. The default is 5.
@@ -45,6 +42,9 @@ class MultiAgentInteractor:
         :param global_fruit_attractive_thr: The fruit attractive threshold of global agent. The default is 15.
         :param local_fruit_attractive_thr: The fruit attractive threshold of local agent. The default is 5.
         '''
+        # Read config files
+        with open(config_file) as file:
+            config = json.load(file)
         # Initialization for game status
         self.cur_pos = None
         self.energizer_data = None
@@ -54,16 +54,28 @@ class MultiAgentInteractor:
         self.reward_type = None
         self.fruit_pos = None
         # Initialization for the weight of each agent
-        self.agent_weight = agent_weight
+        self.agent_weight = config['agent_weight']
+        # Pre-computed data
+        self.adjacent_data = readAdjacentMap(config['map_file'])
+        self.locs_df = readLocDistance(config['loc_distance_file'])
+        self.reward_amount = readRewardAmount()
         # Initialization for pre-defined parameters of global agents and local agents
-        self.global_depth = global_depth
-        self.global_ghost_attractive_thr = global_ghost_attractive_thr
-        self.global_ghost_repulsive_thr = global_ghost_repulsive_thr
-        self.global_fruit_attractive_thr = global_fruit_attractive_thr
-        self.local_depth = local_depth
-        self.local_ghost_attractive_thr = local_ghost_attractive_thr
-        self.local_ghost_repulsive_thr = local_ghost_repulsive_thr
-        self.local_fruit_attractive_thr = local_fruit_attractive_thr
+        self.global_depth = config['global_depth'] \
+            if 'global_depth' in config else 15
+        self.global_ghost_attractive_thr = config['global_ghost_attractive_thr']  \
+            if 'global_ghost_attractive_thr' in config else 34
+        self.global_ghost_repulsive_thr = config['global_ghost_repulsive_thr']  \
+            if 'global_ghost_repulsive_thr' in config else 34
+        self.global_fruit_attractive_thr = config['global_fruit_attractive_thr']  \
+            if 'global_fruit_attractive_thr' in config else 15
+        self.local_depth = config['local_depth']  \
+            if 'local_depth' in config else 5
+        self.local_ghost_attractive_thr = config['local_ghost_attractive_thr']  \
+            if 'local_ghost_attractive_thr' in config else 5
+        self.local_ghost_repulsive_thr = config['local_ghost_repulsive_thr']  \
+            if 'local_ghost_repulsive_thr' in config else 5
+        self.local_fruit_attractive_thr = config['local_fruit_attractive_thr']  \
+            if 'local_fruit_attractive_thr' in config else 5
         # Set of available directions
         self.dir_list = ['left', 'right', 'up', 'down']
         # Determine whether the game status is reseted after the last estimation. Notice that the game status should be
@@ -73,6 +85,7 @@ class MultiAgentInteractor:
         self.last_dir = None
         # The number of crossroads passed wihtout turning for now
         self.loop_count = 0
+        print("Finished all the pre-computation and initializations.")
 
 
     def _oneHot(self, val):
@@ -99,9 +112,9 @@ class MultiAgentInteractor:
         '''
         # Construct the decision tree for the global agent
         self.global_agent = PathTree(
-            adjacent_data,
-            locs_df,
-            reward_amount,
+            self.adjacent_data,
+            self.locs_df,
+            self.reward_amount,
             self.cur_pos,
             self.energizer_data,
             self.bean_data,
@@ -126,9 +139,9 @@ class MultiAgentInteractor:
         '''
         # Construct the decision tree for the local agent
         self.local_agent = PathTree(
-            adjacent_data,
-            locs_df,
-            reward_amount,
+            self.adjacent_data,
+            self.locs_df,
+            self.reward_amount,
             self.cur_pos,
             self.energizer_data,
             self.bean_data,
@@ -151,7 +164,7 @@ class MultiAgentInteractor:
         Use the lazy agent to predict the moving direction given game status of the current time step. 
         :return: The one-hot vector denoting the direction estimation of lazy agent.
         '''
-        self.lazy_agent = LazyAgent(adjacent_data, self.cur_pos, self.last_dir, self.loop_count, max_loop = 5)
+        self.lazy_agent = LazyAgent(self.adjacent_data, self.cur_pos, self.last_dir, self.loop_count, max_loop = 5)
         next_dir, not_turn = self.lazy_agent.nextDir()
         if not_turn:
             self.loop_count += 1
@@ -163,7 +176,7 @@ class MultiAgentInteractor:
         Use the random agent to predict the moving direction given game status of the current time step. 
         :return: The one-hot vector denoting the direction estimation of random agent.
         '''
-        self.random_agent = RandomAgent(adjacent_data, self.cur_pos, self.last_dir)
+        self.random_agent = RandomAgent(self.adjacent_data, self.cur_pos, self.last_dir)
         next_dir = self.random_agent.nextDir()
         return self._oneHot(next_dir)
 
@@ -234,7 +247,7 @@ if __name__ == '__main__':
     with open("extracted_data/test_data.pkl", 'rb') as file:
         all_data = pickle.load(file)
 
-    multiagent = MultiAgentInteractor(agent_weight = [0.4, 0.3, 0.2, 0.1])
+    multiagent = MultiAgentInteractor("config.json")
     for index in range(15):
         each = all_data.iloc[index]
         cur_pos = each.pacmanPos

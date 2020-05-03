@@ -16,7 +16,7 @@ from MultiAgentInteractor import MultiAgentInteractor
 with open("extracted_data/test_data.pkl", 'rb') as file:
     all_data = pickle.load(file)
 # Construct the multi-agent interactor
-multiagent = MultiAgentInteractor(agent_weight=[0.4, 0.3, 0.2, 0.1])
+multiagent = MultiAgentInteractor(config_file = "config.json")
 # Estimate moving directions for every time step
 for index in range(15):
     # Extract game status and Pacman status

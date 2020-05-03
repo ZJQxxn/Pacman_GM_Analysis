@@ -14,35 +14,49 @@ import numpy as np
 
 
 # =========================================
-#         Pre-Computed Variable
+#         Read Pre-Computed Variable
 # =========================================
+def readAdjacentMap(filename):
+    '''
+    Read in the adjacent info of the map.
+    :param filename: File name.
+    :return: A dictionary denoting adjacency of the map.
+    '''
+    adjacent_data = pd.read_csv(filename)
+    for each in ['pos', 'left', 'right', 'up', 'down']:
+        adjacent_data[each] = adjacent_data[each].apply(lambda x : eval(x) if not isinstance(x, float) else np.nan)
+    return adjacent_data
 
-# Read the map adjacent dict
-# TODO: recompute for the new map
-adjacent_data = pd.read_csv("extracted_data/adjacent_map.csv")
-for each in ['pos', 'left', 'right', 'up', 'down']:
-    adjacent_data[each] = adjacent_data[each].apply(lambda x : eval(x) if not isinstance(x, float) else np.nan)
 
-# The distance between two positions on the map
-# TODO: recompute for the new map
-locs_df = pd.read_csv("../common_data/dij_distance_map.csv")[["pos1", "pos2", "dis"]]
-locs_df.pos1, locs_df.pos2= (
-    locs_df.pos1.apply(eval),
-    locs_df.pos2.apply(eval)
-)
+def readLocDistance(filename):
+    '''
+    Read in the location distance.
+    :param filename: File name.
+    :return: A pandas.DataFrame denoting the dijkstra distance between every two locations of the map. 
+    '''
+    locs_df = pd.read_csv(filename)[["pos1", "pos2", "dis"]]
+    locs_df.pos1, locs_df.pos2= (
+        locs_df.pos1.apply(eval),
+        locs_df.pos2.apply(eval)
+    )
+    return locs_df
 
-# Reward amount for every type of reward
-reward_amount = {
-    1:3,
-    2:4,
-    3:3,
-    4:5,
-    5:8,
-    6:12,
-    7:17
-}
 
-print("Finished all the pre-computation and initializations.")
+def readRewardAmount():
+    '''
+    Reward amount for every type of reward
+    :return: A dictionary denoting the reward amount of each type of reward.
+    '''
+    reward_amount = {
+        1:3,
+        2:4,
+        3:3,
+        4:5,
+        5:8,
+        6:12,
+        7:17
+    }
+    return reward_amount
 
 # =========================================
 #           Tool Functions

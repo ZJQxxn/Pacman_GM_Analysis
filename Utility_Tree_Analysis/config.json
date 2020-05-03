@@ -1,0 +1,13 @@
+{
+  "map_file": "extracted_data/adjacent_map.csv",
+  "loc_distance_file": "extracted_data/dij_distance_map.csv",
+  "agent_weight" : [1, 0, 0, 0],
+  "global_depth" : 15,
+  "local_depth": 5,
+  "global_ghost_attractive_thr": 34,
+  "local_ghost_attractive_thr" : 5,
+  "global_ghost_repulsive_thr" : 34,
+  "local_ghost_repulsive_thr" : 5,
+  "global_fruit_attractive_thr" : 15,
+  "local_fruit_attractive_thr" : 5
+}
