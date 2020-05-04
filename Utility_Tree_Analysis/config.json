@@ -1,6 +1,6 @@
 {
-  "map_file": "extracted_data/adjacent_map.csv",
-  "loc_distance_file": "extracted_data/dij_distance_map.csv",
+  "map_file": "adjacent_map.csv",
+  "loc_distance_file": "dij_distance_map.csv",
   "agent_weight" : [1, 0, 0, 0],
   "global_depth" : 15,
   "local_depth": 5,

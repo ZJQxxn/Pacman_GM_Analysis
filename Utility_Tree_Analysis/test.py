@@ -13,7 +13,7 @@ import numpy as np
 from MultiAgentInteractor import MultiAgentInteractor
 
 # Read testing data
-with open("extracted_data/test_data.pkl", 'rb') as file:
+with open("test_data.pkl", 'rb') as file:
     all_data = pickle.load(file)
 # Construct the multi-agent interactor
 multiagent = MultiAgentInteractor(config_file = "config.json")

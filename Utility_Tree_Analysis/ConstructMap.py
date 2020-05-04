@@ -13,8 +13,11 @@ import pandas as pd
 import numpy as np
 
 # Read in data
-map_pos = pd.read_csv("../common_data/map_info_brian.csv")[["pos", "iswall"]]
-map_pos.pos = map_pos.pos.apply(lambda x: eval(x))
+map_pos = pd.read_csv("small_map_info_brian.csv")[["Pos1", "Pos2", "iswall"]]
+map_pos.assign(
+    pos = map_pos.apply(lambda x: (x.Pos1, x.Pos2), axis = 1)
+)
+# map_pos.pos = map_pos.pos.apply(lambda x: eval(x))
 map_pos = map_pos.iloc[:-4, :]
 
 # Construct a map using matrix
@@ -58,5 +61,5 @@ for y in range(positions.shape[0]):
 
 for key in adjacent_dict.keys():
     adjacent_dict[str(key)] = adjacent_dict.pop(key)
-with open("extracted_data/adjacent_map.json", 'w') as file:
+with open("extracted_data/adjacent_small_map.json", 'w') as file:
     json.dump(adjacent_dict, file)
