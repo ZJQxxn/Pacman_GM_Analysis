@@ -14,19 +14,21 @@ import numpy as np
 
 class RandomAgent:
 
-    def __init__(self, adjacent_data, cur_pos, last_dir):
+    def __init__(self, adjacent_data, cur_pos, last_dir, random_seed):
         '''
         Initialization of the random agent.
         :param adjacent_data: The adjacent tiles of each tile in the map. Should be a data with the type pf pandas.DataFrame.
         :param cur_pos: The current position of Pacman, should be a 2-tuple.
         :param last_dir: The moving direction of the last time step, should be a string from {``left'', ``right'', ``up'',
                                   ``down''}.
+        :param random_seed: The random seed.
         '''
+        np.random.seed(random_seed)
         self.cur_pos = cur_pos
-        self.adjacent_pos = adjacent_data[adjacent_data.pos == self.cur_pos]
+        self.adjacent_pos = adjacent_data[self.cur_pos]
         self.available_dir = []
-        for dir in self.adjacent_pos.columns.values[-4:]:
-            if None != self.adjacent_pos[dir].values.item():
+        for dir in ["left", "right", "up", "down"]:
+            if None != self.adjacent_pos[dir]:
                 self.available_dir.append(dir)
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))

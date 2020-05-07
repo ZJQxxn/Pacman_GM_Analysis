@@ -26,6 +26,7 @@ from PathTreeConstructor import PathTree
 from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
 
+import time
 
 class MultiAgentInteractor:
 
@@ -85,6 +86,8 @@ class MultiAgentInteractor:
         self.last_dir = None
         # The number of crossroads passed wihtout turning for now
         self.loop_count = 0
+        # random seed for the random agent
+        self.random_seed = config["random_seed"]
         print("Finished all the pre-computation and initializations.")
 
 
@@ -176,7 +179,7 @@ class MultiAgentInteractor:
         Use the random agent to predict the moving direction given game status of the current time step. 
         :return: The one-hot vector denoting the direction estimation of random agent.
         '''
-        self.random_agent = RandomAgent(self.adjacent_data, self.cur_pos, self.last_dir)
+        self.random_agent = RandomAgent(self.adjacent_data, self.cur_pos, self.last_dir, self.random_seed)
         next_dir = self.random_agent.nextDir()
         return self._oneHot(next_dir)
 

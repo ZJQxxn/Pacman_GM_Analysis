@@ -21,7 +21,6 @@ sys.path.append('./')
 from TreeAnalysisUtils import unitStepFunc
 
 
-
 class PathTree:
 
     def __init__(self, adjacent_data, locs_df, reward_amount, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status,
@@ -103,7 +102,7 @@ class PathTree:
             self.current_node = self.node_queue.popleft()
             cur_depth += 1
         # Find the best path with the highest utility
-        best_leaf = self.root
+        best_leaf = self.root.leaves[0]
         for leaf in self.root.leaves:
             if leaf.cumulative_utility > best_leaf.cumulative_utility:
                 best_leaf = leaf
@@ -115,19 +114,19 @@ class PathTree:
 
     def _attachNode(self):
         # Find adjacent positions and the corresponding moving directions for the current node
-        tmp_data = self.adjacent_data[self.adjacent_data.pos == self.current_node.name]
-        for each in tmp_data.columns.values[-4:]:
-            # do not walk on the wall or wolk out of boundary
+        tmp_data = self.adjacent_data[self.current_node.name]
+        for each in ["left", "right", "up", "down"]:
+            # do not walk on the wall or walk out of boundary
             # do not turn back
-            if None == self.current_node.parent and isinstance(tmp_data[each].values.item(), float):
+            if None == self.current_node.parent and isinstance(tmp_data[each], float):
                 continue
             elif None != self.current_node.parent and \
-                    (isinstance(tmp_data[each].values.item(), float)
-                     or tmp_data[each].values.item() == self.current_node.parent.name):
+                    (isinstance(tmp_data[each], float)
+                     or tmp_data[each] == self.current_node.parent.name):
                 continue
             else:
                 # Compute utility
-                cur_pos = tmp_data[each].values.item()
+                cur_pos = tmp_data[each]
                 cur_reward = self._computeReward(cur_pos)
                 cur_risk = self._computeRisk()
                 # Construct the new node
@@ -177,7 +176,8 @@ class PathTree:
             if np.all(np.array(cur_position) == np.array(self.fruit_pos)):
                 reward += self.reward_amount[int(self.reward_type)]
             else:
-                fruit_dist = self.locs_df[(self.locs_df.pos1 == cur_position) & (self.locs_df.pos2 == self.fruit_pos)].dis.values.item()
+                # fruit_dist = self.locs_df[(self.locs_df.pos1 == cur_position) & (self.locs_df.pos2 == self.fruit_pos)].dis.values.item()
+                fruit_dist = self.locs_df[cur_position][self.fruit_pos]
                 if fruit_dist < self.fruit_attractive_thr:
                     reward += self.reward_amount[int(self.reward_type)] * (1 / fruit_dist)
         return reward
@@ -201,24 +201,3 @@ class PathTree:
         return risk
 
 
-
-if __name__ == '__main__':
-    import pickle
-    from TreeAnalysisUtils import adjacent_data, locs_df, reward_amount
-    # Read data
-    with open("extracted_data/test_data.pkl", 'rb') as file:
-        all_data = pickle.load(file)
-    # Extract features
-    each = all_data.iloc[0]
-    cur_pos = each.pacmanPos
-    energizer_data = each.energizers
-    bean_data = each.beans
-    ghost_data = np.array([each.distance1, each.distance2])
-    ghost_status = each[["ifscared1", "ifscared2"]].values
-    reward_type = int(each.Reward)
-    fruit_pos = each.fruitPos
-    # Construct the utility tree
-    tree = PathTree(adjacent_data, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
-    root, highest_utility, best_path = tree.construct()
-    print(highest_utility)
-    print(best_path)

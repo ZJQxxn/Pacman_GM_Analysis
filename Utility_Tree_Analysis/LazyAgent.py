@@ -28,10 +28,10 @@ class LazyAgent:
                           crossroads when loop_count > max_loop.
         '''
         self.cur_pos = cur_pos
-        self.adjacent_pos = adjacent_data[adjacent_data.pos == self.cur_pos] # all the adjacent positions of the current position
+        self.adjacent_pos = adjacent_data[self.cur_pos] # all the adjacent positions of the current position
         self.available_dir = []
-        for dir in self.adjacent_pos.columns.values[-4:]:
-            if None != self.adjacent_pos[dir].values.item():
+        for dir in ["left", "right", "up", "down"]:
+            if None != self.adjacent_pos[dir]:
                 self.available_dir.append(dir)
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))

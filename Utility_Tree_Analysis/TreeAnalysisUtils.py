@@ -25,7 +25,14 @@ def readAdjacentMap(filename):
     adjacent_data = pd.read_csv(filename)
     for each in ['pos', 'left', 'right', 'up', 'down']:
         adjacent_data[each] = adjacent_data[each].apply(lambda x : eval(x) if not isinstance(x, float) else np.nan)
-    return adjacent_data
+    dict_adjacent_data = {}
+    for each in adjacent_data.values:
+        dict_adjacent_data[each[1]] = {}
+        dict_adjacent_data[each[1]]["left"] = each[2] if not isinstance(each[2], float) else np.nan
+        dict_adjacent_data[each[1]]["right"] = each[3] if not isinstance(each[3], float) else np.nan
+        dict_adjacent_data[each[1]]["up"] = each[4] if not isinstance(each[4], float) else np.nan
+        dict_adjacent_data[each[1]]["down"] = each[5] if not isinstance(each[5], float) else np.nan
+    return dict_adjacent_data
 
 
 def readLocDistance(filename):
@@ -39,7 +46,14 @@ def readLocDistance(filename):
         locs_df.pos1.apply(eval),
         locs_df.pos2.apply(eval)
     )
-    return locs_df
+    dict_locs_df = {}
+    for each in locs_df.values:
+        if each[0] not in dict_locs_df:
+            dict_locs_df[each[0]] = {}
+        dict_locs_df[each[0]][each[1]] = each[2]
+    # correct the distance between two ends of the tunnel
+    dict_locs_df[(1, 18)][(27, 18)] = 1
+    return dict_locs_df
 
 
 def readRewardAmount():
