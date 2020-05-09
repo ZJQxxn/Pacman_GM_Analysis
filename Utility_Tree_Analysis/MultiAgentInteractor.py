@@ -88,6 +88,11 @@ class MultiAgentInteractor:
         self.loop_count = 0
         # random seed for the random agent
         self.random_seed = config["random_seed"]
+        # All the agents
+        self.global_agent = None
+        self.local_agent = None
+        self.lazy_agent = None
+        self.random_agent = None
         print("Finished all the pre-computation and initializations.")
 
 
@@ -132,6 +137,7 @@ class MultiAgentInteractor:
         )
         # Estimate the moving direction
         root, highest_utility, best_path = self.global_agent.construct()
+        # print("Global children:", len((self.global_agent.root.descendants)))
         return self._oneHot(best_path[0][1])
 
 
@@ -158,7 +164,8 @@ class MultiAgentInteractor:
             ghost_repulsive_thr=self.local_ghost_repulsive_thr
         )
         # Estimate the moving direction
-        root, highest_utility, best_path = self.global_agent.construct()
+        root, highest_utility, best_path = self.local_agent.construct()
+        # print("Local children:", len((self.local_agent.root.descendants)))
         return self._oneHot(best_path[0][1])
 
 
@@ -242,6 +249,26 @@ class MultiAgentInteractor:
         self.reward_type = reward_type
         self.fruit_pos = fruit_pos
         self.reset_flag = True
+        if None != self.global_agent:
+            # self.global_agent.reset()
+            self.global_agent = None
+        if None != self.global_agent:
+            # self.local_agent.reset()
+            self.local_agent = None
+        if None != self.lazy_agent:
+            # self.local_agent.reset()
+            self.lazy_agent = None
+        if None != self.random_agent:
+            # self.local_agent.reset()
+            self.random_agent = None
+
+
+    def resetLastDir(self):
+        '''
+        Reset the last direction to None.
+        :return: VOID
+        '''
+        self.last_dir = None
 
 
 

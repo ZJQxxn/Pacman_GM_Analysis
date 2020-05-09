@@ -31,7 +31,7 @@ class LazyAgent:
         self.adjacent_pos = adjacent_data[self.cur_pos] # all the adjacent positions of the current position
         self.available_dir = []
         for dir in ["left", "right", "up", "down"]:
-            if None != self.adjacent_pos[dir]:
+            if None != self.adjacent_pos[dir] and not isinstance(self.adjacent_pos[dir], float):
                 self.available_dir.append(dir)
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))
@@ -40,6 +40,8 @@ class LazyAgent:
         self.loop_count = loop_count  # the number of crossroads passed for now
         self.max_loop = max_loop  # the maximum number of the crossroads Pacman can directly pass
         self.dir_list = ['left', 'right', 'up', 'down']
+        # opposite direction; to avoid turn back
+        self.opposite_dir = {"left":"right", "right":"left", "up":"down", "down":"up"}
 
 
     def _atTunnel(self):
@@ -99,11 +101,13 @@ class LazyAgent:
         else:
             # If at the corner or in the tunnel (i.e., only one direction can be chosen except the last moving direction)
             if self._atTunnel() or self._atCorner():
-                self.available_dir.remove(self.last_dir)
+                if self.opposite_dir[self.last_dir] in self.available_dir:
+                    self.available_dir.remove(self.opposite_dir[self.last_dir])
                 choice = self.available_dir[0]
             # else if at the T-junction and the Pacman must turn (i.e., two direction can be chosen except the last moving direction)
             elif self._atTJunction():
-                self.available_dir.remove(self.last_dir)
+                if self.opposite_dir[self.last_dir] in self.available_dir:
+                    self.available_dir.remove(self.opposite_dir[self.last_dir])
                 choice = np.random.choice(range(len(self.available_dir)), 1).item()
                 choice = self.available_dir[choice]
             # else if at the crossroads or T-junctions (without mandatory turning)
@@ -114,7 +118,8 @@ class LazyAgent:
                     self.not_turn = True
                 # turn for breaking the loop
                 else:
-                    self.available_dir.remove(self.last_dir)
+                    if self.opposite_dir[self.last_dir] in self.available_dir:
+                        self.available_dir.remove(self.opposite_dir[self.last_dir])
                     choice = np.random.choice(range(len(self.available_dir)), 1).item()
                     choice = self.available_dir[choice]
         return (choice, self.not_turn)

@@ -28,12 +28,14 @@ class RandomAgent:
         self.adjacent_pos = adjacent_data[self.cur_pos]
         self.available_dir = []
         for dir in ["left", "right", "up", "down"]:
-            if None != self.adjacent_pos[dir]:
+            if None != self.adjacent_pos[dir] and not isinstance(self.adjacent_pos[dir], float):
                 self.available_dir.append(dir)
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))
         self.last_dir = last_dir  # moving direction for the last time step
         self.dir_list = ['left', 'right', 'up', 'down']
+        # opposite direction; to avoid turn back
+        self.opposite_dir = {"left": "right", "right": "left", "up": "down", "down": "up"}
 
 
     def nextDir(self):
@@ -47,7 +49,8 @@ class RandomAgent:
             choice = self.available_dir[choice]
         # else, stay moving to the same direction until the number of passed crossroads surpasses a threshold (default = 5)
         else:
-            self.available_dir.remove(self.last_dir)
+            if self.opposite_dir[self.last_dir] in self.available_dir:
+                self.available_dir.remove(self.opposite_dir[self.last_dir])
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
         return choice

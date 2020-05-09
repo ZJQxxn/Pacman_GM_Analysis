@@ -11,6 +11,7 @@ Date:
 import pickle
 import numpy as np
 from MultiAgentInteractor import MultiAgentInteractor
+import time
 
 # Read testing data
 with open("extracted_data/test_data.pkl", 'rb') as file:
@@ -18,7 +19,7 @@ with open("extracted_data/test_data.pkl", 'rb') as file:
 # Construct the multi-agent interactor
 multiagent = MultiAgentInteractor(config_file = "config.json")
 # Estimate moving directions for every time step
-for index in range(15):
+for index in range(100):
     # Extract game status and Pacman status
     each = all_data.iloc[index]
     cur_pos = each.pacmanPos #
@@ -31,7 +32,13 @@ for index in range(15):
     # Pass game status to the agent
     multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
     # Estimation
+    start = time.clock()
     dir_prob = multiagent.estimateDir()
+    end = time.clock() - start
+    if end > 2:
+        print()
+        multiagent.estimateDir()
+    print("Time: ", end)
     # Print out the estimation
     cur_dir = multiagent.dir_list[np.argmax(dir_prob)]
     if "left" == cur_dir:

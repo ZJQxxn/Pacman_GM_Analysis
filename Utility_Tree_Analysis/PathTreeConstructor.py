@@ -16,6 +16,7 @@ import anytree
 from anytree.exporter import DotExporter
 from collections import deque
 import sys
+import time
 
 sys.path.append('./')
 from TreeAnalysisUtils import unitStepFunc
@@ -78,6 +79,7 @@ class PathTree:
         self.adjacent_data = adjacent_data
         self.locs_df = locs_df
         self.reward_amount = reward_amount
+        self.existing_bean = bean_data
 
 
     def construct(self):
@@ -142,21 +144,14 @@ class PathTree:
                         cumulative_risk = self.current_node.cumulative_risk + cur_risk
                         )
                 self.node_queue.append(new_node)
-                # # Find the path with the biggest utility value
-                # if not self.best_flag:
-                #     self.best_path.append(new_node)
-                #     self.best_flag = True
-                # else:
-                #     if new_node.cumulative_utility > self.best_path[-1].cumulative_utility:
-                #         self.best_path[-1] = new_node
 
 
     def _computeReward(self, cur_position):
         reward = 0
         # Bean reward
-        if cur_position in self.bean_data:
+        if cur_position in self.existing_bean:
             reward += self.reward_amount[1]
-            self.bean_data.remove(cur_position)
+            self.existing_bean.remove(cur_position)
         else:
             reward += 0
         # Energizer reward
@@ -168,7 +163,12 @@ class PathTree:
         ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
         ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
         if 4 == ifscared1 or 4 == ifscared2: # ghosts are scared
-            ghost_dist = min(self.ghost_data)
+            if 3 == ifscared1:
+                ghost_dist = self.ghost_data[1]
+            elif 3 == ifscared2:
+                ghost_dist = self.ghost_data[0]
+            else:
+                ghost_dist = min(self.ghost_data)
             if ghost_dist < self.ghost_attractive_thr:
                 reward += 8 * (1 / ghost_dist)
         # Fruit reward
@@ -187,11 +187,16 @@ class PathTree:
         # Compute ghost risk when ghosts are normal
         ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
         ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
-        if 1 == ifscared1 and 1 == ifscared2: # ghosts are normal
-            ghost_dist = min(self.ghost_data)
+        if 1 == ifscared1 or 1 == ifscared2: # ghosts are normal; use "or" for dealing with dead ghosts
+            if 3 == ifscared1:
+                ghost_dist = self.ghost_data[1]
+            elif 3 == ifscared2:
+                ghost_dist = self.ghost_data[0]
+            else:
+                ghost_dist = min(self.ghost_data)
             # TODO: difficult to directly use repulsive
-            repulsive = - (1 / ghost_dist ** 2) * \
-                            (1 / self.ghost_repulsive_thr - 1 / min(self.ghost_data))
+            # repulsive = - (1 / ghost_dist ** 2) * \
+            #                 (1 / self.ghost_repulsive_thr - 1 / min(self.ghost_data))
             if ghost_dist < self.ghost_repulsive_thr:
                 risk = -8 * 1 / ghost_dist
             else:
@@ -199,5 +204,3 @@ class PathTree:
         else:
             risk = 0
         return risk
-
-
