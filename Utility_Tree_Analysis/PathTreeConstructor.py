@@ -28,10 +28,20 @@ class PathTree:
                  depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
         '''
         Initialization.
-        :param root: The tree root (i.e., the current position with the shape of 2-tuple).
-        :param path_data: 
-        :param depth: The deepest 
-        :param threshold: 
+        :param adjacent_data: Map adjacent data (dict).
+        :param locs_df: Locations distance (dict).
+        :param reward_amount: Reward amount (dict).
+        :param root: Pacman position of 2-tuple.
+        :param energizer_data: A list of positions of energizers. Each position should be a 2-tuple.
+        :param bean_data: A list of positions of bens. Each position should be a 2-tuple.
+        :param ghost_data: A list of positions of ghosts. Each position should be a 2-tuple. If no ghost exists, pass np.nan.
+        :param reward_type: The type pf reward (int).
+        :param fruit_pos: The position of fruit. Should be a 2-tuple.
+        :param ghost_status: A list of ghost status. Each status should be either 1(normal) or 4 (scared). If no ghost exists, pass np.nan.
+        :param depth: The maximum depth of tree. 
+        :param ghost_attractive_thr: Ghost attractive threshold.
+        :param ghost_repulsive_thr: Ghost repulsive threshold.
+        :param fruit_attractive_thr: Fruit attractive threshold.
         '''
         # Parameter type check
         if not isinstance(root, tuple):
@@ -63,10 +73,10 @@ class PathTree:
         self.node_queue.append(self.root)
         # The maximize depth (i.e., the path length)
         self.depth = depth
-        # All the true data for a certain path
+        # Game status
         self.energizer_data = energizer_data
         self.bean_data = bean_data
-        self.ghost_data = ghost_data
+        self.ghost_data = [tuple(each) for each in ghost_data]
         self.ghost_status = ghost_status
         # Fruit data
         self.reward_type = reward_type
@@ -80,6 +90,7 @@ class PathTree:
         self.locs_df = locs_df
         self.reward_amount = reward_amount
         self.existing_bean = bean_data
+        self.existing_energizer = energizer_data
 
 
     def construct(self):
@@ -130,7 +141,7 @@ class PathTree:
                 # Compute utility
                 cur_pos = tmp_data[each]
                 cur_reward = self._computeReward(cur_pos)
-                cur_risk = self._computeRisk()
+                cur_risk = self._computeRisk(cur_pos)
                 # Construct the new node
                 new_node = anytree.Node(
                         cur_pos,
@@ -154,24 +165,33 @@ class PathTree:
             self.existing_bean.remove(cur_position)
         else:
             reward += 0
-        # Energizer reward
+        # Energizer reward #TODO: revise this; split this into energizer reward and ghost reward
         if isinstance(self.energizer_data, float) or cur_position not in self.energizer_data:
             reward += 0
         else:
-            reward += self.reward_amount[2] * unitStepFunc(self.ghost_attractive_thr - min(self.ghost_data))
+            # Potential reward for ghosts
+            ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
+            ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
+            if 4 == ifscared1 or 4 == ifscared2:  # ghosts are scared
+                if 3 == ifscared1:
+                    ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
+                elif 3 == ifscared2:
+                    ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
+                else:
+                    ghost_dist = min(
+                        self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
+                    )
+                if ghost_dist < self.ghost_attractive_thr:
+                    reward += self.reward_amount[8] * (1 / ghost_dist)
+            # Reward for eating the energizer
+            if cur_position in self.existing_energizer:
+                reward += self.reward_amount[2]
+                self.existing_energizer.remove(cur_position)
+                self.ghost_status = [4 if each != 3 else 3 for each in self.ghost_status] # change ghost status
         # Ghost reward
-        ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-        ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
-        if 4 == ifscared1 or 4 == ifscared2: # ghosts are scared
-            if 3 == ifscared1:
-                ghost_dist = self.ghost_data[1]
-            elif 3 == ifscared2:
-                ghost_dist = self.ghost_data[0]
-            else:
-                ghost_dist = min(self.ghost_data)
-            if ghost_dist < self.ghost_attractive_thr:
-                reward += 8 * (1 / ghost_dist)
-        # Fruit reward
+        if cur_position in self.ghost_data: #TODO: ghost status
+                reward += self.reward_amount[8]
+        # Fruit reward 
         if not isinstance(self.fruit_pos, float):
             if np.all(np.array(cur_position) == np.array(self.fruit_pos)):
                 reward += self.reward_amount[int(self.reward_type)]
@@ -183,24 +203,49 @@ class PathTree:
         return reward
 
 
-    def _computeRisk(self):
+    def _computeRisk(self, cur_position):
         # Compute ghost risk when ghosts are normal
         ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
         ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
         if 1 == ifscared1 or 1 == ifscared2: # ghosts are normal; use "or" for dealing with dead ghosts
             if 3 == ifscared1:
-                ghost_dist = self.ghost_data[1]
+                # Pacman is eaten
+                if cur_position == self.ghost_data[1]:
+                    risk = -self.reward_amount[8]
+                    self.ghost_data[1] = ()
+                    self.ghost_status[1] = 3
+                    return risk
+                ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
             elif 3 == ifscared2:
-                ghost_dist = self.ghost_data[0]
+                # Pacman is eaten
+                if cur_position == self.ghost_data[0]:
+                    risk = -self.reward_amount[8]
+                    self.ghost_data[0] = ()
+                    self.ghost_status[0] = 3
+                    return risk
+                ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
             else:
-                ghost_dist = min(self.ghost_data)
-            # TODO: difficult to directly use repulsive
-            # repulsive = - (1 / ghost_dist ** 2) * \
-            #                 (1 / self.ghost_repulsive_thr - 1 / min(self.ghost_data))
+                # Pacman is eaten
+                if cur_position == self.ghost_data[0] or cur_position == self.ghost_data[1]:
+                    if cur_position == self.ghost_data[0]:
+                        self.ghost_data[0] = ()
+                        self.ghost_status[0] = 3
+                    else:
+                        self.ghost_data[1] = ()
+                        self.ghost_status[1] = 3
+                    risk = -self.reward_amount[8]
+                    return risk
+                # Potential risk
+                else:
+                    ghost_dist = min(
+                        self.locs_df[cur_position][self.ghost_data[0]],
+                        self.locs_df[cur_position][self.ghost_data[1]]
+                    )
             if ghost_dist < self.ghost_repulsive_thr:
-                risk = -8 * 1 / ghost_dist
+                risk = -self.reward_amount[8] * 1 / ghost_dist
             else:
                 risk = 0
+        # Ghosts are not scared
         else:
             risk = 0
         return risk

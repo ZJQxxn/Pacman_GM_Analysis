@@ -221,8 +221,8 @@ class MultiAgentInteractor:
         :param energizer_data: A list contains positions of all the energizers. Each list element is a 2-tuple. 
                                If no energizer exists, just pass np.nan to the function.  
         :param bean_data: A list contains positions of all the beans. Each list element is a 2-tuple. 
-        :param ghost_data: A list with a length of 2 denoting the distance between Pacman and two ghosts. 
-                           [ghost 1 distance, ghost 2 distance]
+        :param ghost_data: A list with a length of 2 denoting the positions of two ghosts. Each position should be a 2-tuple.
+                           [ghost 1 position, ghost 2 position]
         :param reward_type: The integer expression of the type of fruit existing in the game. If no fruit exists, just pass 
                              np.nan to the function. The fruit type and its corresponding integer expression is:
                                 3 -- cherry,

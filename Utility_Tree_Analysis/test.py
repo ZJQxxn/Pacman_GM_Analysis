@@ -25,7 +25,7 @@ for index in range(100):
     cur_pos = each.pacmanPos #
     energizer_data = each.energizers
     bean_data = each.beans
-    ghost_data = np.array([each.distance1, each.distance2])
+    ghost_data = np.array([each.ghost1Pos, each.ghost2Pos])
     ghost_status = each[["ifscared1", "ifscared2"]].values
     reward_type = int(each.Reward)
     fruit_pos = each.fruitPos
