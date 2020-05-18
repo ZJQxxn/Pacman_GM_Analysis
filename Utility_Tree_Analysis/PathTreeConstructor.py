@@ -91,6 +91,7 @@ class PathTree:
         self.reward_amount = reward_amount
         self.existing_bean = bean_data
         self.existing_energizer = energizer_data
+        self.existing_fruit = fruit_pos
 
 
     def construct(self):
@@ -165,14 +166,38 @@ class PathTree:
             self.existing_bean.remove(cur_position)
         else:
             reward += 0
-        # Energizer reward #TODO: revise this; split this into energizer reward and ghost reward
+        # Energizer reward
         if isinstance(self.energizer_data, float) or cur_position not in self.energizer_data:
             reward += 0
         else:
-            # Potential reward for ghosts
-            ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-            ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
-            if 4 == ifscared1 or 4 == ifscared2:  # ghosts are scared
+            # Reward for eating the energizer
+            if cur_position in self.existing_energizer:
+                reward += self.reward_amount[2]
+                self.existing_energizer.remove(cur_position)
+                self.ghost_status = [4 if each != 3 else 3 for each in self.ghost_status]  # change ghost status
+                # Potential reward for ghosts
+                ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
+                ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
+                if 4 == ifscared1 or 4 == ifscared2:  # ghosts are scared
+                    if 3 == ifscared1:
+                        ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
+                    elif 3 == ifscared2:
+                        ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
+                    else:
+                        ghost_dist = min(
+                            self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
+                        )
+                    if ghost_dist < self.ghost_attractive_thr:
+                        reward += self.reward_amount[8] * (1 / ghost_dist)
+            else:
+                reward += 0
+
+        # Ghost reward (check whether ghosts are scared)
+        ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
+        ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
+        if 4 == ifscared1 or 4 == ifscared2:  # ghosts are scared
+            if cur_position not in self.ghost_data:
+                # compute ghost dist
                 if 3 == ifscared1:
                     ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
                 elif 3 == ifscared2:
@@ -183,20 +208,20 @@ class PathTree:
                     )
                 if ghost_dist < self.ghost_attractive_thr:
                     reward += self.reward_amount[8] * (1 / ghost_dist)
-            # Reward for eating the energizer
-            if cur_position in self.existing_energizer:
-                reward += self.reward_amount[2]
-                self.existing_energizer.remove(cur_position)
-                self.ghost_status = [4 if each != 3 else 3 for each in self.ghost_status] # change ghost status
-        # Ghost reward
-        if cur_position in self.ghost_data: #TODO: ghost status
+            elif cur_position in self.ghost_data:
                 reward += self.reward_amount[8]
-        # Fruit reward 
-        if not isinstance(self.fruit_pos, float):
-            if np.all(np.array(cur_position) == np.array(self.fruit_pos)):
-                reward += self.reward_amount[int(self.reward_type)]
+                if cur_position == self.ghost_data[0]:
+                    self.ghost_status[0] = 3
+                else:
+                    self.ghost_status[1] = 3
             else:
-                # fruit_dist = self.locs_df[(self.locs_df.pos1 == cur_position) & (self.locs_df.pos2 == self.fruit_pos)].dis.values.item()
+                reward += 0
+        # Fruit reward 
+        if not isinstance(self.existing_fruit, float):
+            if cur_position == self.fruit_pos:
+                reward += self.reward_amount[int(self.reward_type)]
+                self.existing_fruit = np.nan
+            else:
                 fruit_dist = self.locs_df[cur_position][self.fruit_pos]
                 if fruit_dist < self.fruit_attractive_thr:
                     reward += self.reward_amount[int(self.reward_type)] * (1 / fruit_dist)

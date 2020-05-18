@@ -28,7 +28,7 @@ def t2p(tile_pos):
     :param tile_pos: Tile position of 2-tuple.
     :return: Heatmap position of 2-tuple.
     '''
-    return [tile_pos[0]+0.5, tile_pos[1]+0.5]
+    return [tile_pos[0]+0.5, tile_pos[1]+0.5] if len(tile_pos) > 0 else []
 
 
 # ===========================================
@@ -56,15 +56,15 @@ array = np.concatenate((array, np.array([[False] * 30])))
 #   game_status_3: many beans in local and one energizers far away; scared ghosts
 # ===========================================
 
-with open("game_status_2.json", 'r') as file:
+with open("game_status_3.json", 'r') as file:
     game_status = json.load(file)
 adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
 locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
 reward_amount = readRewardAmount()
 print("Finished reading data.")
 
-status = "normal"
-for depth in [5]:
+status = "scared"
+for depth in [5, 15, 20]:
     # Reset game status
     pacman_pos = tuple(game_status["pacman_pos"])
     ghost_pos = [tuple(each) for each in game_status["ghost_pos"]]
@@ -82,9 +82,9 @@ for depth in [5]:
         energizer_pos.copy(),
         bean_pos.copy(),
         ghost_pos,
-        ghost_status,
         np.nan,
-        [0, 0],
+        np.nan,
+        ghost_status,
         depth=depth,
         ghost_attractive_thr=20,
         ghost_repulsive_thr=20,
@@ -120,9 +120,17 @@ for depth in [5]:
         pacman_pos[0], pacman_pos[1], color="green", marker="^", s=210, label="Pacman"
     )
     # Plot ghosts
-    plt.scatter(
-        ghost_pos[:, 0], ghost_pos[:, 1], color="red", marker="s", s=210, label="ghost"
-    )
+    if "normal" == status:
+        plt.scatter(
+            ghost_pos[0, 0], ghost_pos[0, 1], color="yellow", marker="s", s=210, label="yellow ghost"
+        )
+        plt.scatter(
+            ghost_pos[1, 0], ghost_pos[1, 1], color="red", marker="s", s=210, label="red ghost"
+        )
+    else:
+        plt.scatter(
+            ghost_pos[0][0], ghost_pos[0][1], color="blue", marker="s", s=210, label="scared ghost"
+        )
     # Plot energizers
     plt.scatter(
         energizer_pos[:, 0], energizer_pos[:, 1], color="purple", marker="o", s=230, label="energizer"
@@ -166,7 +174,7 @@ for depth in [5]:
                 ec="orange"
             )
 
-    plt.legend(fontsize=15, ncol=2)
-    # plt.savefig("estimated_path_depth={}_ghost_{}.pdf".format(depth, status))
+    plt.legend(fontsize=12, ncol=2)
+    plt.savefig("estimated_path_depth={}_ghost_{}.pdf".format(depth, status))
     # plt.savefig("game_status_ghost_{}.pdf".format(status))
-    plt.show()
+    # plt.show()
