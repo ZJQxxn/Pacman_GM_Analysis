@@ -202,16 +202,16 @@ class MultiAgentInteractor:
             warnings.warn("The game status is not reset since the last direction estimation! "
                           "Are you sure you want to predict the moving direction in this case?")
         # Obtain estimations of all the agents
-        integrate_estimation = np.zeros((4, 4))
-        integrate_estimation[:, 0] = self._globalAgent()
-        integrate_estimation[:, 1] = self._localAgent()
-        integrate_estimation[:, 2] = self._lazyAgent()
-        integrate_estimation[:, 3] = self._randomAgent()
-        integrate_estimation = integrate_estimation @ self.agent_weight
+        agent_estimation = np.zeros((4, 4))
+        agent_estimation[:, 0] = self._globalAgent()
+        agent_estimation[:, 1] = self._localAgent()
+        agent_estimation[:, 2] = self._lazyAgent()
+        agent_estimation[:, 3] = self._randomAgent()
+        integrate_estimation = agent_estimation @ self.agent_weight
         self.reset_flag = False
         # If multiple directions have the highest score, choose the first occurrence
         self.last_dir = self.dir_list[np.argmax(integrate_estimation)]
-        return integrate_estimation
+        return integrate_estimation, agent_estimation
 
 
     def resetStatus(self, cur_pos, energizer_data, bean_data, ghost_data,reward_type,fruit_pos,ghost_status):
@@ -288,7 +288,7 @@ if __name__ == '__main__':
         reward_type = int(each.Reward)
         fruit_pos = each.fruitPos
         multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data,reward_type,fruit_pos,ghost_status)
-        dir_prob = multiagent.estimateDir()
+        dir_prob, _ = multiagent.estimateDir()
         cur_dir = multiagent.dir_list[np.argmax(dir_prob)]
         if "left" == cur_dir:
             next_pos = [cur_pos[0] - 1, cur_pos[1]]
