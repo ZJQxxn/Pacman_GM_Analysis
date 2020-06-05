@@ -104,6 +104,26 @@ class MultiAgentAnalysis:
         print("Linear Regression Coefficient: ", LR_coeff)
 
 
+    def MultinomialNBAnalysis(self):
+        X, _, Y = self._constructDataset()
+        model = MultinomialNB()
+        model.fit(X, Y)
+        NB_coeff = model.coef_
+        NB_coeff = np.mean(np.abs(NB_coeff), axis = 0)
+        NB_coeff = NB_coeff / np.sum(abs(NB_coeff))
+        print("Multinomial Naive Bayes: {}".format(NB_coeff))
+
+
+    def CategoricalNBAnalysis(self):
+        X, _, Y = self._constructDataset()
+        model = MultinomialNB()
+        model.fit(X, Y)
+        NB_coeff = model.feature_log_prob_
+        NB_coeff = np.mean(np.abs(NB_coeff), axis = 0)
+        NB_coeff = NB_coeff / np.sum(abs(NB_coeff))
+        print("Categorical Naive Bayes: {}".format(NB_coeff))
+
+
     def BayesianAnalysis(self):
         # Direction for each agent
         global_agent = self.global_dir
@@ -134,6 +154,8 @@ if __name__ == '__main__':
     filename = "diary.csv"
     analysis = MultiAgentAnalysis(filename)
     #
-    analysis.LogisticAnalysis()
-    analysis.LinearAnalysis()
+    # analysis.LogisticAnalysis()
+    # analysis.LinearAnalysis()
     # analysis.BayesianAnalysis()
+    # analysis.MultinomialNBAnalysis()
+    analysis.CategoricalNBAnalysis()
