@@ -157,5 +157,5 @@ if __name__ == '__main__':
     # analysis.LogisticAnalysis()
     # analysis.LinearAnalysis()
     # analysis.BayesianAnalysis()
-    # analysis.MultinomialNBAnalysis()
-    analysis.CategoricalNBAnalysis()
+    analysis.MultinomialNBAnalysis()
+    # analysis.CategoricalNBAnalysis()
