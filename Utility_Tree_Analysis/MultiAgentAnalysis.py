@@ -12,7 +12,7 @@ Date:
 import numpy as np
 import pandas as pd
 import pymc3 as pm
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression, Lasso
 from sklearn.naive_bayes import MultinomialNB, CategoricalNB, GaussianNB
 
 
@@ -27,24 +27,24 @@ class MultiAgentAnalysis:
         # self.dir_list = ['left', 'right', 'up', 'down']
         # self.data = pd.read_csv(filename)
         # self.direction_vec = self.data['pacman_dir']
-        self.agent_dir = pd.read_pickle("agent_dir.pkl")
-        self.pacman_pos = self.agent_dir.pacman_pos
-        self.global_dir = self.agent_dir.global_dir.apply(
-            lambda x: np.argmax(eval(x)) if not isinstance(x, float) else -1
+        self.agent_dir = pd.read_csv(filename)
+        self.pacman_pos = self.agent_dir.pacmanPos
+        self.global_dir = self.agent_dir.global_estimation.apply(
+            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
         )
-        self.local_dir = self.agent_dir.local_dir.apply(
-            lambda x: np.argmax(eval(x)) if not isinstance(x, float) else -1
+        self.local_dir = self.agent_dir.local_estimation.apply(
+            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
         )
-        self.lazy_dir = self.agent_dir.lazy_dir.apply(
-            lambda x: np.argmax(eval(x)) if not isinstance(x, float) else -1
+        self.lazy_dir = self.agent_dir.lazy_estimation.apply(
+            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
         )
-        self.random_dir = self.agent_dir.random_dir.apply(
-            lambda x: np.argmax(eval(x)) if not isinstance(x, float) else -1
+        self.random_dir = self.agent_dir.random_estimation.apply(
+            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
         )
-        self.integrate_dir = self.agent_dir.integrate_dir.apply(
-            lambda x: np.argmax(eval(x)) if not isinstance(x, float) else -1
+        self.integrate_dir = self.agent_dir.pacman_dir.apply(
+            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
         )
-
+        print()
 
     def _constructDataset(self):
         X = np.vstack(
@@ -87,21 +87,24 @@ class MultiAgentAnalysis:
         print("Logistic regression coefficient: ", LR_coeff)
 
 
-    def LinearAnalysis(self):
+    def LinearAnalysis(self, need_reg = True):
         '''
         Extract features and use linear regression.
         :return: 
         '''
         # Construct dataset
         X, _, Y = self._constructDataset()
-        # Logistic regression
-        model = LinearRegression(fit_intercept=False)
+        # Linear regression
+        if need_reg:
+            model = Lasso(alpha = 1, fit_intercept = False)
+        else:
+            model = LinearRegression(fit_intercept=False)
         model.fit(X, Y)
         # The coefficient
         LR_coeff = model.coef_
         # LR_coeff = np.array([np.sum(np.abs(LR_coeff)[i:i + 2]) for i in [0, 2, 4, 6]])
-        LR_coeff = LR_coeff / np.sum(abs(LR_coeff))
-        print("Linear Regression Coefficient: ", LR_coeff)
+        LR_coeff = np.abs(LR_coeff) / np.sum(np.abs(LR_coeff))
+        print("{} Coefficient: {}".format("Lasso" if need_reg else "Linear Regression", LR_coeff))
 
 
     def MultinomialNBAnalysis(self):
@@ -151,11 +154,11 @@ class MultiAgentAnalysis:
 
 
 if __name__ == '__main__':
-    filename = "diary.csv"
+    filename = "stimulus_data/global-graze/diary.csv"
     analysis = MultiAgentAnalysis(filename)
     #
-    # analysis.LogisticAnalysis()
-    # analysis.LinearAnalysis()
+    analysis.LogisticAnalysis()
+    analysis.LinearAnalysis(need_reg=False)
     # analysis.BayesianAnalysis()
     analysis.MultinomialNBAnalysis()
     # analysis.CategoricalNBAnalysis()
