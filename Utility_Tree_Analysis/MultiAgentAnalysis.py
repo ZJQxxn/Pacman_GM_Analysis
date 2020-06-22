@@ -43,10 +43,13 @@ class MultiAgentAnalysis:
         self.random_dir = self.agent_dir.random_estimation.apply(
             lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
         )
-        self.integrate_dir = self.agent_dir.pacman_dir.apply(
-            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
-        )
-        print()
+        for index in range(self.agent_dir.pacman_dir.values.shape[0]):
+            each = self.agent_dir.pacman_dir.values[index]
+            each = each.strip('[]').split(' ')
+            while '' in each:
+                each.remove('')
+            self.agent_dir.pacman_dir.values[index] = np.argmax([float(e) for e in each])
+        self.integrate_dir = self.agent_dir.pacman_dir
 
 
     def _constructDataset(self):
@@ -239,8 +242,10 @@ class MultiAgentAnalysis:
 
 
 if __name__ == '__main__':
-    filename = "stimulus_data/complex-condition/stimulus-global-local.csv"
+    # filename = "stimulus_data/complex-condition/stimulus-global-local.csv"
     # filename = "stimulus_data/local-graze/diary.csv"
+    filename = "stimulus_data/stimulus-switch/diary.csv"
+
 
     analysis = MultiAgentAnalysis(filename)
     #
@@ -251,4 +256,4 @@ if __name__ == '__main__':
     # analysis.CategoricalNBAnalysis()
 
     # 20 is enough for global graze
-    analysis.movingWindowAnalysis(window = 200)
+    analysis.movingWindowAnalysis(window = 500)
