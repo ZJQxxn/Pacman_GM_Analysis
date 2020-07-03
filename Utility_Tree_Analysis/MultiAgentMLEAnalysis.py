@@ -47,7 +47,8 @@ def oneHot(val):
     onehot_vec[dir_list.index(val)] = 1
     return onehot_vec
 
-def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount):
+
+def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
     # TODO: check correctness
     agent_weight = [0.7, 0.0, 0.2, 0.1] #TODO: later, also estimate this weight vector
     # Parameters
@@ -62,11 +63,13 @@ def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount
     local_ghost_repulsive_thr = int(param[5])
     # Compute log likelihood
     nll = 0  # negative log likelihood
+    estimation_prob_trajectory = []
     num_samples = all_data.shape[0]
     last_dir = None
     loop_count = 0
     # for index in range(num_samples):
-    for index in range(100):  # TODO: use only a part of samples for efficiency for now
+    useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
+    for index in range(useful_num_samples):  # TODO: use only a part of samples for efficiency for now
         # Extract game status and Pacman status
         each = all_data.iloc[index]
         cur_pos = eval(each.pacmanPos)
@@ -127,10 +130,14 @@ def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount
         best_dir_index = np.argmax(dir_prob)
         last_dir = dir_list[best_dir_index]
         exp_prob = np.exp(dir_prob)
-        log_likelihood = dir_prob[best_dir_index] - np.sum(exp_prob)
+        log_likelihood = dir_prob[best_dir_index] - np.log(np.sum(exp_prob))
         nll += (-log_likelihood)
+        estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob))
     print('Finished')
-    return nll
+    if not return_trajectory:
+        return nll
+    else:
+        return (nll, estimation_prob_trajectory)
 
 
 def MLE(data_filename, map_filename, loc_distance_filename):
@@ -145,18 +152,39 @@ def MLE(data_filename, map_filename, loc_distance_filename):
         all_data = pd.read_csv(file)
     print("Number of sanmples : ", all_data.shape[0])
     # Optimization
-    bounds = [[0, 40], [0, 40], [0, 40], [0, 40], [0, 40], [0, 40]]
+    useful_num_samples = 1000 # use a part of samples for efficiency
+    print("Number of used samples : ", useful_num_samples)
+    bounds = [[1, 40], [1, 40], [1, 40], [1, 40], [1, 40], [1, 40]]
     params = np.array([34, 34, 12, 5, 5, 5]) # TODO: same as the initial guess
-    func = lambda parameter: negativeLogLikelihood(parameter, all_data, adjacent_data, locs_df, reward_amount)
+    cons = []  # construct the bounds in the form of constraints
+    for par in range(len(bounds)):
+        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+        cons.append(l)
+        cons.append(u)
+    func = lambda parameter: negativeLogLikelihood(parameter, all_data, adjacent_data, locs_df, reward_amount,
+                                                   useful_num_samples = useful_num_samples)
     res = scipy.optimize.minimize(
         func,
         x0 = params,
         method = "SLSQP",
         bounds = bounds,
-        # constraints = cons
+        tol = 1e-6,
+        constraints = cons
     )
-    print(res)
+    print("Initial guess : ", params)
     print("Estimated Parameter : ", res.x)
+    print(res)
+    # Estimation
+    _, estimated_prob = negativeLogLikelihood(res.x, all_data, adjacent_data, locs_df, reward_amount,
+                                              useful_num_samples = useful_num_samples, return_trajectory = True)
+    true_dir = all_data.pacman_dir.apply(
+            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
+        ).values[:useful_num_samples]
+    estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    correct_rate = np.sum(estimated_dir == true_dir)
+    print("Correct rate : ", correct_rate / len(true_dir))
+
 
 
 
