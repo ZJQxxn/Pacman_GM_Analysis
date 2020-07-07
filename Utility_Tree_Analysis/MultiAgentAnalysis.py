@@ -256,4 +256,4 @@ if __name__ == '__main__':
     # analysis.CategoricalNBAnalysis()
 
     # 20 is enough for global graze
-    analysis.movingWindowAnalysis(window = 500)
+    analysis.movingWindowAnalysis(window = 30)
