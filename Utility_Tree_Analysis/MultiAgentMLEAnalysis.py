@@ -398,8 +398,8 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
     all_correct_rate = []
     # Moving the window
     for index in subset_index:
-        if index % 20 == 0:
-            print("Window at {}...".format(index))
+        # if index % 20 == 0:
+        print("Window at {}...".format(index))
         sub_X = X[index - window:index + window]
         sub_Y = Y[index - window:index + window]
         X_train, X_test, Y_train, Y_test = train_test_split(sub_X, sub_Y, test_size=0.2)
@@ -488,5 +488,5 @@ if __name__ == '__main__':
     # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 5)
 
     # Moving Window Analysis with MEE
-    X, Y = constructDatasetFromCSV(data_filename, clip = 400)
-    movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20)
+    X, Y = constructDatasetFromCSV(data_filename, clip = None)
+    movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 50)
