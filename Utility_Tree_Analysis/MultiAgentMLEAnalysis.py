@@ -219,7 +219,7 @@ def estimationError(param, all_data, adjacent_data, locs_df, reward_amount, usef
         each = each.strip('[]').split(' ')
         while '' in each: # For the weird case that '' might exist in the split list
             each.remove('')
-        true_prob.append(np.argmax([float(e) for e in each]))
+        true_prob.append([float(e) for e in each])
     true_prob = np.array(true_prob)
     # Compute log likelihood
     nll = 0  # negative log likelihood
@@ -308,8 +308,10 @@ def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
     #     all_data = pickle.load(file)
     with open(data_filename, 'r') as file:
         all_data = pd.read_csv(file)
-    print("Number of sanmples : ", all_data.shape[0])
+    print("Number of samples : ", all_data.shape[0])
     # Optimization
+    if useful_num_samples is None:
+        useful_num_samples = all_data.shape[0]
     print("Number of used samples : ", useful_num_samples)
     bounds = [[0, 1], [0, 1], [0, 1], [0, 1]]
     params = np.array([0.0, 0.0, 0.0, 0.0])
@@ -343,9 +345,14 @@ def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
     # Estimation
     _, estimated_prob = estimationError(res.x, all_data, adjacent_data, locs_df, reward_amount,
                                               useful_num_samples = useful_num_samples, return_trajectory = True)
-    true_dir = all_data.pacman_dir.apply(
-            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
-        ).values[:useful_num_samples]
+    true_dir = []
+    for index in range(all_data.pacman_dir.values.shape[0]):
+        each = all_data.pacman_dir.values[index]
+        each = each.strip('[]').split(' ')
+        while '' in each:  # For the weird case that '' might exist in the split list
+            each.remove('')
+        true_dir.append(np.argmax([float(e) for e in each]))
+    true_dir = np.array(true_dir)
     estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate : ", correct_rate / len(true_dir))
@@ -402,9 +409,9 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
         print("Window at {}...".format(index))
         sub_X = X[index - window:index + window]
         sub_Y = Y[index - window:index + window]
-        X_train, X_test, Y_train, Y_test = train_test_split(sub_X, sub_Y, test_size=0.2)
+        # X_train, X_test, Y_train, Y_test = train_test_split(sub_X, sub_Y, test_size=0.2)
         # Optimize with minimum error estimation (MEE)
-        func = lambda parameter: estimationError(parameter, X_train, adjacent_data, locs_df, reward_amount)
+        func = lambda parameter: estimationError(parameter, sub_X, adjacent_data, locs_df, reward_amount)
         is_success = False
         retry_num = 0
         while not is_success and retry_num < 10:
@@ -420,9 +427,9 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
             if not is_success:
                 retry_num += 1
         # Make estimations on the testing dataset
-        _, estimated_prob = estimationError(res.x, X_test, adjacent_data, locs_df, reward_amount, return_trajectory=True)
+        _, estimated_prob = estimationError(res.x, sub_X, adjacent_data, locs_df, reward_amount, return_trajectory=True)
         estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-        correct_rate = np.sum(estimated_dir == Y_test) / len(Y_test)
+        correct_rate = np.sum(estimated_dir == sub_Y) / len(sub_Y)
         all_correct_rate.append(correct_rate)
         # The coefficient
         all_coeff.append(res.x)
@@ -470,6 +477,10 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
     # plt.legend(fontsize=20)
     plt.show()
 
+    # Save estimated agent weights
+    np.save("MEE-agent-weight.npy", all_coeff)
+
+
 
 
 if __name__ == '__main__':
@@ -485,7 +496,7 @@ if __name__ == '__main__':
 
     # # MEE (minimum error estimation)
     # print("=" * 10, " MEE ", "=" * 10)
-    # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 5)
+    # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 100)
 
     # Moving Window Analysis with MEE
     X, Y = constructDatasetFromCSV(data_filename, clip = None)
