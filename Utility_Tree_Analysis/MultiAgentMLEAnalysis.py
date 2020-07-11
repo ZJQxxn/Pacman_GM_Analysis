@@ -56,12 +56,13 @@ def oneHot(val):
 #             MAXIMUM LIKELIHOOD ESTIMATION
 # ===========================================================
 def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
+    #TODO: revise for real data
     # Parameters
-    global_depth = 15
+    global_depth = 5
     global_ghost_attractive_thr = 34
     global_fruit_attractive_thr = 34
     global_ghost_repulsive_thr = 12
-    local_depth = 5
+    local_depth = 15
     local_ghost_attractive_thr = 5
     local_fruit_attractive_thr = 5
     local_ghost_repulsive_thr = 5
@@ -145,18 +146,36 @@ def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount
         return (nll, estimation_prob_trajectory)
 
 
+
+
 def MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples = None):
     # Load pre-computed data
     adjacent_data = readAdjacentMap(map_filename)
     locs_df = readLocDistance(loc_distance_filename)
     reward_amount = readRewardAmount()
     # Load experiment data
-    # with open(data_filename, 'rb') as file:
-    #     all_data = pickle.load(file)
     with open(data_filename, 'r') as file:
         all_data = pd.read_csv(file)
-    print("Number of sanmples : ", all_data.shape[0])
+    true_prob = all_data.pacman_dir
+    if "[" in true_prob.values[0]:  # If pacman_dir is a vector
+        overall_dir = []
+        for index in range(all_data.pacman_dir.values.shape[0]):
+            each = all_data.pacman_dir.values[index]
+            each = each.strip('[]').split(' ')
+            while '' in each:  # For the weird case that '' might exist in the split list
+                each.remove('')
+            overall_dir.append([float(e) for e in each])
+        overall_dir = np.array(overall_dir)
+        true_prob = overall_dir
+    else:  # If pacman_dir is the name of directions
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+    print("Number of samples : ", all_data.shape[0])
     # Optimization
+    if useful_num_samples is None:
+        useful_num_samples = all_data.shape[0]
     print("Number of used samples : ", useful_num_samples)
     bounds = [[0, 1], [0, 1], [0, 1], [0, 1]]
     params = np.array([0.0, 0.0, 0.0, 0.0])
@@ -168,17 +187,17 @@ def MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] - 1})
     func = lambda parameter: negativeLogLikelihood(parameter, all_data, adjacent_data, locs_df, reward_amount,
-                                                   useful_num_samples = useful_num_samples)
+                                                   useful_num_samples=useful_num_samples)
     is_success = False
     retry_num = 0
     while not is_success and retry_num < 10:
         res = scipy.optimize.minimize(
             func,
-            x0 = params,
-            method = "SLSQP",
-            bounds = bounds,
-            tol = 1e-8,
-            constraints = cons
+            x0=params,
+            method="SLSQP",
+            bounds=bounds,
+            tol=1e-8,
+            constraints=cons
         )
         is_success = res.success
         if not is_success:
@@ -189,10 +208,15 @@ def MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
     print(res)
     # Estimation
     _, estimated_prob = negativeLogLikelihood(res.x, all_data, adjacent_data, locs_df, reward_amount,
-                                              useful_num_samples = useful_num_samples, return_trajectory = True)
-    true_dir = all_data.pacman_dir.apply(
-            lambda x: np.argmax([float(each) for each in x.strip('[]').split(' ')]) if not isinstance(x, float) else -1
-        ).values[:useful_num_samples]
+                                              useful_num_samples=useful_num_samples, return_trajectory=True)
+    true_dir = []
+    for index in range(all_data.pacman_dir.values.shape[0]):
+        each = all_data.pacman_dir.values[index]
+        each = each.strip('[]').split(' ')
+        while '' in each:  # For the weird case that '' might exist in the split list
+            each.remove('')
+        true_dir.append(np.argmax([float(e) for e in each]))
+    true_dir = np.array(true_dir)
     estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate : ", correct_rate / len(true_dir))
@@ -201,26 +225,26 @@ def MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
 # ===========================================================
 #               MINIMUM ERROR ESTIMATION
 # ===========================================================
-def estimationError(param, all_data, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
+def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
     # Parameters
-    global_depth = 15
+    global_depth = 5
     global_ghost_attractive_thr = 34
     global_fruit_attractive_thr = 34
     global_ghost_repulsive_thr = 12
-    local_depth = 5
+    local_depth = 15
     local_ghost_attractive_thr = 5
     local_fruit_attractive_thr = 5
     local_ghost_repulsive_thr = 5
     agent_weight = [param[0], param[1], param[2], param[3]]
-    # True probability
-    true_prob = []
-    for index in range(all_data.pacman_dir.values.shape[0]):
-        each = all_data.pacman_dir.values[index]
-        each = each.strip('[]').split(' ')
-        while '' in each: # For the weird case that '' might exist in the split list
-            each.remove('')
-        true_prob.append([float(e) for e in each])
-    true_prob = np.array(true_prob)
+    # # True probability
+    # true_prob = np.array([oneHot(each) for each in true_prob]) #TODO: for other functions
+    # for index in range(all_data.pacman_dir.values.shape[0]):
+    #     each = all_data.pacman_dir.values[index]
+    #     each = each.strip('[]').split(' ')
+    #     while '' in each: # For the weird case that '' might exist in the split list
+    #         each.remove('')
+    #     true_prob.append([float(e) for e in each])
+    # true_prob = np.array(true_prob)
     # Compute log likelihood
     nll = 0  # negative log likelihood
     estimation_prob_trajectory = []
@@ -229,16 +253,27 @@ def estimationError(param, all_data, adjacent_data, locs_df, reward_amount, usef
     loop_count = 0
     # for index in range(num_samples):
     useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
-    for index in range(useful_num_samples):  # TODO: use only a part of samples for efficiency for now
+    for index in range(useful_num_samples):
         # Extract game status and Pacman status
         each = all_data.iloc[index]
-        cur_pos = eval(each.pacmanPos)
-        energizer_data = eval(each.energizers)
-        bean_data = eval(each.beans)
-        ghost_data = np.array([eval(each.ghost1_pos), eval(each.ghost2_pos)])
-        ghost_status = each[["ghost1_status", "ghost2_status"]].values # TODO: check whether same as ``ifscared''
-        reward_type = int(each.fruit_type) if not np.isnan(each.fruit_type) else np.nan
-        fruit_pos = eval(each.fruit_pos) if not isinstance(each.fruit_pos, float) else np.nan
+        # TODO: rename the columns first before this function
+        cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
+        energizer_data = eval(each.energizers) if isinstance(each.energizers, str) else each.energizers
+        bean_data = eval(each.beans) if isinstance(each.beans, str) else each.beans
+        ghost_data = np.array([eval(each.ghost1_pos), eval(each.ghost2_pos)]) \
+            if "ghost1_pos" in all_data.columns.values or "ghost2_pos" in all_data.columns.values \
+            else np.array([each.ghost1Pos, each.ghost2Pos])
+        ghost_status = each[["ghost1_status", "ghost2_status"]].values \
+            if "ghost1_status" in all_data.columns.values or "ghost2_status" in all_data.columns.values \
+            else np.array([each.ifscared1, each.ifscared1])
+        if "fruit_type" in all_data.columns.values:
+            reward_type = int(each.fruit_type)  if not np.isnan(each.fruit_type) else np.nan
+        else:
+            reward_type = each.Reward
+        if "fruit_pos" in all_data.columns.values:
+            fruit_pos = eval(each.fruit_pos) if not isinstance(each.fruit_pos, float) else np.nan
+        else:
+            fruit_pos = each.fruitPos
         # Construct agents
         global_agent = PathTree(
             adjacent_data,
@@ -287,11 +322,12 @@ def estimationError(param, all_data, adjacent_data, locs_df, reward_amount, usef
         agent_estimation[:, 2] = oneHot(lazy_next_dir)
         agent_estimation[:, 3] = oneHot(random_next_dir)
         dir_prob = agent_estimation @ agent_weight
-        error = np.linalg.norm(dir_prob - true_prob[index])
+        error = np.linalg.norm(dir_prob - true_prob.values[index]
+                               if isinstance(true_prob, pd.DataFrame)
+                               else dir_prob - true_prob[index])
         nll += error
         # estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob))
         estimation_prob_trajectory.append(dir_prob)
-    # print('Finished')
     if not return_trajectory:
         return nll
     else:
@@ -304,10 +340,24 @@ def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
     locs_df = readLocDistance(loc_distance_filename)
     reward_amount = readRewardAmount()
     # Load experiment data
-    # with open(data_filename, 'rb') as file:
-    #     all_data = pickle.load(file)
     with open(data_filename, 'r') as file:
         all_data = pd.read_csv(file)
+    true_prob = all_data.pacman_dir
+    if "[" in true_prob.values[0]: # If pacman_dir is a vector
+        overall_dir = []
+        for index in range(all_data.pacman_dir.values.shape[0]):
+            each = all_data.pacman_dir.values[index]
+            each = each.strip('[]').split(' ')
+            while '' in each:  # For the weird case that '' might exist in the split list
+                each.remove('')
+            overall_dir.append([float(e) for e in each])
+        overall_dir = np.array(overall_dir)
+        true_prob = overall_dir
+    else: # If pacman_dir is the name of directions
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
     print("Number of samples : ", all_data.shape[0])
     # Optimization
     if useful_num_samples is None:
@@ -322,7 +372,7 @@ def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
         cons.append(l)
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] - 1})
-    func = lambda parameter: estimationError(parameter, all_data, adjacent_data, locs_df, reward_amount,
+    func = lambda parameter: estimationError(parameter, all_data, true_prob, adjacent_data, locs_df, reward_amount,
                                                    useful_num_samples = useful_num_samples)
     is_success = False
     retry_num = 0
@@ -343,7 +393,7 @@ def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
     print("Estimated Parameter : ", res.x)
     print(res)
     # Estimation
-    _, estimated_prob = estimationError(res.x, all_data, adjacent_data, locs_df, reward_amount,
+    _, estimated_prob = estimationError(res.x, all_data, true_prob, adjacent_data, locs_df, reward_amount,
                                               useful_num_samples = useful_num_samples, return_trajectory = True)
     true_dir = []
     for index in range(all_data.pacman_dir.values.shape[0]):
@@ -381,6 +431,30 @@ def constructDatasetFromCSV(filename, clip = None):
     return X, Y
 
 
+def constructDatasetFromOriginalLog(filename, clip = None):
+    # Read data and pre-processing
+    with open(filename, "rb") as file:
+        # file.seek(0) # deal with the error that "could not find MARK"
+        all_data = pickle.load(file)
+    true_prob = all_data.pacman_dir
+    start_index = 0
+    while pd.isna(true_prob[start_index]):
+        start_index += 1
+    true_prob = true_prob[start_index:]
+    all_data = all_data[start_index:]
+    for index in range(1, true_prob.shape[0]):
+        if pd.isna(true_prob[index]):
+            true_prob[index] = true_prob[index - 1]
+    true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+    # Construct the dataset
+    if clip is not None and clip > all_data.shape[0]:
+        print("Warning: requir more data than you have. Use the entire dataset by default.")
+        clip = None
+    X = all_data if clip is None else all_data[:clip]
+    Y = true_prob if clip is None else true_prob[:clip]
+    return X, Y
+
+
 def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100):
     # Load pre-computed data
     adjacent_data = readAdjacentMap(map_filename)
@@ -403,6 +477,7 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
     subset_index = np.arange(window, len(Y) - window)
     all_coeff = []
     all_correct_rate = []
+    all_success = []
     # Moving the window
     for index in subset_index:
         # if index % 20 == 0:
@@ -411,32 +486,91 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
         sub_Y = Y[index - window:index + window]
         # X_train, X_test, Y_train, Y_test = train_test_split(sub_X, sub_Y, test_size=0.2)
         # Optimize with minimum error estimation (MEE)
-        func = lambda parameter: estimationError(parameter, sub_X, adjacent_data, locs_df, reward_amount)
+        func = lambda parameter: estimationError(parameter, sub_X, sub_Y, adjacent_data, locs_df, reward_amount)
         is_success = False
         retry_num = 0
-        while not is_success and retry_num < 10:
+        while not is_success and retry_num < 5:
             res = scipy.optimize.minimize(
                 func,
                 x0 = params,
                 method = "SLSQP",
                 bounds = bounds,
-                tol = 1e-8,
+                tol = 1e-5,
                 constraints = cons
             )
             is_success = res.success
             if not is_success:
+                print("Fail, retrying...")
                 retry_num += 1
+        all_success.append(is_success)
         # Make estimations on the testing dataset
-        _, estimated_prob = estimationError(res.x, sub_X, adjacent_data, locs_df, reward_amount, return_trajectory=True)
+        _, estimated_prob = estimationError(res.x, sub_X, sub_Y, adjacent_data, locs_df, reward_amount, return_trajectory=True)
         estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-        correct_rate = np.sum(estimated_dir == sub_Y) / len(sub_Y)
+        true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+        correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
         all_correct_rate.append(correct_rate)
         # The coefficient
         all_coeff.append(res.x)
     print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
     print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
+
+    # # Plot weight variation
+    # all_coeff = np.array(all_coeff)
+    # plt.stackplot(np.arange(all_coeff.shape[0]),
+    #               all_coeff[:, 3],  # random agent
+    #               all_coeff[:, 2],  # lazy agent
+    #               all_coeff[:, 1],  # local agent
+    #               all_coeff[:, 0],  # global agent
+    #               labels=["Random Agent", "Lazy Agent", "Local Agent", "Global Agent"])
+    # plt.ylim(0, 1.0)
+    # plt.ylabel("Agent Percentage (%)", fontsize=20)
+    # plt.yticks(fontsize=20)
+    # plt.xlim(0, all_coeff.shape[0])
+    # plt.xlabel("Time Step", fontsize=20)
+    # plt.xticks(fontsize=20)
+    # plt.legend(fontsize=20)
+    # plt.show()
+    #
+    # plt.clf()
+    # plt.plot(all_coeff[:, 0], "o-", label="Global Agent", ms=2, lw=0.5)
+    # plt.plot(all_coeff[:, 1], "o-", label="Local Agent", ms=2, lw=0.5)
+    # plt.plot(all_coeff[:, 2], "o--", label="Lazy Agent", ms=2, lw=0.5)
+    # plt.plot(all_coeff[:, 3], "o--", label="Random Agent", ms=2, lw=0.5)
+    # plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
+    # plt.yticks(fontsize=20)
+    # plt.xlim(0, all_coeff.shape[0])
+    # plt.xlabel("Time Step", fontsize=20)
+    # plt.xticks(fontsize=20)
+    # plt.legend(fontsize=20)
+    # plt.show()
+    #
+    # plt.clf()
+    # plt.title("Correct Rate vs. Time Step", fontsize=20)
+    # plt.plot(all_correct_rate, "d-", label="Correct Rate", ms=3, lw=2)
+    # plt.ylabel("Correct Rate (%)", fontsize=20)
+    # plt.ylim(0, 1.1)
+    # plt.yticks(fontsize=20)
+    # plt.xlim(0, len(all_correct_rate))
+    # plt.xlabel("Time Step", fontsize=20)
+    # plt.xticks(fontsize=20)
+    # # plt.legend(fontsize=20)
+    # plt.show()
+
+    # Save estimated agent weights
+    np.save("MEE-agent-weight-real_data-window50.npy", all_coeff)
+    np.save("MEE-is_success.npy", np.array(all_success))
+
+
+def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_point = None):
     # Plot weight variation
-    all_coeff = np.array(all_coeff)
+    all_coeff = np.array(all_agent_weight)
+    if is_success is not None: # TODO: deal with fail optimization
+        for index in range(1, is_success.shape[0]):
+            if not is_success[index]:
+                all_agent_weight[index] = all_agent_weight[index - 1]
+    # plt.style.use("seaborn")
+    plt.subplot(2, 1, 1)
+    plt.title("Agent Weights Variation", fontsize = 30)
     plt.stackplot(np.arange(all_coeff.shape[0]),
                   all_coeff[:, 3],  # random agent
                   all_coeff[:, 2],  # lazy agent
@@ -445,59 +579,63 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
                   labels=["Random Agent", "Lazy Agent", "Local Agent", "Global Agent"])
     plt.ylim(0, 1.0)
     plt.ylabel("Agent Percentage (%)", fontsize=20)
-    plt.yticks(fontsize=20)
-    plt.xlim(0, all_coeff.shape[0])
-    plt.xlabel("Time Step", fontsize=20)
-    plt.xticks(fontsize=20)
-    plt.legend(fontsize=20)
-    plt.show()
+    plt.yticks(
+        np.arange(0.1, 1.1, 0.1),
+        ["0.{}".format(each)  if each < 10 else "1.0" for each in np.arange(1, 11, 1)],
+        fontsize=20)
+    plt.xlim(0, all_coeff.shape[0]-1)
+    # plt.xlabel("Time Step", fontsize=20)
+    x_ticks = list(range(0, all_coeff.shape[0], 10))
+    if (all_coeff.shape[0]-1) not in x_ticks:
+        x_ticks.append(all_coeff.shape[0]-1)
+    x_ticks = np.array(x_ticks)
+    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
+    plt.legend(fontsize=20, ncol = 4)
 
-    plt.clf()
-    plt.plot(all_coeff[:, 0], "o-", label="Global Agent", ms=2, lw=0.5)
-    plt.plot(all_coeff[:, 1], "o-", label="Local Agent", ms=2, lw=0.5)
-    plt.plot(all_coeff[:, 2], "o--", label="Lazy Agent", ms=2, lw=0.5)
-    plt.plot(all_coeff[:, 3], "o--", label="Random Agent", ms=2, lw=0.5)
+    plt.subplot(2, 1, 2)
+    plt.plot(all_coeff[:, 3], "o-", label="Random Agent", ms=3, lw=5)
+    plt.plot(all_coeff[:, 2], "o-", label="Lazy Agent", ms=3, lw=5)
+    plt.plot(all_coeff[:, 1], "o-", label="Local Agent", ms=3, lw=5)
+    plt.plot(all_coeff[:, 0], "o-", label="Global Agent", ms=3, lw=5)
+    if reverse_point is not None:
+        plt.plot([reverse_point-window, reverse_point-window], [0.0, np.max(all_coeff)+0.1], "k--", lw = 3, alpha = 0.5)
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize=20)
-    plt.xlim(0, all_coeff.shape[0])
+    plt.ylim(-0.05, np.max(all_coeff) + 0.3)
+    plt.yticks(
+        np.arange(0, np.max(all_coeff)+0.3, 0.1),
+        ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, int((np.max(all_coeff).item() + 0.3)*10), 1)],
+        fontsize = 20)
+    plt.xlim(0, all_coeff.shape[0]-1)
     plt.xlabel("Time Step", fontsize=20)
-    plt.xticks(fontsize=20)
-    plt.legend(fontsize=20)
+    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
+    plt.legend(fontsize=20, ncol = 4)
     plt.show()
-
-    plt.clf()
-    plt.title("Correct Rate vs. Time Step", fontsize=20)
-    plt.plot(all_correct_rate, "d-", label="Correct Rate", ms=3, lw=2)
-    plt.ylabel("Correct Rate (%)", fontsize=20)
-    plt.ylim(0, 1.1)
-    plt.yticks(fontsize=20)
-    plt.xlim(0, len(all_correct_rate))
-    plt.xlabel("Time Step", fontsize=20)
-    plt.xticks(fontsize=20)
-    # plt.legend(fontsize=20)
-    plt.show()
-
-    # Save estimated agent weights
-    np.save("MEE-agent-weight.npy", all_coeff)
-
 
 
 
 if __name__ == '__main__':
     # data_filename = "extracted_data/test_data.pkl"
-    data_filename = "stimulus_data/stimulus-switch/diary.csv"
+    data_filename = "stimulus_data/local-graze/diary.csv"
     map_filename = "extracted_data/adjacent_map.csv"
     loc_distance_filename = "extracted_data/dij_distance_map.csv"
+    original_data_filename = "../common_data/df_total_with_reward.pkl"
 
     # # MLE (maximum likelihood estimation)
     # # Note: The performance of MEE is much better.
     # print("="*10, " MLE ", "="*10)
-    # MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 100)
+    # MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 50)
 
     # # MEE (minimum error estimation)
     # print("=" * 10, " MEE ", "=" * 10)
     # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 100)
 
-    # Moving Window Analysis with MEE
-    X, Y = constructDatasetFromCSV(data_filename, clip = None)
-    movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 50)
+    # # Moving Window Analysis with MEE
+    # X, Y = constructDatasetFromCSV(data_filename, clip = None)
+    X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200)
+    # movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 50)
+
+    # # Plot agent weights variation
+    # all_agent_weight = np.load("MEE-agent-weight-real_data-window50.npy")
+    # is_success = np.load("MEE-is_success-real_data.npy")
+    # plotWeightVariation(all_agent_weight, is_success = is_success, window = 50, reverse_point = None)
