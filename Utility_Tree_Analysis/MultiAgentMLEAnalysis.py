@@ -323,10 +323,9 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
         agent_estimation[:, 3] = oneHot(random_next_dir)
         dir_prob = agent_estimation @ agent_weight
         error = np.linalg.norm(dir_prob - true_prob.values[index]
-                               if isinstance(true_prob, pd.DataFrame)
+                               if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
                                else dir_prob - true_prob[index])
         nll += error
-        # estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob))
         estimation_prob_trajectory.append(dir_prob)
     if not return_trajectory:
         return nll
@@ -431,17 +430,20 @@ def constructDatasetFromCSV(filename, clip = None):
     return X, Y
 
 
-def constructDatasetFromOriginalLog(filename, clip = None):
+def constructDatasetFromOriginalLog(filename, clip = None, trial_name = None):
     # Read data and pre-processing
     with open(filename, "rb") as file:
         # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
+    if trial_name is not None: # explicitly indicate the trial
+        clip = None
+        all_data = all_data[all_data.file == trial_name].reset_index()
     true_prob = all_data.pacman_dir
     start_index = 0
     while pd.isna(true_prob[start_index]):
         start_index += 1
-    true_prob = true_prob[start_index:]
-    all_data = all_data[start_index:]
+    true_prob = true_prob[start_index:].reset_index(drop = True)
+    all_data = all_data[start_index:].reset_index(drop = True)
     for index in range(1, true_prob.shape[0]):
         if pd.isna(true_prob[index]):
             true_prob[index] = true_prob[index - 1]
@@ -455,7 +457,7 @@ def constructDatasetFromOriginalLog(filename, clip = None):
     return X, Y
 
 
-def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100):
+def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100, trial_name = None):
     # Load pre-computed data
     adjacent_data = readAdjacentMap(map_filename)
     locs_df = readLocDistance(loc_distance_filename)
@@ -557,8 +559,10 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
     # plt.show()
 
     # Save estimated agent weights
-    np.save("MEE-agent-weight-real_data-window50.npy", all_coeff)
-    np.save("MEE-is_success.npy", np.array(all_success))
+    np.save("MEE-agent-weight-real_data-window{}.npy".format(window) if trial_name is None
+            else "MEE-agent-weight-real_data-window{}-{}.npy".format(window, trial_name), all_coeff)
+    np.save("MEE-is_success-window{}.npy".format(window) if trial_name is None
+            else "MEE-is_success-weight-window{}-{}.npy".format(window, trial_name), is_success)
 
 
 def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_point = None):
@@ -603,8 +607,8 @@ def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_poi
     plt.yticks(fontsize=20)
     plt.ylim(-0.05, np.max(all_coeff) + 0.3)
     plt.yticks(
-        np.arange(0, np.max(all_coeff)+0.3, 0.1),
-        ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, int((np.max(all_coeff).item() + 0.3)*10), 1)],
+        np.arange(0, 1.3, 0.2),
+        ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, 12, 2)],
         fontsize = 20)
     plt.xlim(0, all_coeff.shape[0]-1)
     plt.xlabel("Time Step", fontsize=20)
@@ -632,10 +636,10 @@ if __name__ == '__main__':
 
     # # Moving Window Analysis with MEE
     # X, Y = constructDatasetFromCSV(data_filename, clip = None)
-    X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200)
-    # movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 50)
+    # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = "1-2-Omega-15-Jul-2019.csv")
+    # movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20, trial_name = "1-2-Omega-15-Jul-2019.csv")
 
-    # # Plot agent weights variation
-    # all_agent_weight = np.load("MEE-agent-weight-real_data-window50.npy")
-    # is_success = np.load("MEE-is_success-real_data.npy")
-    # plotWeightVariation(all_agent_weight, is_success = is_success, window = 50, reverse_point = None)
+    # Plot agent weights variation
+    all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-2-Omega-15-Jul-2019.npy")
+    is_success = np.load("MEE-is_success-1-2-Omega-15-Jul-2019.npy")
+    plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None)
