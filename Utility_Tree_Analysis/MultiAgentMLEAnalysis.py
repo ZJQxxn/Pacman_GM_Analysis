@@ -23,7 +23,7 @@ import sys
 # from MultiAgentInteractor import MultiAgentInteractor
 sys.path.append('./')
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount
-from PathTreeConstructor import PathTree
+from PathTreeConstructor import PathTree, OptimisticAgent, PessimisticAgent
 from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
 
@@ -235,7 +235,7 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
     local_ghost_attractive_thr = 5
     local_fruit_attractive_thr = 5
     local_ghost_repulsive_thr = 5
-    agent_weight = [param[0], param[1], param[2], param[3]]
+    agent_weight = [param[0], param[1], 0, 0] # TODO: exclude random and lazy
     # # True probability
     # true_prob = np.array([oneHot(each) for each in true_prob]) #TODO: for other functions
     # for index in range(all_data.pacman_dir.values.shape[0]):
@@ -319,6 +319,100 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
         random_next_dir = random_agent.nextDir()
         agent_estimation[:, 0] = oneHot(global_best_path[0][1])
         agent_estimation[:, 1] = oneHot(local_best_path[0][1])
+        agent_estimation[:, 2] = oneHot(lazy_next_dir)
+        agent_estimation[:, 3] = oneHot(random_next_dir)
+        dir_prob = agent_estimation @ agent_weight
+        error = np.linalg.norm(dir_prob - true_prob.values[index]
+                               if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
+                               else dir_prob - true_prob[index])
+        nll += error
+        estimation_prob_trajectory.append(dir_prob)
+    if not return_trajectory:
+        return nll
+    else:
+        return (nll, estimation_prob_trajectory)
+
+
+def estimationErrorOptimism(param, all_data, true_prob, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
+    # Parameters
+    depth = 10 #TODO:
+    ghost_attractive_thr = 34
+    fruit_attractive_thr = 34
+    ghost_repulsive_thr = 12
+    agent_weight = [param[0], param[1], param[2], param[3]]
+    nll = 0  # negative log likelihood
+    estimation_prob_trajectory = []
+    num_samples = all_data.shape[0]
+    last_dir = None
+    loop_count = 0
+    # for index in range(num_samples):
+    useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
+    for index in range(useful_num_samples):
+        # Extract game status and Pacman status
+        each = all_data.iloc[index]
+        # TODO: rename the columns first before this function
+        cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
+        energizer_data = eval(each.energizers) if isinstance(each.energizers, str) else each.energizers
+        bean_data = eval(each.beans) if isinstance(each.beans, str) else each.beans
+        ghost_data = np.array([eval(each.ghost1_pos), eval(each.ghost2_pos)]) \
+            if "ghost1_pos" in all_data.columns.values or "ghost2_pos" in all_data.columns.values \
+            else np.array([each.ghost1Pos, each.ghost2Pos])
+        ghost_status = each[["ghost1_status", "ghost2_status"]].values \
+            if "ghost1_status" in all_data.columns.values or "ghost2_status" in all_data.columns.values \
+            else np.array([each.ifscared1, each.ifscared1])
+        if "fruit_type" in all_data.columns.values:
+            reward_type = int(each.fruit_type)  if not np.isnan(each.fruit_type) else np.nan
+        else:
+            reward_type = each.Reward
+        if "fruit_pos" in all_data.columns.values:
+            fruit_pos = eval(each.fruit_pos) if not isinstance(each.fruit_pos, float) else np.nan
+        else:
+            fruit_pos = each.fruitPos
+        # Construct agents
+        optimistic_agent = OptimisticAgent(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=depth,
+            ghost_attractive_thr=ghost_attractive_thr,
+            fruit_attractive_thr=fruit_attractive_thr,
+            ghost_repulsive_thr=ghost_repulsive_thr
+        )
+        pessimistic_agent = PessimisticAgent(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=depth,
+            ghost_attractive_thr=ghost_attractive_thr,
+            fruit_attractive_thr=fruit_attractive_thr,
+            ghost_repulsive_thr=ghost_repulsive_thr
+        )
+        lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir, loop_count, max_loop=5)
+        random_agent = RandomAgent(adjacent_data, cur_pos, last_dir, None)
+        # Estimation
+        agent_estimation = np.zeros((4, 4))
+        _, _, optimistic_best_path = optimistic_agent.construct()
+        _, _,pessimistic_best_path = pessimistic_agent.construct()
+        lazy_next_dir, not_turn = lazy_agent.nextDir()
+        if not_turn:
+            loop_count += 1
+        random_next_dir = random_agent.nextDir()
+        agent_estimation[:, 0] = oneHot(optimistic_best_path[0][1])
+        agent_estimation[:, 1] = oneHot(pessimistic_best_path[0][1])
         agent_estimation[:, 2] = oneHot(lazy_next_dir)
         agent_estimation[:, 3] = oneHot(random_next_dir)
         dir_prob = agent_estimation @ agent_weight
@@ -457,7 +551,8 @@ def constructDatasetFromOriginalLog(filename, clip = None, trial_name = None):
     return X, Y
 
 
-def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100, trial_name = None):
+def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100,
+                         trial_name = None, optimism_agent = False, need_random_lazy = True):
     # Load pre-computed data
     adjacent_data = readAdjacentMap(map_filename)
     locs_df = readLocDistance(loc_distance_filename)
@@ -466,15 +561,26 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
     print("Start optimizing...")
     print("="*15)
     # Construct constraints for the optimizer
-    bounds = [[0, 1], [0, 1], [0, 1], [0, 1]]
-    params = np.array([0.0, 0.0, 0.0, 0.0])
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] - 1})
+    if need_random_lazy:
+        bounds = [[0, 1], [0, 1], [0, 1], [0, 1]]
+        params = np.array([0.0, 0.0, 0.0, 0.0])
+        cons = []  # construct the bounds in the form of constraints
+        for par in range(len(bounds)):
+            l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+            u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+            cons.append(l)
+            cons.append(u)
+        cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3]  - 1})
+    else:
+        bounds = [[0, 1], [0, 1]]
+        params = np.array([0.0, 0.0])
+        cons = []  # construct the bounds in the form of constraints
+        for par in range(len(bounds)):
+            l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+            u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+            cons.append(l)
+            cons.append(u)
+        cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] - 1})
     # The indices
     subset_index = np.arange(window, len(Y) - window)
     all_coeff = []
@@ -488,7 +594,10 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
         sub_Y = Y[index - window:index + window]
         # X_train, X_test, Y_train, Y_test = train_test_split(sub_X, sub_Y, test_size=0.2)
         # Optimize with minimum error estimation (MEE)
-        func = lambda parameter: estimationError(parameter, sub_X, sub_Y, adjacent_data, locs_df, reward_amount)
+        if optimism_agent:
+            func = lambda parameter: estimationErrorOptimism(parameter, sub_X, sub_Y, adjacent_data, locs_df, reward_amount)
+        else:
+            func = lambda parameter: estimationError(parameter, sub_X, sub_Y, adjacent_data, locs_df, reward_amount)
         is_success = False
         retry_num = 0
         while not is_success and retry_num < 5:
@@ -515,54 +624,12 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
         all_coeff.append(res.x)
     print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
     print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
-
-    # # Plot weight variation
-    # all_coeff = np.array(all_coeff)
-    # plt.stackplot(np.arange(all_coeff.shape[0]),
-    #               all_coeff[:, 3],  # random agent
-    #               all_coeff[:, 2],  # lazy agent
-    #               all_coeff[:, 1],  # local agent
-    #               all_coeff[:, 0],  # global agent
-    #               labels=["Random Agent", "Lazy Agent", "Local Agent", "Global Agent"])
-    # plt.ylim(0, 1.0)
-    # plt.ylabel("Agent Percentage (%)", fontsize=20)
-    # plt.yticks(fontsize=20)
-    # plt.xlim(0, all_coeff.shape[0])
-    # plt.xlabel("Time Step", fontsize=20)
-    # plt.xticks(fontsize=20)
-    # plt.legend(fontsize=20)
-    # plt.show()
-    #
-    # plt.clf()
-    # plt.plot(all_coeff[:, 0], "o-", label="Global Agent", ms=2, lw=0.5)
-    # plt.plot(all_coeff[:, 1], "o-", label="Local Agent", ms=2, lw=0.5)
-    # plt.plot(all_coeff[:, 2], "o--", label="Lazy Agent", ms=2, lw=0.5)
-    # plt.plot(all_coeff[:, 3], "o--", label="Random Agent", ms=2, lw=0.5)
-    # plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
-    # plt.yticks(fontsize=20)
-    # plt.xlim(0, all_coeff.shape[0])
-    # plt.xlabel("Time Step", fontsize=20)
-    # plt.xticks(fontsize=20)
-    # plt.legend(fontsize=20)
-    # plt.show()
-    #
-    # plt.clf()
-    # plt.title("Correct Rate vs. Time Step", fontsize=20)
-    # plt.plot(all_correct_rate, "d-", label="Correct Rate", ms=3, lw=2)
-    # plt.ylabel("Correct Rate (%)", fontsize=20)
-    # plt.ylim(0, 1.1)
-    # plt.yticks(fontsize=20)
-    # plt.xlim(0, len(all_correct_rate))
-    # plt.xlabel("Time Step", fontsize=20)
-    # plt.xticks(fontsize=20)
-    # # plt.legend(fontsize=20)
-    # plt.show()
-
     # Save estimated agent weights
-    np.save("MEE-agent-weight-real_data-window{}.npy".format(window) if trial_name is None
-            else "MEE-agent-weight-real_data-window{}-{}.npy".format(window, trial_name), all_coeff)
-    np.save("MEE-is_success-window{}.npy".format(window) if trial_name is None
-            else "MEE-is_success-weight-window{}-{}.npy".format(window, trial_name), is_success)
+    type = "{}_random_lazy-{}".format("with" if need_random_lazy else "without", "optimism" if optimism_agent else "area")
+    np.save("MEE-agent-weight-real_data-window{}-{}.npy".format(window, type) if trial_name is None
+            else "MEE-agent-weight-real_data-window{}-{}-{}.npy".format(window, trial_name, type), all_coeff)
+    np.save("MEE-is_success-window{}-{}.npy".format(window, type) if trial_name is None
+            else "MEE-is_success-weight-window{}-{}-{}.npy".format(window, trial_name, type), all_success)
 
 
 def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_point = None):
@@ -576,11 +643,13 @@ def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_poi
     plt.subplot(2, 1, 1)
     plt.title("Agent Weights Variation", fontsize = 30)
     plt.stackplot(np.arange(all_coeff.shape[0]),
-                  all_coeff[:, 3],  # random agent
-                  all_coeff[:, 2],  # lazy agent
+                  # all_coeff[:, 3],  # random agent
+                  # all_coeff[:, 2],  # lazy agent
                   all_coeff[:, 1],  # local agent
                   all_coeff[:, 0],  # global agent
-                  labels=["Random Agent", "Lazy Agent", "Local Agent", "Global Agent"])
+                  # labels=["Random Agent", "Lazy Agent", "Local Agent", "Global Agent"]
+                  labels=["Local Agent", "Global Agent"]
+                  )
     plt.ylim(0, 1.0)
     plt.ylabel("Agent Percentage (%)", fontsize=20)
     plt.yticks(
@@ -597,8 +666,8 @@ def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_poi
     plt.legend(fontsize=20, ncol = 4)
 
     plt.subplot(2, 1, 2)
-    plt.plot(all_coeff[:, 3], "o-", label="Random Agent", ms=3, lw=5)
-    plt.plot(all_coeff[:, 2], "o-", label="Lazy Agent", ms=3, lw=5)
+    # plt.plot(all_coeff[:, 3], "o-", label="Random Agent", ms=3, lw=5)
+    # plt.plot(all_coeff[:, 2], "o-", label="Lazy Agent", ms=3, lw=5)
     plt.plot(all_coeff[:, 1], "o-", label="Local Agent", ms=3, lw=5)
     plt.plot(all_coeff[:, 0], "o-", label="Global Agent", ms=3, lw=5)
     if reverse_point is not None:
@@ -634,12 +703,14 @@ if __name__ == '__main__':
     # print("=" * 10, " MEE ", "=" * 10)
     # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 100)
 
-    # # Moving Window Analysis with MEE
+    # Moving Window Analysis with MEE
     # X, Y = constructDatasetFromCSV(data_filename, clip = None)
-    # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = "1-2-Omega-15-Jul-2019.csv")
-    # movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20, trial_name = "1-2-Omega-15-Jul-2019.csv")
+    X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = "1-1-Omega-15-Jul-2019.csv")
+    movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20,
+                         trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
 
-    # Plot agent weights variation
-    all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-2-Omega-15-Jul-2019.npy")
-    is_success = np.load("MEE-is_success-1-2-Omega-15-Jul-2019.npy")
-    plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None)
+    # # Plot agent weights variation
+    # all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-2-Omega-15-Jul-2019.csv.npy")
+    # is_success = np.load("MEE-is_success-weight-window20-1-2-Omega-15-Jul-2019.csv.npy")
+    # # is_success = np.tile(True, all_agent_weight.shape[0])
+    # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None)
