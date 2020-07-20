@@ -18,6 +18,7 @@ import h5py
 from scipy.io import loadmat
 import scipy.optimize
 from sklearn.model_selection import train_test_split
+import itertools
 
 import sys
 # from MultiAgentInteractor import MultiAgentInteractor
@@ -957,6 +958,72 @@ def plotWeightVariationAllAgent(all_agent_weight, window, is_success = None, rev
     plt.show()
 
 
+def _consecutiveInterval(list):
+    list = np.hstack(([0], list, [0]))# avoid not ended consecutive numbers
+    start_index = np.where(np.diff(list) == 1)[0] + 1
+    end_index = np.where(np.diff(list) == -1)[0] + 1
+    consecutive_list = [[start_index[i], end_index[i]] for i in range(len(start_index))]
+    return consecutive_list
+
+
+
+def plotTrueLabel(trial_name, window):
+    # Read data
+    with open("../common_data/labeled_df_toynew.pkl", "rb") as file:
+        data = pickle.load(file)
+    # Extract labels
+    data = data[data.file == trial_name]
+    data = data[
+        ["label_local_graze",
+         "label_hunt1",
+         "label_hunt2",
+         "label_prehunt",
+         "label_global_optimal",
+         "label_global_notoptimal",
+         "label_evade"]
+    ]
+    data = data.fillna(0)
+    global_graze_label = np.array(np.logical_or(data.label_global_optimal.values, data.label_global_notoptimal.values), dtype = np.int)
+    local_graze_label = data.label_local_graze.values
+    optimistic_label = data.label_prehunt.values
+    pessimistic_label = data.label_evade.values
+    hunt_label = np.array(np.logical_or(data.label_hunt1.values, data.label_hunt2.values), dtype = np.int)
+
+    global_graze_index = _consecutiveInterval(global_graze_label)
+    local_graze_index = _consecutiveInterval(local_graze_label)
+    optimistic_index = _consecutiveInterval(optimistic_label)
+    pessimistic_index = _consecutiveInterval(pessimistic_label)
+    hunt_index = _consecutiveInterval(hunt_label)
+
+    # Plot true labels for this trial
+    # plt.plot(global_graze_label, "o", label="Global Graze", ms=5)
+    # plt.plot(local_graze_label, "o", label="Local Graze", ms=5)
+    # plt.plot(optimistic_label, "o", label="Optimistic (Pre-Hunt)", ms=5)
+    # plt.plot(pessimistic_label, "o", label="Pessimistic (Evade)", ms=5)
+    for each in global_graze_index:
+        plt.fill_between(each, [1.0, 1.0], color = "red")
+    for each in local_graze_index:
+        plt.fill_between(each, [1.0, 1.0], color = "#0AA344")
+    for each in optimistic_index:
+        plt.fill_between(each, [1.0, 1.0], color = "#FF8936")
+    for each in pessimistic_index:
+        plt.fill_between(each, [1.0, 1.0], color = "blue")
+    plt.ylabel("Label Indication", fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(0.0, 1.0)
+    plt.yticks([0.0, 1.0], [0, 1], fontsize=20)
+    plt.xlim(0, data.shape[0] - 1)
+    plt.xlabel("Time Step", fontsize=20)
+    x_ticks = list(range(0, data.shape[0], 10))
+    if (data.shape[0] - 1) not in x_ticks:
+        x_ticks.append(data.shape[0] - 1)
+    x_ticks = np.array(x_ticks)
+    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
+    # plt.legend(fontsize=20, ncol=4)
+    plt.show()
+
+
+
 if __name__ == '__main__':
     # data_filename = "extracted_data/test_data.pkl"
     data_filename = "stimulus_data/local-graze/diary.csv"
@@ -994,9 +1061,10 @@ if __name__ == '__main__':
     #                             trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
 
 
-    # Plot agent weights variation
-    all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-2-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
-    is_success = np.load("MEE-is_success-weight-window20-1-2-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
-    # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None,
-    #                     with_random_lazy = True, optimism_agent = False)
-    plotWeightVariationAllAgent(all_agent_weight, is_success=is_success, window=20, reverse_point=None)
+    # # Plot agent weights variation
+    # all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-1-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
+    # is_success = np.load("MEE-is_success-weight-window20-1-1-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
+    # # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None,
+    # #                     with_random_lazy = True, optimism_agent = False)
+    # plotWeightVariationAllAgent(all_agent_weight, is_success=is_success, window=20, reverse_point=None)
+    plotTrueLabel("1-2-Omega-15-Jul-2019.csv", window = 20)
