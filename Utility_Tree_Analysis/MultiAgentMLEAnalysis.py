@@ -57,7 +57,17 @@ def oneHot(val):
 #             MAXIMUM LIKELIHOOD ESTIMATION
 # ===========================================================
 def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
-    #TODO: revise for real data
+    '''
+    Compute the negative log likelihood. 
+    :param param: Parameters.
+    :param all_data: All the experimental data (pd.DataFrame).
+    :param adjacent_data: Adjacent data (pd.DataFrame).
+    :param locs_df: Dij distance map data.
+    :param reward_amount: Reward value (dict). 
+    :param useful_num_samples: Number of samples used in the computation.
+    :param return_trajectory: Whether return the estimated probability for each sample.
+    :return: 
+    '''
     # Parameters
     global_depth = 5
     global_ghost_attractive_thr = 34
@@ -74,9 +84,8 @@ def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount
     num_samples = all_data.shape[0]
     last_dir = None
     loop_count = 0
-    # for index in range(num_samples):
     useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
-    for index in range(useful_num_samples):  # TODO: use only a part of samples for efficiency for now
+    for index in range(useful_num_samples):
         # Extract game status and Pacman status
         each = all_data.iloc[index]
         cur_pos = eval(each.pacmanPos)
@@ -145,8 +154,6 @@ def negativeLogLikelihood(param, all_data, adjacent_data, locs_df, reward_amount
         return nll
     else:
         return (nll, estimation_prob_trajectory)
-
-
 
 
 def MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples = None):
@@ -227,6 +234,18 @@ def MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
 #               MINIMUM ERROR ESTIMATION
 # ===========================================================
 def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
+    '''
+    Compute the estimation error with global/local/lazy/random agents.
+    :param param: Parameters.
+    :param all_data: All the experimental data (pd.DataFrame).
+    :param: true_prob: True probability of directions.
+    :param adjacent_data: Adjacent data (pd.DataFrame).
+    :param locs_df: Dij distance map data.
+    :param reward_amount: Reward value (dict). 
+    :param useful_num_samples: Number of samples used in the computation.
+    :param return_trajectory: Whether return the estimated probability for each sample.
+    :return: 
+    '''
     # Parameters
     global_depth = 5
     global_ghost_attractive_thr = 34
@@ -236,28 +255,17 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
     local_ghost_attractive_thr = 5
     local_fruit_attractive_thr = 5
     local_ghost_repulsive_thr = 5
-    agent_weight = [param[0], param[1], 0, 0] # TODO: exclude random and lazy
-    # # True probability
-    # true_prob = np.array([oneHot(each) for each in true_prob]) #TODO: for other functions
-    # for index in range(all_data.pacman_dir.values.shape[0]):
-    #     each = all_data.pacman_dir.values[index]
-    #     each = each.strip('[]').split(' ')
-    #     while '' in each: # For the weird case that '' might exist in the split list
-    #         each.remove('')
-    #     true_prob.append([float(e) for e in each])
-    # true_prob = np.array(true_prob)
-    # Compute log likelihood
-    nll = 0  # negative log likelihood
+    agent_weight = [param[0], param[1], param[2], param[3]]
+    # Compute estimation error
+    nll = 0  # estimation error
     estimation_prob_trajectory = []
     num_samples = all_data.shape[0]
     last_dir = None
     loop_count = 0
-    # for index in range(num_samples):
     useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
     for index in range(useful_num_samples):
         # Extract game status and Pacman status
         each = all_data.iloc[index]
-        # TODO: rename the columns first before this function
         cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
         energizer_data = eval(each.energizers) if isinstance(each.energizers, str) else each.energizers
         bean_data = eval(each.beans) if isinstance(each.beans, str) else each.beans
@@ -335,6 +343,18 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
 
 
 def estimationErrorOptimism(param, all_data, true_prob, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
+    '''
+    Compute the estimation error with optimistic/pessimistic/lazy/random agents.
+    :param param: Parameters.
+    :param all_data: All the experimental data (pd.DataFrame).
+    :param: true_prob: True probability of directions.
+    :param adjacent_data: Adjacent data (pd.DataFrame).
+    :param locs_df: Dij distance map data.
+    :param reward_amount: Reward value (dict). 
+    :param useful_num_samples: Number of samples used in the computation.
+    :param return_trajectory: Whether return the estimated probability for each sample.
+    :return: 
+    '''
     # Parameters
     depth = 10 #TODO:
     ghost_attractive_thr = 34
@@ -429,7 +449,18 @@ def estimationErrorOptimism(param, all_data, true_prob, adjacent_data, locs_df, 
 
 
 def estimationErrorAll(param, all_data, true_prob, adjacent_data, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
-    # Global, local, optimistic pessimistic
+    '''
+    Compute the estimation error with optimistic/pessimistic/global/lazy agents.
+    :param param: Parameters.
+    :param all_data: All the experimental data (pd.DataFrame).
+    :param: true_prob: True probability of directions.
+    :param adjacent_data: Adjacent data (pd.DataFrame).
+    :param locs_df: Dij distance map data.
+    :param reward_amount: Reward value (dict). 
+    :param useful_num_samples: Number of samples used in the computation.
+    :param return_trajectory: Whether return the estimated probability for each sample.
+    :return: 
+    '''
     # Parameters
     optimisim_depth = 10
     optimisim_ghost_attractive_thr = 34
@@ -657,6 +688,13 @@ def constructDatasetFromCSV(filename, clip = None):
 
 
 def constructDatasetFromOriginalLog(filename, clip = None, trial_name = None):
+    '''
+    Construct dataset from a .pkl file.
+    :param filename: Filename.
+    :param clip: Number of samples used for computation.
+    :param trial_name: Trial name.
+    :return: 
+    '''
     # Read data and pre-processing
     with open(filename, "rb") as file:
         # file.seek(0) # deal with the error that "could not find MARK"
@@ -966,8 +1004,8 @@ def _consecutiveInterval(list):
     return consecutive_list
 
 
-
 def plotTrueLabel(trial_name, window):
+    #TODO: check the label
     # Read data
     with open("../common_data/labeled_df_toynew.pkl", "rb") as file:
         data = pickle.load(file)
@@ -1025,8 +1063,7 @@ def plotTrueLabel(trial_name, window):
 
 
 if __name__ == '__main__':
-    # data_filename = "extracted_data/test_data.pkl"
-    data_filename = "stimulus_data/local-graze/diary.csv"
+    # Data
     map_filename = "extracted_data/adjacent_map.csv"
     loc_distance_filename = "extracted_data/dij_distance_map.csv"
     original_data_filename = "../common_data/df_total_with_reward.pkl"
@@ -1034,31 +1071,31 @@ if __name__ == '__main__':
     # # MLE (maximum likelihood estimation)
     # # Note: The performance of MEE is much better.
     # print("="*10, " MLE ", "="*10)
+    # data_filename = "stimulus_data/local-graze/diary.csv"
     # MLE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 50)
 
     # # MEE (minimum error estimation)
     # print("=" * 10, " MEE ", "=" * 10)
     # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 100)
 
-    # # Moving Window Analysis with MEE
-    # # X, Y = constructDatasetFromCSV(data_filename, clip = None)
-    # trial_name = "1-1-Omega-15-Jul-2019.csv"
-    # type = "all"
-    # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = trial_name)
-    #
-    # if type == "all":
-    #     print("{}--{}".format(type, trial_name))
-    #     movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
-    # else:
-    #     need_random_lazy = False
-    #     need_optimism = False
-    #     print("{}--{}--{}--{}".format(
-    #         type,
-    #         trial_name,
-    #         "with_random_lazy" if need_random_lazy else "without_random_lazy",
-    #         "optimisim" if need_optimism else "area"))
-    #     movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20,
-    #                             trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
+    # Moving Window Analysis with MEE
+    trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
+    type = "all"
+    X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = trial_name)
+
+    if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
+        print("{}--{}".format(type, trial_name))
+        movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
+    else:
+        need_random_lazy = False # include random and lazy agents?
+        need_optimism = False # use optimitic & pessimitic or global & local agents?
+        print("{}--{}--{}--{}".format(
+            type,
+            trial_name,
+            "with_random_lazy" if need_random_lazy else "without_random_lazy",
+            "optimisim" if need_optimism else "area"))
+        movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20,
+                                trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
 
 
     # # Plot agent weights variation
@@ -1067,4 +1104,4 @@ if __name__ == '__main__':
     # # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None,
     # #                     with_random_lazy = True, optimism_agent = False)
     # plotWeightVariationAllAgent(all_agent_weight, is_success=is_success, window=20, reverse_point=None)
-    plotTrueLabel("1-2-Omega-15-Jul-2019.csv", window = 20)
+    # plotTrueLabel("1-2-Omega-15-Jul-2019.csv", window = 20)
