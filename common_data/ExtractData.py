@@ -42,8 +42,39 @@ def generate_suicide_normal(df_total):
 
 
 def obtain_evade_list(df_total):
-    evade_indexes = [
-        list(i)[0]
-        for i in consecutive_groups(df_total[df_total.label_evade == 1].index) # TODO: just the label of evading
-    ]
-    return evade_indexes
+    index = df_total[df_total.label_evade == 1].index
+    # TODO: select evade data
+    # evade_indexes = [
+    #     list(i)[0]
+    #     for i in consecutive_groups(df_total[df_total.label_evade == 1].index) # TODO: just the label of evading
+    # ]
+    return index
+
+
+if __name__ == '__main__':
+    # Configurations
+    data_filename = "labeled_df_toynew.pkl"
+    evade_data_filename = "../Utility_Tree_Analysis/extracted_data/evade_data.pkl"
+    suicide_data_filename = "../Utility_Tree_Analysis/extracted_data/one_trial_suicide_data.pkl"
+    # Read in the complet data
+    with open(data_filename, "rb") as file:
+        df_total = pickle.load(file)
+    clip = 1000
+    print("=" * 20)
+    print("Finished reading.")
+    print("Data shape : ", df_total.shape)
+    # Extract evade data
+    evade_list = obtain_evade_list(df_total)
+    evade_data = df_total.iloc[evade_list[:clip]]
+    print("Evade data shape : ", len(evade_list))
+    # Extract suicide data
+    suicide_lists, normal_lists = generate_suicide_normal(df_total)
+    print("Suicide data shape : ", len(suicide_lists))
+    trial_suicide_index = suicide_lists.values[0]
+    suicide_data = df_total.iloc[trial_suicide_index[0]-50 : trial_suicide_index[-1]+50]
+    # Save extracted data
+    with open(evade_data_filename, "wb") as file:
+        pickle.dump(evade_data, file)
+    with open(suicide_data_filename, "wb") as file:
+        pickle.dump(suicide_data, file)
+    print("Finished writing.")
