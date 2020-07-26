@@ -33,6 +33,8 @@ def _isOptimistic():
 def _isPessimistic():
     pass
 
+def _isSuicide():
+    pass
 
 def labeling(df_total):
     pass

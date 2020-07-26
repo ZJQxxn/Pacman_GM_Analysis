@@ -34,6 +34,10 @@ def readAdjacentMap(filename):
         dict_adjacent_data[each[1]]["down"] = each[5] if not isinstance(each[5], float) else np.nan
     return dict_adjacent_data
 
+def readAdjacentPath(filename):
+    adjacent_data = pd.read_csv(filename)
+    return adjacent_data[["pos1", "pos2", "path"]]
+
 
 def readLocDistance(filename):
     '''
