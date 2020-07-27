@@ -54,11 +54,16 @@ def obtain_evade_list(df_total):
 if __name__ == '__main__':
     # Configurations
     data_filename = "labeled_df_toynew.pkl"
+    reward_data_filename = "df_total_with_reward.pkl"
     evade_data_filename = "../Utility_Tree_Analysis/extracted_data/evade_data.pkl"
     suicide_data_filename = "../Utility_Tree_Analysis/extracted_data/one_trial_suicide_data.pkl"
     # Read in the complet data
     with open(data_filename, "rb") as file:
         df_total = pickle.load(file)
+    with open(reward_data_filename, "rb") as file:
+        reward_data = pickle.load(file)
+    df_total["Reward"] = reward_data.Reward
+    df_total["fruitPos"] = reward_data.fruitPos
     clip = 1000
     print("=" * 20)
     print("Finished reading.")

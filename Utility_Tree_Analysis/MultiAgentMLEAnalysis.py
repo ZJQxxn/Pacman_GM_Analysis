@@ -23,10 +23,11 @@ import itertools
 import sys
 # from MultiAgentInteractor import MultiAgentInteractor
 sys.path.append('./')
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
 from PathTreeConstructor import PathTree, OptimisticAgent, PessimisticAgent
 from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
+from SuicideAgent import SuicideAgent
 
 
 # ===========================================================
@@ -590,6 +591,164 @@ def estimationErrorAll(param, all_data, true_prob, adjacent_data, locs_df, rewar
         return (nll, estimation_prob_trajectory)
 
 
+def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adjacent_path, locs_df, reward_amount, useful_num_samples = None, return_trajectory = False):
+    '''
+    Compute the estimation error with optimistic/pessimistic/global/lazy agents.
+    :param param: Parameters.
+    :param all_data: All the experimental data (pd.DataFrame).
+    :param: true_prob: True probability of directions.
+    :param adjacent_data: Adjacent data (pd.DataFrame).
+    :param locs_df: Dij distance map data.
+    :param reward_amount: Reward value (dict). 
+    :param useful_num_samples: Number of samples used in the computation.
+    :param return_trajectory: Whether return the estimated probability for each sample.
+    :return: 
+    '''
+    # Parameters
+    optimisim_depth = 10
+    optimisim_ghost_attractive_thr = 34
+    optimisim_fruit_attractive_thr = 34
+    optimisim_ghost_repulsive_thr = 12
+    global_depth = 5
+    global_ghost_attractive_thr = 34
+    global_fruit_attractive_thr = 34
+    global_ghost_repulsive_thr = 12
+    local_depth = 15
+    local_ghost_attractive_thr = 5
+    local_fruit_attractive_thr = 5
+    local_ghost_repulsive_thr = 5
+    agent_weight = [param[0], param[1], param[2], param[3], param[4]]
+    nll = 0  # negative log likelihood
+    estimation_prob_trajectory = []
+    num_samples = all_data.shape[0]
+    last_dir = None
+    loop_count = 0
+    # for index in range(num_samples):
+    useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
+    for index in range(useful_num_samples):
+        # Extract game status and Pacman status
+        each = all_data.iloc[index]
+        # TODO: rename the columns first before this function
+        cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
+        energizer_data = eval(each.energizers) if isinstance(each.energizers, str) else each.energizers
+        bean_data = eval(each.beans) if isinstance(each.beans, str) else each.beans
+        ghost_data = np.array([eval(each.ghost1_pos), eval(each.ghost2_pos)]) \
+            if "ghost1_pos" in all_data.columns.values or "ghost2_pos" in all_data.columns.values \
+            else np.array([each.ghost1Pos, each.ghost2Pos])
+        ghost_status = each[["ghost1_status", "ghost2_status"]].values \
+            if "ghost1_status" in all_data.columns.values or "ghost2_status" in all_data.columns.values \
+            else np.array([each.ifscared1, each.ifscared1])
+        if "fruit_type" in all_data.columns.values:
+            reward_type = int(each.fruit_type)  if not np.isnan(each.fruit_type) else np.nan
+        else:
+            reward_type = each.Reward
+        if "fruit_pos" in all_data.columns.values:
+            fruit_pos = eval(each.fruit_pos) if not isinstance(each.fruit_pos, float) else np.nan
+        else:
+            fruit_pos = each.fruitPos
+        # Construct agents
+        global_agent = PathTree(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=global_depth,
+            ghost_attractive_thr=global_ghost_attractive_thr,
+            fruit_attractive_thr=global_fruit_attractive_thr,
+            ghost_repulsive_thr=global_ghost_repulsive_thr
+        )
+        local_agent = PathTree(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=local_depth,
+            ghost_attractive_thr=local_ghost_attractive_thr,
+            fruit_attractive_thr=local_fruit_attractive_thr,
+            ghost_repulsive_thr=local_ghost_repulsive_thr
+        )
+        optimistic_agent = OptimisticAgent(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=optimisim_depth,
+            ghost_attractive_thr=optimisim_ghost_attractive_thr,
+            fruit_attractive_thr=optimisim_fruit_attractive_thr,
+            ghost_repulsive_thr=optimisim_ghost_repulsive_thr
+        )
+        pessimistic_agent = PessimisticAgent(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=optimisim_depth,
+            ghost_attractive_thr=optimisim_ghost_attractive_thr,
+            fruit_attractive_thr=optimisim_fruit_attractive_thr,
+            ghost_repulsive_thr=optimisim_ghost_repulsive_thr
+        )
+        reward_data = bean_data
+        reward_data.extend(energizer_data)
+        if fruit_pos is not None:
+            reward_data.append(fruit_pos)
+        suicide_agent = SuicideAgent(
+            adjacent_data,
+            adjacent_path,
+            locs_df,
+            cur_pos,
+            [tuple(each) for each in ghost_data],
+            [int(each) for each in ghost_status],
+            reward_data,
+            last_dir
+        )
+        # Estimation
+        agent_estimation = np.zeros((4, 5))
+        _, _, global_best_path = global_agent.construct()
+        _, _, local_best_path = local_agent.construct()
+        _, _, optimistic_best_path = optimistic_agent.construct()
+        _, _,pessimistic_best_path = pessimistic_agent.construct()
+        suicide_choice, is_scared, is_suicide = suicide_agent.nextDir()
+        agent_estimation[:, 0] = oneHot(global_best_path[0][1])
+        agent_estimation[:, 1] = oneHot(local_best_path[0][1])
+        agent_estimation[:, 2] = oneHot(optimistic_best_path[0][1])
+        agent_estimation[:, 3] = oneHot(pessimistic_best_path[0][1])
+        agent_estimation[:, 4] = oneHot(suicide_choice)
+        dir_prob = agent_estimation @ agent_weight
+        error = np.linalg.norm(dir_prob - true_prob.values[index]
+                               if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
+                               else dir_prob - true_prob[index])
+        nll += error
+        estimation_prob_trajectory.append(dir_prob)
+    if not return_trajectory:
+        return nll
+    else:
+        return (nll, estimation_prob_trajectory)
+
+
 def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = None):
     # Load pre-computed data
     adjacent_data = readAdjacentMap(map_filename)
@@ -870,6 +1029,74 @@ def movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window = 
             else "MEE-is_success-weight-window{}-{}-{}.npy".format(window, trial_name, type), all_success)
 
 
+def movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window = 100,
+                         trial_name = None):
+    # Load pre-computed data
+    adjacent_data = readAdjacentMap(map_filename)
+    adjacent_path = readAdjacentPath(loc_distance_filename)
+    locs_df = readLocDistance(loc_distance_filename)
+    reward_amount = readRewardAmount()
+    print("Finished pre-processing!")
+    print("Start optimizing...")
+    print("="*15)
+    # Construct constraints for the optimizer
+    bounds = [[0, 1], [0, 1], [0, 1], [0, 1], [0, 1]]
+    params = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+    cons = []  # construct the bounds in the form of constraints
+    for par in range(len(bounds)):
+        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+        cons.append(l)
+        cons.append(u)
+    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3]  - 1})
+    # The indices
+    subset_index = np.arange(window, len(Y) - window)
+    all_coeff = []
+    all_correct_rate = []
+    all_success = []
+    # Moving the window
+    for index in subset_index:
+        # if index % 20 == 0:
+        print("Window at {}...".format(index))
+        sub_X = X[index - window:index + window]
+        sub_Y = Y[index - window:index + window]
+        # X_train, X_test, Y_train, Y_test = train_test_split(sub_X, sub_Y, test_size=0.2)
+        # Optimize with minimum error estimation (MEE)
+        func = lambda parameter: estimationErrorAllWithSuicide(parameter, sub_X, sub_Y, adjacent_data, adjacent_path, locs_df, reward_amount)
+        is_success = False
+        retry_num = 0
+        while not is_success and retry_num < 5:
+            res = scipy.optimize.minimize(
+                func,
+                x0 = params,
+                method = "SLSQP",
+                bounds = bounds,
+                tol = 1e-5,
+                constraints = cons
+            )
+            is_success = res.success
+            if not is_success:
+                print("Fail, retrying...")
+                retry_num += 1
+        all_success.append(is_success)
+        # Make estimations on the testing dataset
+        _, estimated_prob = estimationError(res.x, sub_X, sub_Y, adjacent_data, locs_df, reward_amount, return_trajectory=True)
+        estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+        true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+        correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+        all_correct_rate.append(correct_rate)
+        # The coefficient
+        all_coeff.append(res.x)
+    print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
+    print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
+    # Save estimated agent weights
+    type = "area_and_optimisim"
+    np.save("MEE-with_suicide-agent-weight-real_data-window{}-{}.npy".format(window, type) if trial_name is None
+            else "MEE-with_suicide-agent-weight-real_data-window{}-{}-{}.npy".format(window, trial_name, type), all_coeff)
+    np.save("MEE-with_suicide-is_success-window{}-{}.npy".format(window, type) if trial_name is None
+            else "MEE-with_suicide-is_success-weight-window{}-{}-{}.npy".format(window, trial_name, type), all_success)
+
+
 def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_point = None,
                         with_random_lazy = True, optimism_agent = False):
     # Determine agent names
@@ -996,6 +1223,63 @@ def plotWeightVariationAllAgent(all_agent_weight, window, is_success = None, rev
     plt.show()
 
 
+def plotWeightVariationWithSuicide(all_agent_weight, window, is_success = None, reverse_point = None):
+    # Determine agent names
+    agent_name = ["Suicide Agent", "Pessimistic Agent", "Optimistic Agent", "Local Agent", "Global Agent"]
+    # Plot weight variation
+    all_coeff = np.array(all_agent_weight)
+    if is_success is not None: # TODO: deal with fail optimization
+        for index in range(1, is_success.shape[0]):
+            if not is_success[index]:
+                all_agent_weight[index] = all_agent_weight[index - 1]
+    # plt.style.use("seaborn")
+    plt.subplot(2, 1, 1)
+    plt.title("Agent Weights Variation", fontsize = 30)
+    plt.stackplot(np.arange(all_coeff.shape[0]),
+                  all_coeff[:, 4],  # suicide agent
+                  all_coeff[:, 3],  # pessimistic agent
+                  all_coeff[:, 2],  # optimistic agent
+                  all_coeff[:, 1],  # local agent
+                  all_coeff[:, 0],  # global agent
+                  labels=agent_name
+                  )
+    plt.ylim(0, 1.0)
+    plt.ylabel("Agent Percentage (%)", fontsize=20)
+    plt.yticks(
+        np.arange(0.1, 1.1, 0.1),
+        ["0.{}".format(each)  if each < 10 else "1.0" for each in np.arange(1, 11, 1)],
+        fontsize=20)
+    plt.xlim(0, all_coeff.shape[0]-1)
+    # plt.xlabel("Time Step", fontsize=20)
+    x_ticks = list(range(0, all_coeff.shape[0], 10))
+    if (all_coeff.shape[0]-1) not in x_ticks:
+        x_ticks.append(all_coeff.shape[0]-1)
+    x_ticks = np.array(x_ticks)
+    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
+    plt.legend(fontsize=20, ncol = 4)
+
+    plt.subplot(2, 1, 2)
+    plt.plot(all_coeff[:, 4], "o-", label=agent_name[0], ms=3, lw=5)
+    plt.plot(all_coeff[:, 3], "o-", label=agent_name[1], ms=3, lw=5)
+    plt.plot(all_coeff[:, 2], "o-", label=agent_name[2], ms=3, lw=5)
+    plt.plot(all_coeff[:, 1], "o-", label=agent_name[3], ms=3, lw=5)
+    plt.plot(all_coeff[:, 0], "o-", label=agent_name[4], ms=3, lw=5)
+    if reverse_point is not None:
+        plt.plot([reverse_point-window, reverse_point-window], [0.0, np.max(all_coeff)+0.1], "k--", lw = 3, alpha = 0.5)
+    plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(-0.05, np.max(all_coeff) + 0.3)
+    plt.yticks(
+        np.arange(0, 1.3, 0.2),
+        ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, 12, 2)],
+        fontsize = 20)
+    plt.xlim(0, all_coeff.shape[0]-1)
+    plt.xlabel("Time Step", fontsize=20)
+    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
+    plt.legend(fontsize=20, ncol = 4)
+    plt.show()
+
+
 def _consecutiveInterval(list):
     list = np.hstack(([0], list, [0]))# avoid not ended consecutive numbers
     start_index = np.where(np.diff(list) == 1)[0] + 1
@@ -1080,12 +1364,18 @@ if __name__ == '__main__':
 
     # Moving Window Analysis with MEE
     trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
-    type = "all"
+    original_data_filename = "./extracted_data/one_trial_suicide_data.pkl"
+
+    type = "suicide"
     X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = trial_name)
+    print("Data Shape : ", X.shape)
 
     if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
         print("{}--{}".format(type, trial_name))
         movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
+    elif type == "suicide": # use gloabl/local/optimistic/pessimistic agents for analysis
+        print("{}--{}".format(type, trial_name))
+        movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
     else:
         need_random_lazy = False # include random and lazy agents?
         need_optimism = False # use optimitic & pessimitic or global & local agents?

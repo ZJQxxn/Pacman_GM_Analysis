@@ -74,7 +74,6 @@ class SuicideAgent:
             choice = self.available_dir[choice]
             return choice, is_scared, is_suicide
         #Else if ghosts are scared
-        print()
         P_G_distance = np.array([
             self.locs_df[self.cur_pos][each]
             for each in self.ghost_pos
@@ -91,27 +90,32 @@ class SuicideAgent:
         is_ghosts_closer = [np.all(each < P_R_distance) for each in P_G_distance]
         # determine whether suicide is better
         is_suicide_better = [np.all(each < P_R_distance) for each in R_R_distance]
-        need_suicede = np.logical_and(is_ghosts_closer, is_suicide_better)
-        # Suicide. Run to ghosts.
-        if True in need_suicede:
-            is_suicide = True
-            if 2 == np.sum(need_suicede):
+        # need_suicede = np.logical_and(is_ghosts_closer, is_suicide_better)
+        if True in is_ghosts_closer:
+            if 2 == np.sum(is_ghosts_closer):
                 ghost_index = np.min(P_G_distance)
             else:
                 ghost_index = np.where(P_G_distance).item()
-            choice = self._relativeDir(
-                self.cur_pos,
-                self.adjaccent_path[
-                    self.adjaccent_path.pos1 == self.cur_pos and self.adjaccent_path.pos2 == self.ghost_pos[ghost_index]
-                    ].path.values[0])
+            # Suicide. Run to ghosts.
+            if True in is_suicide_better:
+                is_suicide = True
+                choice = self._relativeDir(
+                    self.cur_pos,
+                    self.adjaccent_path[
+                        self.adjaccent_path.pos1 == self.cur_pos and self.adjaccent_path.pos2 == self.ghost_pos[
+                            ghost_index]
+                        ].path.values[0])
         # Evade. Run away to the opposite direction
-        else:
+        elif self.last_dir is not None:
             cur_opposite_dir = self.opposite_dir[self.last_dir]
             if cur_opposite_dir in self.available_dir:
                 choice = cur_opposite_dir
             else:
                 choice = np.random.choice(range(len(self.available_dir)), 1).item()
                 choice = self.available_dir[choice]
+        else:
+            choice = np.random.choice(range(len(self.available_dir)), 1).item()
+            choice = self.available_dir[choice]
         return choice, is_scared, is_suicide
 
 if __name__ == '__main__':
