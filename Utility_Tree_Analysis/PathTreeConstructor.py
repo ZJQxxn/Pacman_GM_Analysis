@@ -162,7 +162,9 @@ class PathTree:
     def _computeReward(self, cur_position):
         reward = 0
         # Bean reward
-        if cur_position in self.existing_bean:
+        if isinstance(self.existing_bean, float):
+            reward += 0
+        elif cur_position in self.existing_bean:
             reward += self.reward_amount[1]
             self.existing_bean.remove(cur_position)
         else:
@@ -414,7 +416,9 @@ class OptimisticAgent:
     def _computeReward(self, cur_position):
         reward = 0
         # Bean reward
-        if cur_position in self.existing_bean:
+        if isinstance(self.existing_bean, float):
+            reward += 0
+        elif cur_position in self.existing_bean:
             reward += self.reward_amount[1]
             self.existing_bean.remove(cur_position)
         else:

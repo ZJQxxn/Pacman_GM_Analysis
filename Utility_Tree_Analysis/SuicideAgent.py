@@ -51,7 +51,22 @@ class SuicideAgent:
 
 
     def _relativeDir(self, cur_pos, destination):
-        pass
+        '''
+        Determine the relative direction of the adjacent destination given the current location of Pacman.
+        :param cur_pos: Current position of Pacman.
+        :param destination: Location of destination.
+        :return: Relative direction. "left"/"right"/"up"/"down"/None. Heere, None denoting that two positions are the same.
+        '''
+        if cur_pos[0] < destination[0]:
+            return "right"
+        elif cur_pos[0] > destination[0]:
+            return "left"
+        elif cur_pos[1] > destination[1]:
+            return "up"
+        elif cur_pos[1] > destination[1]:
+            return "down"
+        else:
+            return None
 
 
     def nextDir(self):
@@ -86,25 +101,26 @@ class SuicideAgent:
             self.locs_df[self.reborn_pos][each]
             for each in self.reward_pos
         ]) # distance between reborn point and rewards
-        # determine whether ghosts are closer than rewards
-        is_ghosts_closer = [np.all(each < P_R_distance) for each in P_G_distance]
+
+        # # determine whether ghosts are closer than rewards
+        # is_ghosts_closer = [np.all(each < P_R_distance) for each in P_G_distance] #TODO: do not need this
+
         # determine whether suicide is better
         is_suicide_better = [np.all(each < P_R_distance) for each in R_R_distance]
-        # need_suicede = np.logical_and(is_ghosts_closer, is_suicide_better)
-        if True in is_ghosts_closer:
-            if 2 == np.sum(is_ghosts_closer):
-                ghost_index = np.min(P_G_distance)
-            else:
-                ghost_index = np.where(P_G_distance).item()
-            # Suicide. Run to ghosts.
+        closest_ghost_index = np.argmin(P_G_distance)
+        # Suicide. Run to ghosts.
+        if True in is_suicide_better:
             if True in is_suicide_better:
                 is_suicide = True
                 choice = self._relativeDir(
                     self.cur_pos,
                     self.adjaccent_path[
                         self.adjaccent_path.pos1 == self.cur_pos and self.adjaccent_path.pos2 == self.ghost_pos[
-                            ghost_index]
+                            closest_ghost_index]
                         ].path.values[0])
+                if choice is None:
+                    choice = np.random.choice(range(len(self.available_dir)), 1).item()
+                    choice = self.available_dir[choice]
         # Evade. Run away to the opposite direction
         elif self.last_dir is not None:
             cur_opposite_dir = self.opposite_dir[self.last_dir]

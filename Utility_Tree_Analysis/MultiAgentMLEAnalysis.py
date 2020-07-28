@@ -620,6 +620,8 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
     agent_weight = [param[0], param[1], param[2], param[3], param[4]]
     nll = 0  # negative log likelihood
     estimation_prob_trajectory = []
+    is_suicide_trajectory = [] # remains the same during the optimization
+    is_scared_trajectory = [] # remains the same during the optimization
     num_samples = all_data.shape[0]
     last_dir = None
     loop_count = 0
@@ -646,6 +648,10 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
             fruit_pos = eval(each.fruit_pos) if not isinstance(each.fruit_pos, float) else np.nan
         else:
             fruit_pos = each.fruitPos
+        #
+        # bean_data = bean_data if not isinstance(bean_data, float) else None
+        # energizer_data = energizer_data if not isinstance(energizer_data, float) else None
+        # fruit_pos = fruit_pos if not isinstance(fruit_pos, float) else None
         # Construct agents
         global_agent = PathTree(
             adjacent_data,
@@ -711,9 +717,10 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
             fruit_attractive_thr=optimisim_fruit_attractive_thr,
             ghost_repulsive_thr=optimisim_ghost_repulsive_thr
         )
-        reward_data = bean_data
-        reward_data.extend(energizer_data)
-        if fruit_pos is not None:
+        reward_data = bean_data if bean_data is not None else []
+        if not isinstance(energizer_data, float) and energizer_data is not None:
+            reward_data.extend(energizer_data)
+        if not isinstance(fruit_pos, float) and fruit_pos is not None:
             reward_data.append(fruit_pos)
         suicide_agent = SuicideAgent(
             adjacent_data,
@@ -731,7 +738,13 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
         _, _, local_best_path = local_agent.construct()
         _, _, optimistic_best_path = optimistic_agent.construct()
         _, _,pessimistic_best_path = pessimistic_agent.construct()
-        suicide_choice, is_scared, is_suicide = suicide_agent.nextDir()
+        try:
+            suicide_choice, is_scared, is_suicide = suicide_agent.nextDir()
+        except:
+            suicide_choice = np.random.choice(range(len(suicide_agent.available_dir)), 1).item()
+            suicide_choice = suicide_agent.available_dir[suicide_choice]
+            is_scared = False
+            is_suicide = False
         agent_estimation[:, 0] = oneHot(global_best_path[0][1])
         agent_estimation[:, 1] = oneHot(local_best_path[0][1])
         agent_estimation[:, 2] = oneHot(optimistic_best_path[0][1])
@@ -743,10 +756,12 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
                                else dir_prob - true_prob[index])
         nll += error
         estimation_prob_trajectory.append(dir_prob)
+        is_suicide_trajectory.append(is_suicide)
+        is_scared_trajectory.append(is_scared)
     if not return_trajectory:
         return nll
     else:
-        return (nll, estimation_prob_trajectory)
+        return (nll, estimation_prob_trajectory, is_suicide_trajectory, is_scared_trajectory)
 
 
 def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = None):
@@ -823,6 +838,59 @@ def MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples =
     print("Correct rate : ", correct_rate / len(true_dir))
 
 
+
+def MEEWithData(X, Y, map_filename, loc_distance_filename, useful_num_samples = None):
+    # Load pre-computed data
+    adjacent_data = readAdjacentMap(map_filename)
+    locs_df = readLocDistance(loc_distance_filename)
+    adjacent_path = readAdjacentPath(loc_distance_filename)
+    reward_amount = readRewardAmount()
+    print("Number of samples : ", X.shape[0])
+    # Optimization
+    if useful_num_samples is None:
+        useful_num_samples = X.shape[0]
+    print("Number of used samples : ", useful_num_samples)
+    # X = X.iloc[:useful_num_samples]
+    # Y = Y.iloc[:useful_num_samples]
+    bounds = [[0, 1], [0, 1], [0, 1], [0, 1], [0, 1]]
+    params = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+    cons = []  # construct the bounds in the form of constraints
+    for par in range(len(bounds)):
+        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+        cons.append(l)
+        cons.append(u)
+    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] + x[4] - 1})
+    func = lambda parameter: estimationErrorAllWithSuicide(parameter, X, Y, adjacent_data, adjacent_path, locs_df, reward_amount,
+                                             useful_num_samples=useful_num_samples)
+    is_success = False
+    retry_num = 0
+    while not is_success and retry_num < 5:
+        res = scipy.optimize.minimize(
+            func,
+            x0=params,
+            method="SLSQP",
+            bounds=bounds,
+            tol=1e-8,
+            constraints=cons
+        )
+        is_success = res.success
+        if not is_success:
+            retry_num += 1
+            print("Failed, retrying...")
+    print("Initial guess : ", params)
+    print("Estimated Parameter : ", res.x)
+    print(res)
+    # Estimation
+    _, estimated_prob = estimationError(res.x, X, Y, adjacent_data, locs_df, reward_amount,
+                                        useful_num_samples=useful_num_samples, return_trajectory=True)
+    true_dir = np.array([np.argmax(each) for each in Y.iloc[:useful_num_samples]])
+    # true_dir = [dir_list.index(each) if isinstance(each, str) else -1 for each in X.pacman_dir.values]
+    estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    correct_rate = np.sum(estimated_dir == true_dir)
+    print("Correct rate : ", correct_rate / len(true_dir))
+
+
 # ===========================================================
 #               AGENT WEIGHT ANALYSIS
 # ===========================================================
@@ -860,7 +928,8 @@ def constructDatasetFromOriginalLog(filename, clip = None, trial_name = None):
         all_data = pickle.load(file)
     if trial_name is not None: # explicitly indicate the trial
         clip = None
-        all_data = all_data[all_data.file == trial_name].reset_index()
+        all_data = all_data[all_data.file == trial_name]
+    all_data = all_data.reset_index()
     true_prob = all_data.pacman_dir
     start_index = 0
     while pd.isna(true_prob[start_index]):
@@ -1048,7 +1117,7 @@ def movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3]  - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] + x[4] - 1})
     # The indices
     subset_index = np.arange(window, len(Y) - window)
     all_coeff = []
@@ -1080,7 +1149,7 @@ def movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename
                 retry_num += 1
         all_success.append(is_success)
         # Make estimations on the testing dataset
-        _, estimated_prob = estimationError(res.x, sub_X, sub_Y, adjacent_data, locs_df, reward_amount, return_trajectory=True)
+        _, estimated_prob, all_is_suicede, all_is_scared = estimationErrorAllWithSuicide(res.x, sub_X, sub_Y, adjacent_data, adjacent_path, locs_df, reward_amount, return_trajectory=True)
         estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
         true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
         correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
@@ -1095,6 +1164,12 @@ def movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename
             else "MEE-with_suicide-agent-weight-real_data-window{}-{}-{}.npy".format(window, trial_name, type), all_coeff)
     np.save("MEE-with_suicide-is_success-window{}-{}.npy".format(window, type) if trial_name is None
             else "MEE-with_suicide-is_success-weight-window{}-{}-{}.npy".format(window, trial_name, type), all_success)
+    np.save("MEE-with_suicide-is_suicide-real_data-window{}-{}.npy".format(window, type) if trial_name is None
+            else "MEE-with_suicide-is_suicide-real_data-window{}-{}-{}.npy".format(window, trial_name, type),
+            np.array(all_is_suicede))
+    np.save("MEE-with_suicide-is_scared-real_data-window{}-{}.npy".format(window, type) if trial_name is None
+            else "MEE-with_suicide-is_scared-real_data-window{}-{}-{}.npy".format(window, trial_name, type),
+            np.array(all_is_scared))
 
 
 def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_point = None,
@@ -1256,7 +1331,7 @@ def plotWeightVariationWithSuicide(all_agent_weight, window, is_success = None, 
         x_ticks.append(all_coeff.shape[0]-1)
     x_ticks = np.array(x_ticks)
     plt.xticks(x_ticks, x_ticks + window, fontsize=20)
-    plt.legend(fontsize=20, ncol = 4)
+    plt.legend(fontsize=15, ncol = 5)
 
     plt.subplot(2, 1, 2)
     plt.plot(all_coeff[:, 4], "o-", label=agent_name[0], ms=3, lw=5)
@@ -1276,7 +1351,7 @@ def plotWeightVariationWithSuicide(all_agent_weight, window, is_success = None, 
     plt.xlim(0, all_coeff.shape[0]-1)
     plt.xlabel("Time Step", fontsize=20)
     plt.xticks(x_ticks, x_ticks + window, fontsize=20)
-    plt.legend(fontsize=20, ncol = 4)
+    plt.legend(fontsize=15, ncol = 5)
     plt.show()
 
 
@@ -1360,38 +1435,47 @@ if __name__ == '__main__':
 
     # # MEE (minimum error estimation)
     # print("=" * 10, " MEE ", "=" * 10)
-    # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 100)
+    # original_data_filename = "./extracted_data/all_suicide_data.pkl"
+    # MEE(data_filename, map_filename, loc_distance_filename, useful_num_samples = 200)
+    # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = None)
+    # MEEWithData(X, Y, map_filename, loc_distance_filename, useful_num_samples = 30)
 
-    # Moving Window Analysis with MEE
-    trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
-    original_data_filename = "./extracted_data/one_trial_suicide_data.pkl"
+    # # Moving Window Analysis with MEE
+    # trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
+    # original_data_filename = "./extracted_data/one_trial_suicide_data.pkl"
+    #
+    # type = "suicide"
+    # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip = 50, trial_name = None)
+    # print("Data Shape : ", X.shape)
+    #
+    # if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
+    #     print("{}--{}".format(type, trial_name))
+    #     movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
+    # elif type == "suicide": # use gloabl/local/optimistic/pessimistic agents for analysis
+    #     print("{}--{}".format(type, trial_name))
+    #     movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window=10, trial_name=None)
+    # else:
+    #     need_random_lazy = False # include random and lazy agents?
+    #     need_optimism = False # use optimitic & pessimitic or global & local agents?
+    #     print("{}--{}--{}--{}".format(
+    #         type,
+    #         trial_name,
+    #         "with_random_lazy" if need_random_lazy else "without_random_lazy",
+    #         "optimisim" if need_optimism else "area"))
+    #     movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 10,
+    #                             trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
 
-    type = "suicide"
-    X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = trial_name)
-    print("Data Shape : ", X.shape)
 
-    if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
-        print("{}--{}".format(type, trial_name))
-        movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
-    elif type == "suicide": # use gloabl/local/optimistic/pessimistic agents for analysis
-        print("{}--{}".format(type, trial_name))
-        movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
-    else:
-        need_random_lazy = False # include random and lazy agents?
-        need_optimism = False # use optimitic & pessimitic or global & local agents?
-        print("{}--{}--{}--{}".format(
-            type,
-            trial_name,
-            "with_random_lazy" if need_random_lazy else "without_random_lazy",
-            "optimisim" if need_optimism else "area"))
-        movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 20,
-                                trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
-
-
-    # # Plot agent weights variation
-    # all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-1-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
-    # is_success = np.load("MEE-is_success-weight-window20-1-1-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
-    # # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None,
-    # #                     with_random_lazy = True, optimism_agent = False)
+    # Plot agent weights variation
+    all_agent_weight = np.load("MEE-with_suicide-agent-weight-real_data-window10-area_and_optimisim.npy")
+    is_success = np.load("MEE-with_suicide-is_success-weight-window10-area_and_optimisim.npy")
+    is_suicide = np.load("MEE-with_suicide-is_suicide-real_data-window10-area_and_optimisim.npy")
+    is_scared = np.load("MEE-with_suicide-is_scared-real_data-window10-area_and_optimisim.npy")
+    print("Suicide Index : ", np.where(is_suicide == 1))
+    # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None,
+    #                     with_random_lazy = True, optimism_agent = False)
     # plotWeightVariationAllAgent(all_agent_weight, is_success=is_success, window=20, reverse_point=None)
+    plotWeightVariationWithSuicide(all_agent_weight, is_success=is_success, window = 10, reverse_point=None)
+
+
     # plotTrueLabel("1-2-Omega-15-Jul-2019.csv", window = 20)
