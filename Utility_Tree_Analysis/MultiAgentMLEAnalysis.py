@@ -29,6 +29,9 @@ from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
 from SuicideAgent import SuicideAgent
 
+sys.path.append('../common_data')
+from LabelingData import labeling
+
 
 # ===========================================================
 #               UTILITY FUNCTIONS
@@ -1030,7 +1033,6 @@ def movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 100
             else "MEE-is_success-weight-window{}-{}-{}.npy".format(window, trial_name, type), all_success)
 
 
-
 def movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window = 100,
                          trial_name = None):
     # Load pre-computed data
@@ -1174,11 +1176,12 @@ def movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename
 
 def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_point = None,
                         with_random_lazy = True, optimism_agent = False):
+    #TODO: generalize plot for all conditions
     # Determine agent names
     if optimism_agent:
-        agent_name = ["Random Agent", "Lazy Agent", "Pessimistic Agent", "Optimistic Agent"]
+        agent_name = ["Optimistic Agent","Pessimistic Agent", "Lazy Agent", "Random Agent"]
     else:
-        agent_name = ["Random Agent", "Lazy Agent", "Local Agent", "Global Agent"]
+        agent_name = ["Global Agent", "Local Agent", "Lazy Agent", "Random Agent"]
     if not with_random_lazy:
         agent_name = agent_name[2:]
     # Plot weight variation
@@ -1223,15 +1226,18 @@ def plotWeightVariation(all_agent_weight, window, is_success = None, reverse_poi
 
     plt.subplot(2, 1, 2)
     if with_random_lazy:
-        plt.plot(all_coeff[:, 3], "o-", label=agent_name[0], ms=3, lw=5)
-        plt.plot(all_coeff[:, 2], "o-", label=agent_name[1], ms=3, lw=5)
-    plt.plot(all_coeff[:, 1], "o-", label=agent_name[2], ms=3, lw=5)
-    plt.plot(all_coeff[:, 0], "o-", label=agent_name[3], ms=3, lw=5)
+        plt.plot(all_coeff[:, 3], "o-", label=agent_name[3], ms=3, lw=5)
+        plt.plot(all_coeff[:, 2], "o-", label=agent_name[2], ms=3, lw=5)
+    plt.plot(all_coeff[:, 1], "o-", label=agent_name[1], ms=3, lw=5)
+    plt.plot(all_coeff[:, 0], "o-", label=agent_name[0], ms=3, lw=5)
     if reverse_point is not None:
         plt.plot([reverse_point-window, reverse_point-window], [0.0, np.max(all_coeff)+0.1], "k--", lw = 3, alpha = 0.5)
+    with open("../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl", "rb") as file:
+        trial_data = pickle.load(file)
+    plotTrueLabel(trial_data)
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize=20)
-    plt.ylim(-0.05, np.max(all_coeff) + 0.3)
+    plt.ylim(-0.1, np.max(all_coeff) + 0.3)
     plt.yticks(
         np.arange(0, 1.3, 0.2),
         ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, 12, 2)],
@@ -1284,9 +1290,12 @@ def plotWeightVariationAllAgent(all_agent_weight, window, is_success = None, rev
     plt.plot(all_coeff[:, 0], "o-", label=agent_name[3], ms=3, lw=5)
     if reverse_point is not None:
         plt.plot([reverse_point-window, reverse_point-window], [0.0, np.max(all_coeff)+0.1], "k--", lw = 3, alpha = 0.5)
+    with open("../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl", "rb") as file:
+        trial_data = pickle.load(file)
+    plotTrueLabel(trial_data)
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize=20)
-    plt.ylim(-0.05, np.max(all_coeff) + 0.3)
+    plt.ylim(-0.1, np.max(all_coeff) + 0.3)
     plt.yticks(
         np.arange(0, 1.3, 0.2),
         ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, 12, 2)],
@@ -1343,7 +1352,10 @@ def plotWeightVariationWithSuicide(all_agent_weight, window, is_success = None, 
         plt.plot([reverse_point-window, reverse_point-window], [0.0, np.max(all_coeff)+0.1], "k--", lw = 3, alpha = 0.5)
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize=20)
-    plt.ylim(-0.05, np.max(all_coeff) + 0.3)
+    with open("../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl", "rb") as file:
+        trial_data = pickle.load(file) #TODO: filename
+    plotTrueLabel(trial_data)
+    plt.ylim(-0.1, np.max(all_coeff) + 0.3)
     plt.yticks(
         np.arange(0, 1.3, 0.2),
         ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(0, 12, 2)],
@@ -1363,61 +1375,23 @@ def _consecutiveInterval(list):
     return consecutive_list
 
 
-def plotTrueLabel(trial_name, window):
-    #TODO: check the label
-    # Read data
-    with open("../common_data/labeled_df_toynew.pkl", "rb") as file:
-        data = pickle.load(file)
-    # Extract labels
-    data = data[data.file == trial_name]
-    data = data[
-        ["label_local_graze",
-         "label_hunt1",
-         "label_hunt2",
-         "label_prehunt",
-         "label_global_optimal",
-         "label_global_notoptimal",
-         "label_evade"]
-    ]
-    data = data.fillna(0)
-    global_graze_label = np.array(np.logical_or(data.label_global_optimal.values, data.label_global_notoptimal.values), dtype = np.int)
-    local_graze_label = data.label_local_graze.values
-    optimistic_label = data.label_prehunt.values
-    pessimistic_label = data.label_evade.values
-    hunt_label = np.array(np.logical_or(data.label_hunt1.values, data.label_hunt2.values), dtype = np.int)
-
-    global_graze_index = _consecutiveInterval(global_graze_label)
-    local_graze_index = _consecutiveInterval(local_graze_label)
-    optimistic_index = _consecutiveInterval(optimistic_label)
-    pessimistic_index = _consecutiveInterval(pessimistic_label)
-    hunt_index = _consecutiveInterval(hunt_label)
-
-    # Plot true labels for this trial
-    # plt.plot(global_graze_label, "o", label="Global Graze", ms=5)
-    # plt.plot(local_graze_label, "o", label="Local Graze", ms=5)
-    # plt.plot(optimistic_label, "o", label="Optimistic (Pre-Hunt)", ms=5)
-    # plt.plot(pessimistic_label, "o", label="Pessimistic (Evade)", ms=5)
-    for each in global_graze_index:
-        plt.fill_between(each, [1.0, 1.0], color = "red")
-    for each in local_graze_index:
-        plt.fill_between(each, [1.0, 1.0], color = "#0AA344")
-    for each in optimistic_index:
-        plt.fill_between(each, [1.0, 1.0], color = "#FF8936")
-    for each in pessimistic_index:
-        plt.fill_between(each, [1.0, 1.0], color = "blue")
-    plt.ylabel("Label Indication", fontsize=20)
-    plt.yticks(fontsize=20)
-    plt.ylim(0.0, 1.0)
-    plt.yticks([0.0, 1.0], [0, 1], fontsize=20)
-    plt.xlim(0, data.shape[0] - 1)
-    plt.xlabel("Time Step", fontsize=20)
-    x_ticks = list(range(0, data.shape[0], 10))
-    if (data.shape[0] - 1) not in x_ticks:
-        x_ticks.append(data.shape[0] - 1)
-    x_ticks = np.array(x_ticks)
-    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
-    # plt.legend(fontsize=20, ncol=4)
-    plt.show()
+def plotTrueLabel(trial_data):
+    # TODO: generalize to all conditions
+    # Lebeling data
+    is_local, is_global, is_evade, is_suicide, is_optimistic, is_pessimistic = labeling(trial_data)
+    # Plot labels
+    local_label_index = np.where(is_local)
+    global_label_index = np.where(is_global)
+    suicide_label_index = np.where(is_suicide)
+    # TODO: the color
+    for each in local_label_index[0]:
+        plt.fill_between(x=[each, each + 1], y1=0, y2=-0.1, color="green")
+    for each in global_label_index[0]:
+        plt.fill_between(x=[each, each + 1], y1=0, y2=-0.1, color="red")
+    for each in suicide_label_index[0]:
+        plt.fill_between(x=[each, each + 1], y1=0, y2=-0.1, color="black")
+    # plt.ylim(-0.05, 0.2)
+    # plt.yticks(np.arange(0, 0.21, 0.1), np.arange(0, 0.21, 0.1))
 
 
 
@@ -1440,42 +1414,43 @@ if __name__ == '__main__':
     # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip=200, trial_name = None)
     # MEEWithData(X, Y, map_filename, loc_distance_filename, useful_num_samples = 30)
 
-    # # Moving Window Analysis with MEE
-    # trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
-    # original_data_filename = "./extracted_data/one_trial_suicide_data.pkl"
-    #
-    # type = "suicide"
-    # X, Y = constructDatasetFromOriginalLog(original_data_filename, clip = 50, trial_name = None)
-    # print("Data Shape : ", X.shape)
-    #
-    # if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
-    #     print("{}--{}".format(type, trial_name))
-    #     movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name=trial_name)
-    # elif type == "suicide": # use gloabl/local/optimistic/pessimistic agents for analysis
-    #     print("{}--{}".format(type, trial_name))
-    #     movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window=10, trial_name=None)
-    # else:
-    #     need_random_lazy = False # include random and lazy agents?
-    #     need_optimism = False # use optimitic & pessimitic or global & local agents?
-    #     print("{}--{}--{}--{}".format(
-    #         type,
-    #         trial_name,
-    #         "with_random_lazy" if need_random_lazy else "without_random_lazy",
-    #         "optimisim" if need_optimism else "area"))
-    #     movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 10,
-    #                             trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
+    # Moving Window Analysis with MEE
+    trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
+    original_data_filename = "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl"
+
+    type = "all"
+    X, Y = constructDatasetFromOriginalLog(original_data_filename, clip = 200, trial_name = None)
+    print("Data Shape : ", X.shape)
+
+    if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
+        print("{}--{}".format(type, trial_name))
+        movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name = None)
+    elif type == "suicide": # use gloabl/local/optimistic/pessimistic agents for analysis
+        print("{}--{}".format(type, trial_name))
+        movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window=10, trial_name=None)
+    else:
+        need_random_lazy = False # include random and lazy agents?
+        need_optimism = False # use optimitic & pessimitic or global & local agents?
+        print("{}--{}--{}--{}".format(
+            type,
+            trial_name,
+            "with_random_lazy" if need_random_lazy else "without_random_lazy",
+            "optimisim" if need_optimism else "area"))
+        movingWindowAnalysis(X, Y, map_filename, loc_distance_filename, window = 10,
+                                trial_name = "1-1-Omega-15-Jul-2019.csv", need_random_lazy = True, optimism_agent = True)
 
 
     # Plot agent weights variation
-    all_agent_weight = np.load("MEE-with_suicide-agent-weight-real_data-window10-area_and_optimisim.npy")
-    is_success = np.load("MEE-with_suicide-is_success-weight-window10-area_and_optimisim.npy")
-    is_suicide = np.load("MEE-with_suicide-is_suicide-real_data-window10-area_and_optimisim.npy")
-    is_scared = np.load("MEE-with_suicide-is_scared-real_data-window10-area_and_optimisim.npy")
-    print("Suicide Index : ", np.where(is_suicide == 1))
+    # all_agent_weight = np.load("MEE-agent-weight-real_data-window20-1-1-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
+    # is_success = np.load("MEE-is_success-weight-window20-1-1-Omega-15-Jul-2019.csv-area_and_optimisim.npy")
+    # is_success = np.array([1 for i in range(len(all_agent_weight))])
+    # is_suicide = np.load("MEE-with_suicide-is_suicide-real_data-window10-area_and_optimisim.npy")
+    # is_scared = np.load("MEE-with_suicide-is_scared-real_data-window10-area_and_optimisim.npy")
+    # print("Suicide Index : ", np.where(is_suicide == 1))
     # plotWeightVariation(all_agent_weight, is_success = is_success, window = 20, reverse_point = None,
-    #                     with_random_lazy = True, optimism_agent = False)
+    #                     with_random_lazy = False, optimism_agent = False)
     # plotWeightVariationAllAgent(all_agent_weight, is_success=is_success, window=20, reverse_point=None)
-    plotWeightVariationWithSuicide(all_agent_weight, is_success=is_success, window = 10, reverse_point=None)
+    # plotWeightVariationWithSuicide(all_agent_weight, is_success=is_success, window = 10, reverse_point=None)
 
 
     # plotTrueLabel("1-2-Omega-15-Jul-2019.csv", window = 20)

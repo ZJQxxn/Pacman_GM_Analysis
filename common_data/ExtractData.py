@@ -20,7 +20,7 @@ import numpy as np
 
 
 # 这个function输出的第一个variable就是suicide_list
-def generate_suicide_normal(df_total):
+def _generate_suicide_normal(df_total):
     select_last_num = 100
     suicide_normal = (
         df_total.reset_index()
@@ -41,17 +41,17 @@ def generate_suicide_normal(df_total):
     return suicide_lists, normal_lists
 
 
-def obtain_suicide_list(df_total):
+def _obtain_suicide_list(df_total):
     index = df_total[df_total.label_suicide == 1].index
     return index
 
 
-def obtain_evade_list(df_total):
+def _obtain_evade_list(df_total):
     index = df_total[df_total.label_evade == 1].index
     return index
 
 
-if __name__ == '__main__':
+def extractSuicideAndEvade():
     # Configurations
     data_filename = "labeled_df_toynew.pkl"
     reward_data_filename = "df_total_with_reward.pkl"
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     print("Finished reading.")
     print("Data shape : ", df_total.shape)
     # Extract evade data
-    evade_list = obtain_evade_list(df_total)
+    evade_list = _obtain_evade_list(df_total)
     evade_data = df_total.iloc[evade_list[:clip]]
     print("Evade data shape : ", len(evade_list))
     # Extract suicide data
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     # trial_suicide_index = suicide_lists.values[0]
     # suicide_data = df_total.iloc[trial_suicide_index[0]-50 : trial_suicide_index[-1]+50]
     # TODO: obtain the trial with suicide time steps
-    suicide_list = obtain_suicide_list(df_total)
+    suicide_list = _obtain_suicide_list(df_total)
     print("Suicide data shape : ", len(suicide_list))
     suicide_data = df_total.iloc[suicide_list]
     # Save extracted data
@@ -87,3 +87,49 @@ if __name__ == '__main__':
     with open(suicide_data_filename, "wb") as file:
         pickle.dump(suicide_data, file)
     print("Finished writing.")
+
+
+def extractTrialData():
+    # Configurations
+    print("="*20)
+    print("EXTRACT TRIAL DATA")
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    trial_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/{}-trial_data_with_label.pkl"
+    df_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/all_data_with_label.pkl"
+    # Read data
+    with open(data_filename, "rb") as file:
+        all_data = pickle.load(file)
+    all_data_with_label = all_data["df_total"]
+    print(all_data_with_label.shape)
+    print("Finished reading.")
+    # Extract trial data
+    trial_name_list = ["1-1-Omega-15-Jul-2019-1.csv", "1-2-Omega-15-Jul-2019-1.csv"]
+    print("Trial List : ", trial_name_list)
+    # print(all_data_with_label.file.values[:5])
+    print("-" * 20)
+    for trial_name in trial_name_list:
+        index = np.where(all_data_with_label.file.values == trial_name)
+        trial_data = all_data_with_label.iloc[index]
+        print("Data Shape : ", trial_data.shape)
+        print("Finished extracting {}.".format(trial_name))
+        with open(trial_data_filename.format(trial_name), "wb") as file:
+            pickle.dump(trial_data, file)
+        print("Finished writing {}.".format(trial_name))
+    # # Write all data
+    # with open(df_data_filename, "wb") as file:
+    #     pickle.dump(all_data_with_label, file)
+    # print("Finished writing all data.")
+    print("="*20)
+
+
+
+
+if __name__ == '__main__':
+    # # Extract suicide and evade data
+    # extractSuicideAndEvade()
+
+    # Extract trial data
+    extractTrialData()
+
+    pass
+
