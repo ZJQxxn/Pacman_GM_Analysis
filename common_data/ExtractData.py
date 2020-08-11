@@ -96,11 +96,17 @@ def extractTrialData():
     data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
     trial_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/{}-trial_data_with_label.pkl"
     df_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/all_data_with_label.pkl"
+    reward_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/df_total_with_reward.pkl"
+
     # Read data
     with open(data_filename, "rb") as file:
         all_data = pickle.load(file)
     all_data_with_label = all_data["df_total"]
     print(all_data_with_label.shape)
+    with open(reward_data_filename, "rb") as file:
+        reward_data = pickle.load(file)
+    all_data_with_label["Reward"] = reward_data.Reward
+    all_data_with_label["fruitPos"] = reward_data.fruitPos
     print("Finished reading.")
     # Extract trial data
     trial_name_list = ["1-1-Omega-15-Jul-2019-1.csv", "1-2-Omega-15-Jul-2019-1.csv"]
