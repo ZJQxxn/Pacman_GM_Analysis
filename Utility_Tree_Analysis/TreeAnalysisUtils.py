@@ -36,6 +36,9 @@ def readAdjacentMap(filename):
 
 def readAdjacentPath(filename):
     adjacent_data = pd.read_csv(filename)
+    adjacent_data.pos1 = adjacent_data.pos1.apply(lambda x: eval(x))
+    adjacent_data.pos2 = adjacent_data.pos2.apply(lambda x: eval(x))
+    adjacent_data.path = adjacent_data.path.apply(lambda x: eval(x))
     return adjacent_data[["pos1", "pos2", "path"]]
 
 

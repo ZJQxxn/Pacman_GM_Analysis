@@ -115,9 +115,9 @@ class SuicideAgent:
                 choice = self._relativeDir(
                     self.cur_pos,
                     self.adjaccent_path[
-                        self.adjaccent_path.pos1 == self.cur_pos and self.adjaccent_path.pos2 == self.ghost_pos[
-                            closest_ghost_index]
-                        ].path.values[0])
+                        (self.adjaccent_path.pos1 == self.cur_pos) & (self.adjaccent_path.pos2 == self.ghost_pos[
+                            closest_ghost_index])].path.values[0][0][1]
+                )
                 if choice is None:
                     choice = np.random.choice(range(len(self.available_dir)), 1).item()
                     choice = self.available_dir[choice]

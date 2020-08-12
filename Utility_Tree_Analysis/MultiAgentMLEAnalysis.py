@@ -795,16 +795,16 @@ if __name__ == '__main__':
         "map_filename" : "extracted_data/adjacent_map.csv",
         "loc_distance_filename" : "extracted_data/dij_distance_map.csv",
         # The number of samples used for estimation: None for using all the data
-        "clip_samples" : 30,
+        "clip_samples" : 50,
         # The window size
         "window" : 10,
-        # Maximum try of estimation
+        # Maximum try of estimation, in case the optimization will fail
         "maximum_try" : 5,
         # Optimization method: "MLE" (maximumn likelihood estimation) or "MEE" (minimum error estimation)
         "method": "MEE",
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
-        # Agents
+        # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
         "agents":["global", "local", "lazy", "random"],
         # Parameters for computing the utility
@@ -833,13 +833,14 @@ if __name__ == '__main__':
     }
 
     # ============ ESTIMATION =============
-    # MLE(config)
-    # MEE(config)
+    MLE(config)
+    MEE(config)
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config)
+    # movingWindowAnalysis(config)
 
     # ============ PLOTTING =============
+    # Load the log of moving window analysis; log files are created in the analysis
     # agent_weight = np.load("MEE-agent_weight-window10-global_local_lazy_random.npy")
     # is_success = np.load("MEE-is_success-window10-global_local_lazy_random.npy")
     # plotWeightVariation(agent_weight, config["agents"], config["window"], is_success,

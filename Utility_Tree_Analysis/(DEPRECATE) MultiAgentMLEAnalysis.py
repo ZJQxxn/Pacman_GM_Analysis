@@ -741,12 +741,12 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
         )
         # Estimation
         agent_estimation = np.zeros((4, 5))
-        _, _, global_best_path = global_agent.construct()
-        _, _, local_best_path = local_agent.construct()
-        _, _, optimistic_best_path = optimistic_agent.construct()
-        _, _,pessimistic_best_path = pessimistic_agent.construct()
+        _, _, global_best_path = global_agent._construct()
+        _, _, local_best_path = local_agent._construct()
+        _, _, optimistic_best_path = optimistic_agent._construct()
+        _, _,pessimistic_best_path = pessimistic_agent._construct()
         try:
-            suicide_choice, is_scared, is_suicide = suicide_agent.nextDir()
+            suicide_choice = suicide_agent.nextDir()
         except:
             suicide_choice = np.random.choice(range(len(suicide_agent.available_dir)), 1).item()
             suicide_choice = suicide_agent.available_dir[suicide_choice]
@@ -763,8 +763,8 @@ def estimationErrorAllWithSuicide(param, all_data, true_prob, adjacent_data, adj
                                else dir_prob - true_prob[index])
         nll += error
         estimation_prob_trajectory.append(dir_prob)
-        is_suicide_trajectory.append(is_suicide)
-        is_scared_trajectory.append(is_scared)
+        # is_suicide_trajectory.append(is_suicide)
+        # is_scared_trajectory.append(is_scared)
     if not return_trajectory:
         return nll
     else:
@@ -1422,7 +1422,7 @@ if __name__ == '__main__':
     trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
     original_data_filename = "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl"
 
-    type = "all"
+    type = "suicide"
     X, Y = constructDatasetFromOriginalLog(original_data_filename, clip = 200, trial_name = None)
     print("Data Shape : ", X.shape)
 
