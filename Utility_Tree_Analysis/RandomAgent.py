@@ -14,7 +14,7 @@ import numpy as np
 
 class RandomAgent:
 
-    def __init__(self, adjacent_data, cur_pos, last_dir, random_seed):
+    def __init__(self, adjacent_data, cur_pos, last_dir, random_seed = None):
         '''
         Initialization of the random agent.
         :param adjacent_data: The adjacent tiles of each tile in the map. Should be a data with the type pf pandas.DataFrame.
@@ -58,7 +58,8 @@ class RandomAgent:
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from TreeAnalysisUtils import adjacent_data
+    from TreeAnalysisUtils import readAdjacentMap
+    adjacent_data = readAdjacentMap("./extracted_data/adjacent_map.csv")
     cur_pos = (22, 24)
     last_dir = "right"
     loop_count = 1

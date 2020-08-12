@@ -95,7 +95,7 @@ class PathTree:
         self.existing_fruit = fruit_pos
 
 
-    def construct(self):
+    def _construct(self):
         '''
         Construct the utility tree.
         :return: The tree root node (anytree.Node).
@@ -126,6 +126,10 @@ class PathTree:
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
         return self.root, highest_utility, best_path
 
+
+    def nextDir(self):
+        _, highest_utility, best_path = self._construct()
+        return best_path[0][1]
 
     def _attachNode(self):
         # Find adjacent positions and the corresponding moving directions for the current node
@@ -352,7 +356,7 @@ class OptimisticAgent:
         self.existing_fruit = fruit_pos
 
 
-    def construct(self):
+    def _construct(self):
         '''
         Construct the utility tree.
         :return: The tree root node (anytree.Node).
@@ -382,6 +386,11 @@ class OptimisticAgent:
         best_path = best_leaf.ancestors
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
         return self.root, highest_utility, best_path
+
+
+    def nextDir(self):
+        _, highest_utility, best_path = self._construct()
+        return best_path[0][1]
 
 
     def _attachNode(self):
@@ -560,7 +569,7 @@ class PessimisticAgent:
         self.existing_fruit = fruit_pos
 
 
-    def construct(self):
+    def _construct(self):
         '''
         Construct the utility tree.
         :return: The tree root node (anytree.Node).
@@ -590,6 +599,11 @@ class PessimisticAgent:
         best_path = best_leaf.ancestors
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
         return self.root, highest_utility, best_path
+
+
+    def nextDir(self):
+        _, highest_utility, best_path = self._construct()
+        return best_path[0][1]
 
 
     def _attachNode(self):

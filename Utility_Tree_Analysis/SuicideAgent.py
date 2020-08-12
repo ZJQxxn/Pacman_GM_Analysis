@@ -76,18 +76,18 @@ class SuicideAgent:
         '''
         #TODO: if suicide, run to the closest ghost; If evade, run to the opposite directions of ghosts,
         #TODO: if not avaialble, randomly choose a direction
-        is_scared = False
-        is_suicide = False
+        self.is_scared = False
+        self.is_suicide = False
         # Do not go back
         if self.last_dir is not None:
             if self.opposite_dir[self.last_dir] in self.available_dir:
                 self.available_dir.remove(self.opposite_dir[self.last_dir])
         # If ghosts are scared, degenerate to the random agent
         if  np.any(np.array(self.ghost_status) in np.array([4, 5])):
-            is_scared = True
+            self.is_scared = True
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
-            return choice, is_scared, is_suicide
+            return choice
         #Else if ghosts are scared
         P_G_distance = np.array([
             self.locs_df[self.cur_pos][each]
@@ -111,7 +111,7 @@ class SuicideAgent:
         # Suicide. Run to ghosts.
         if True in is_suicide_better:
             if True in is_suicide_better:
-                is_suicide = True
+                self.is_suicide = True
                 choice = self._relativeDir(
                     self.cur_pos,
                     self.adjaccent_path[
@@ -132,7 +132,7 @@ class SuicideAgent:
         else:
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
-        return choice, is_scared, is_suicide
+        return choice
 
 if __name__ == '__main__':
     import sys
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     agent = SuicideAgent(
         adjacent_data, adjacent_path, locs_df,
         cur_pos, ghost_pos, ghost_status, reward_pos, last_dir)
-    choice, is_scared, is_suicide = agent.nextDir()
+    choice= agent.nextDir()
     print("Choice : ", choice)
-    print("Is scared : ", is_scared)
-    print("Is suicide : ", is_suicide)
+    print("Is scared : ", agent.is_scared)
+    print("Is suicide : ", agent.is_suicide)
