@@ -69,6 +69,7 @@ def readDatasetFromPkl(filename, trial_name = None):
         all_data = all_data[all_data.file == trial_name]
     all_data = all_data.reset_index()
     true_prob = all_data.next_pacman_dir_fill
+    # TODO: when the pacman stays
     start_index = 0
     while pd.isna(true_prob[start_index]):
         start_index += 1
@@ -117,23 +118,23 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
         local_fruit_attractive_thr = utility_param["local_fruit_attractive_thr"]
         local_ghost_repulsive_thr = utility_param["local_ghost_repulsive_thr"]
     if "optimistic" in agents_list:
-        optimistic_depth = utility_param["optimistic_depth"],
-        optimistic_ghost_attractive_thr = utility_param["optimistic_ghost_attractive_thr"],
-        optimistic_fruit_attractive_thr = utility_param["optimistic_fruit_attractive_thr"],
+        print()
+        optimistic_depth = utility_param["optimistic_depth"]
+        optimistic_ghost_attractive_thr = utility_param["optimistic_ghost_attractive_thr"]
+        optimistic_fruit_attractive_thr = utility_param["optimistic_fruit_attractive_thr"]
         optimistic_ghost_repulsive_thr = utility_param["optimistic_ghost_repulsive_thr"]
     if "pessimistic" in agents_list:
-        pessimistic_depth = utility_param["pessimistic_depth"],
-        pessimistic_ghost_attractive_thr = utility_param["pessimistic_ghost_attractive_thr"],
-        pessimistic_fruit_attractive_thr = utility_param["pessimistic_fruit_attractive_thr"],
+        pessimistic_depth = utility_param["pessimistic_depth"]
+        pessimistic_ghost_attractive_thr = utility_param["pessimistic_ghost_attractive_thr"]
+        pessimistic_fruit_attractive_thr = utility_param["pessimistic_fruit_attractive_thr"]
         pessimistic_ghost_repulsive_thr = utility_param["pessimistic_ghost_repulsive_thr"]
     agent_weight = list(param)
     # Compute log likelihood
     nll = 0  # negative log likelihood
     estimation_prob_trajectory = []
     num_samples = all_data.shape[0]
-    last_dir = None # TODO: need revise for lazy agent
-    loop_count = 0 #TODO: for lazyAgent; revise later
-    # useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
+    last_dir = all_data.pacman_dir.values
+    last_dir[np.where(pd.isna(last_dir))] = None
     for index in range(num_samples):
         # Extract game status and Pacman status
         each = all_data.iloc[index]
@@ -228,10 +229,10 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
             )
             agent_object_dict["pessimistic"] = pessimistic_agent
         if "lazy" in agents_list:
-            lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir, loop_count, max_loop=5) # TODO: max_loop should be a param
+            lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir[index]) # TODO: max_loop should be a param
             agent_object_dict["lazy"] = lazy_agent
         if "random" in agents_list:
-            random_agent = RandomAgent(adjacent_data, cur_pos, last_dir, None)
+            random_agent = RandomAgent(adjacent_data, cur_pos, last_dir[index], None)
             agent_object_dict["random"] = random_agent
         if "suicide" in agents_list:
             reward_data = bean_data if bean_data is not None else []
@@ -247,7 +248,7 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
                 [tuple(each) for each in ghost_data],
                 [int(each) for each in ghost_status],
                 reward_data,
-                last_dir
+                last_dir[index]
             )
             agent_object_dict["suicide"] = suicide_agent
         # Estimation
@@ -256,7 +257,6 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
             agent_estimation[:, i] = oneHot(agent_object_dict[agent].nextDir())
         dir_prob = agent_estimation @ agent_weight
         best_dir_index = np.argmax(dir_prob)
-        last_dir = dir_list[best_dir_index]
         exp_prob = np.exp(dir_prob)
         log_likelihood = dir_prob[best_dir_index] - np.log(np.sum(exp_prob))
         nll += (-log_likelihood)
@@ -281,6 +281,7 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
     :param return_trajectory: Whether return the estimated probability for each sample.
     :return: 
     '''
+    #TODO: two loss function
     if 0 == len(agents_list) or None == agents_list:
         raise ValueError("Undefined agents list!")
     else:
@@ -298,23 +299,22 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
         local_fruit_attractive_thr = utility_param["local_fruit_attractive_thr"]
         local_ghost_repulsive_thr = utility_param["local_ghost_repulsive_thr"]
     if "optimistic" in agents_list:
-        optimistic_depth = utility_param["optimistic_depth"],
-        optimistic_ghost_attractive_thr = utility_param["optimistic_ghost_attractive_thr"],
-        optimistic_fruit_attractive_thr = utility_param["optimistic_fruit_attractive_thr"],
+        optimistic_depth = utility_param["optimistic_depth"]
+        optimistic_ghost_attractive_thr = utility_param["optimistic_ghost_attractive_thr"]
+        optimistic_fruit_attractive_thr = utility_param["optimistic_fruit_attractive_thr"]
         optimistic_ghost_repulsive_thr = utility_param["optimistic_ghost_repulsive_thr"]
     if "pessimistic" in agents_list:
-        pessimistic_depth = utility_param["pessimistic_depth"],
-        pessimistic_ghost_attractive_thr = utility_param["pessimistic_ghost_attractive_thr"],
-        pessimistic_fruit_attractive_thr = utility_param["pessimistic_fruit_attractive_thr"],
+        pessimistic_depth = utility_param["pessimistic_depth"]
+        pessimistic_ghost_attractive_thr = utility_param["pessimistic_ghost_attractive_thr"]
+        pessimistic_fruit_attractive_thr = utility_param["pessimistic_fruit_attractive_thr"]
         pessimistic_ghost_repulsive_thr = utility_param["pessimistic_ghost_repulsive_thr"]
     agent_weight = list(param)
     # Compute estimation error
     ee = 0  # estimation error
     estimation_prob_trajectory = []
     num_samples = all_data.shape[0]
-    last_dir = None # TODO: need revise for lazy agent
-    loop_count = 0 #TODO: for lazyAgent; revise later
-    # useful_num_samples = useful_num_samples if useful_num_samples is not None else num_samples
+    last_dir = all_data.pacman_dir.values
+    last_dir[np.where(pd.isna(last_dir))] = None
     for index in range(num_samples):
         # Extract game status and Pacman status
         each = all_data.iloc[index]
@@ -409,10 +409,10 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
             )
             agent_object_dict["pessimistic"] = pessimistic_agent
         if "lazy" in agents_list:
-            lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir, loop_count, max_loop=5) # TODO: max_loop should be a param
+            lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir[index],) # TODO: max_loop should be a param
             agent_object_dict["lazy"] = lazy_agent
         if "random" in agents_list:
-            random_agent = RandomAgent(adjacent_data, cur_pos, last_dir, None)
+            random_agent = RandomAgent(adjacent_data, cur_pos, last_dir[index], None)
             agent_object_dict["random"] = random_agent
         if "suicide" in agents_list:
             reward_data = bean_data if bean_data is not None else []
@@ -428,13 +428,13 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
                 [tuple(each) for each in ghost_data],
                 [int(each) for each in ghost_status],
                 reward_data,
-                last_dir
+                last_dir[index]
             )
             agent_object_dict["suicide"] = suicide_agent
         # Estimation
         agent_estimation = np.zeros((4, len(agents_list))) # (number of directions, number of agents)
-        for index, agent in enumerate(agents_list):
-            agent_estimation[:, index] = oneHot(agent_object_dict[agent].nextDir())
+        for i, agent in enumerate(agents_list):
+            agent_estimation[:, i] = oneHot(agent_object_dict[agent].nextDir())
         dir_prob = agent_estimation @ agent_weight
         error = np.linalg.norm(dir_prob - true_prob.values[index]
                                if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
@@ -456,7 +456,7 @@ def MLE(config):
     adjacent_path = readAdjacentPath(config["loc_distance_filename"])
     reward_amount = readRewardAmount()
     # Load experiment data
-    all_data, _ = readDatasetFromPkl(config["data_filename"]) # TODO: trial name
+    all_data, true_prob = readDatasetFromPkl(config["data_filename"]) # TODO: trial name
     print("Number of samples : ", all_data.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = all_data.shape[0]
@@ -472,7 +472,7 @@ def MLE(config):
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: np.sum(params) - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] - 1})
     func = lambda parameter: negativeLogLikelihood(
         params,
         config["utility_param"],
@@ -492,7 +492,7 @@ def MLE(config):
             x0 = params,
             method="SLSQP",
             bounds=bounds,
-            tol=1e-8,
+            tol=1e-5,
             constraints = cons
         )
         is_success = res.success
@@ -514,14 +514,7 @@ def MLE(config):
         config['agents'],
         return_trajectory = True
     )
-    true_dir = []
-    for index in range(all_data.pacman_dir.values.shape[0]):
-        each = all_data.pacman_dir.values[index]
-        each = each.strip('[]').split(' ')
-        while '' in each:  # For the weird case that '' might exist in the split list
-            each.remove('')
-        true_dir.append(np.argmax([float(e) for e in each]))
-    true_dir = np.array(true_dir)
+    true_dir = np.array([np.argmax(each) for each in true_prob])
     estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate : ", correct_rate / len(true_dir))
@@ -542,17 +535,21 @@ def MEE(config):
         num_samples = all_data.shape[0]
     else:
         num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
-    print("Number of used samples : ", num_samples)
+    all_data = all_data.iloc[:num_samples]
+    true_prob = true_prob.iloc[:num_samples]
+    print("Number of used samples : ", all_data.shape[0])
     # Optimization
+    # bounds = [[0.0, 1.0]] * len(config["agents"])
+    # params = np.array([0.25] * len(config["agents"]))
     bounds = [[0, 1]] * len(config["agents"])
-    params = np.array([0.0] * len(config["agents"]))
+    params = np.array([0.0]  * len(config["agents"]))
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: np.sum(params) - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
     func = lambda parameter: estimationError(
         params,
         config["utility_param"],
@@ -573,7 +570,7 @@ def MEE(config):
             x0 = params,
             method = "SLSQP",
             bounds = bounds,
-            tol = 1e-8,
+            tol = 1e-5,
             constraints = cons
         )
         is_success = res.success
@@ -596,14 +593,7 @@ def MEE(config):
         config["agents"],
         return_trajectory = True
     )
-    true_dir = []
-    for index in range(all_data.pacman_dir.values.shape[0]):
-        each = all_data.pacman_dir.values[index]
-        each = each.strip('[]').split(' ')
-        while '' in each:  # For the weird case that '' might exist in the split list
-            each.remove('')
-        true_dir.append(np.argmax([float(e) for e in each]))
-    true_dir = np.array(true_dir)
+    true_dir = np.array([np.argmax(each) for each in true_prob])
     estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate : ", correct_rate / len(true_dir))
@@ -619,13 +609,15 @@ def movingWindowAnalysis(config):
     adjacent_path = readAdjacentPath(config["loc_distance_filename"])
     reward_amount = readRewardAmount()
     # Load experiment data
-    X, Y = readDatasetFromPkl(config["data_filename"])  # TODO: trial name
+    X, Y = readDatasetFromPkl(config["data_filename"])
     print("Number of samples : ", X.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = X.shape[0]
     else:
         num_samples = X.shape[0] if config["clip_samples"] > X.shape[0] else config["clip_samples"]
-    print("Number of used samples : ", num_samples)
+    X = X.iloc[:num_samples]
+    Y = Y.iloc[:num_samples]
+    print("Number of used samples : ", X.shape[0])
     # Construct optimizer
     bounds = [[0, 1]] * len(config["agents"])
     params = np.array([0.0] * len(config["agents"]))
@@ -635,7 +627,7 @@ def movingWindowAnalysis(config):
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: np.sum(params) - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
     if "MEE" == config["method"]:
         func = lambda parameter: estimationError(
             params,
@@ -724,12 +716,10 @@ def movingWindowAnalysis(config):
         all_coeff.append(res.x)
     print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
     print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
-        # # Save estimated agent weights
-        # type = "area_and_optimisim"
-        # np.save("MEE-agent-weight-real_data-window{}-{}.npy".format(window, type) if trial_name is None
-        #         else "MEE-agent-weight-real_data-window{}-{}-{}.npy".format(window, trial_name, type), all_coeff)
-        # np.save("MEE-is_success-window{}-{}.npy".format(window, type) if trial_name is None
-        #         else "MEE-is_success-weight-window{}-{}-{}.npy".format(window, trial_name, type), all_success)
+    # Save estimated agent weights
+    type = "_".join(config['agents'])
+    np.save("MEE-agent_weight-window{}-{}.npy".format(window, type), all_coeff)
+    np.save("MEE-is_success-window{}-{}.npy".format(window, type), all_success)
 
 
 # ===========================================================
@@ -747,11 +737,12 @@ def plotWeightVariation(all_agent_weight, agent_list, window, is_success = None,
             if not is_success[index]:
                 all_agent_weight[index] = all_agent_weight[index - 1]
     # plt.style.use("seaborn")
-    plt.plot(all_coeff[:, 4], "o-", label=agent_name[0], ms=3, lw=5)
-    plt.plot(all_coeff[:, 3], "o-", label=agent_name[1], ms=3, lw=5)
-    plt.plot(all_coeff[:, 2], "o-", label=agent_name[2], ms=3, lw=5)
-    plt.plot(all_coeff[:, 1], "o-", label=agent_name[3], ms=3, lw=5)
-    plt.plot(all_coeff[:, 0], "o-", label=agent_name[4], ms=3, lw=5)
+    # plt.plot(all_coeff[:, 4], "o-", label=agent_name[0], ms=3, lw=5)
+    # plt.plot(all_coeff[:, 3], "o-", label=agent_name[1], ms=3, lw=5)
+    # plt.plot(all_coeff[:, 2], "o-", label=agent_name[2], ms=3, lw=5)
+    # plt.plot(all_coeff[:, 1], "o-", label=agent_name[3], ms=3, lw=5)
+    # plt.plot(all_coeff[:, 0], "o-", label=agent_name[4], ms=3, lw=5)
+    plt.plot(all_coeff, ms=3, lw=5)
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize=20)
     with open(filename, "rb") as file:
@@ -797,15 +788,16 @@ def plotTrueLabel(trial_data):
 
 
 if __name__ == '__main__':
+    # Configurations
     config = {
         # Filename
         "data_filename" : "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
         "map_filename" : "extracted_data/adjacent_map.csv",
         "loc_distance_filename" : "extracted_data/dij_distance_map.csv",
         # The number of samples used for estimation: None for using all the data
-        "clip_samples" : None,
+        "clip_samples" : 30,
         # The window size
-        "window" : 20,
+        "window" : 10,
         # Maximum try of estimation
         "maximum_try" : 5,
         # Optimization method: "MLE" (maximumn likelihood estimation) or "MEE" (minimum error estimation)
@@ -814,7 +806,7 @@ if __name__ == '__main__':
         "loss-func": "l2-norm",
         # Agents
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents":["global", "local", "random", "lazy"],
+        "agents":["global", "local", "lazy", "random"],
         # Parameters for computing the utility
         "utility_param":{
             # for global agent
@@ -846,3 +838,9 @@ if __name__ == '__main__':
 
     # ============ MOVING WINDOW =============
     movingWindowAnalysis(config)
+
+    # ============ PLOTTING =============
+    # agent_weight = np.load("MEE-agent_weight-window10-global_local_lazy_random.npy")
+    # is_success = np.load("MEE-is_success-window10-global_local_lazy_random.npy")
+    # plotWeightVariation(agent_weight, config["agents"], config["window"], is_success,
+    #                     plot_label = True, filename = config["data_filename"])

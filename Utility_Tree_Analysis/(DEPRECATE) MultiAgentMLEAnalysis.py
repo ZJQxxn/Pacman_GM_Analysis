@@ -1,3 +1,7 @@
+# =================================================
+#              DEPRECATE
+# =================================================
+
 '''
 Description:
     MLE parameter estimation for multi-agent.
@@ -324,11 +328,11 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
         random_agent = RandomAgent(adjacent_data, cur_pos, last_dir, None)
         # Estimation
         agent_estimation = np.zeros((4, 4))
-        _, _, global_best_path = global_agent.construct()
-        _, _,local_best_path = local_agent.construct()
-        lazy_next_dir, not_turn = lazy_agent.nextDir()
-        if not_turn:
-            loop_count += 1
+        _, _, global_best_path = global_agent._construct()
+        _, _,local_best_path = local_agent._construct()
+        lazy_next_dir = lazy_agent.nextDir()
+        # if not_turn:
+        #     loop_count += 1
         random_next_dir = random_agent.nextDir()
         agent_estimation[:, 0] = oneHot(global_best_path[0][1])
         agent_estimation[:, 1] = oneHot(local_best_path[0][1])
@@ -432,9 +436,9 @@ def estimationErrorOptimism(param, all_data, true_prob, adjacent_data, locs_df, 
         agent_estimation = np.zeros((4, 4))
         _, _, optimistic_best_path = optimistic_agent.construct()
         _, _,pessimistic_best_path = pessimistic_agent.construct()
-        lazy_next_dir, not_turn = lazy_agent.nextDir()
-        if not_turn:
-            loop_count += 1
+        lazy_next_dir = lazy_agent.nextDir()
+        # if not_turn:
+        #     loop_count += 1
         random_next_dir = random_agent.nextDir()
         agent_estimation[:, 0] = oneHot(optimistic_best_path[0][1])
         agent_estimation[:, 1] = oneHot(pessimistic_best_path[0][1])
@@ -574,10 +578,10 @@ def estimationErrorAll(param, all_data, true_prob, adjacent_data, locs_df, rewar
         )
         # Estimation
         agent_estimation = np.zeros((4, 4))
-        _, _, global_best_path = global_agent.construct()
-        _, _, local_best_path = local_agent.construct()
-        _, _, optimistic_best_path = optimistic_agent.construct()
-        _, _,pessimistic_best_path = pessimistic_agent.construct()
+        _, _, global_best_path = global_agent._construct()
+        _, _, local_best_path = local_agent._construct()
+        _, _, optimistic_best_path = optimistic_agent._construct()
+        _, _,pessimistic_best_path = pessimistic_agent._construct()
         agent_estimation[:, 0] = oneHot(global_best_path[0][1])
         agent_estimation[:, 1] = oneHot(local_best_path[0][1])
         agent_estimation[:, 2] = oneHot(optimistic_best_path[0][1])
