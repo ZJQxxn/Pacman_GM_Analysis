@@ -324,7 +324,7 @@ def estimationError(param, all_data, true_prob, adjacent_data, locs_df, reward_a
             fruit_attractive_thr=local_fruit_attractive_thr,
             ghost_repulsive_thr=local_ghost_repulsive_thr
         )
-        lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir, loop_count, max_loop=5)
+        lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir)
         random_agent = RandomAgent(adjacent_data, cur_pos, last_dir, None)
         # Estimation
         agent_estimation = np.zeros((4, 4))
@@ -1086,6 +1086,9 @@ def movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window = 
                 print("Fail, retrying...")
                 retry_num += 1
         all_success.append(is_success)
+
+        print(res.x) # TODO: print window analysis
+
         # Make estimations on the testing dataset
         _, estimated_prob = estimationError(res.x, sub_X, sub_Y, adjacent_data, locs_df, reward_amount, return_trajectory=True)
         estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
@@ -1422,13 +1425,13 @@ if __name__ == '__main__':
     trial_name = "1-1-Omega-15-Jul-2019.csv" # filename for the trial
     original_data_filename = "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl"
 
-    type = "suicide"
+    type = "all"
     X, Y = constructDatasetFromOriginalLog(original_data_filename, clip = 200, trial_name = None)
     print("Data Shape : ", X.shape)
 
     if type == "all": # use gloabl/local/optimistic/pessimistic agents for analysis
         print("{}--{}".format(type, trial_name))
-        movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=20, trial_name = None)
+        movingWindowAnalysisAll(X, Y, map_filename, loc_distance_filename, window=10, trial_name = None)
     elif type == "suicide": # use gloabl/local/optimistic/pessimistic agents for analysis
         print("{}--{}".format(type, trial_name))
         movingWindowAnalysisAllWithSuicide(X, Y, map_filename, loc_distance_filename, window=10, trial_name=None)

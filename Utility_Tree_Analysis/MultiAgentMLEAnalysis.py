@@ -293,6 +293,8 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
     else:
         # print("Agent List :", agents_list)
         agent_object_dict = {each : None for each in agents_list}
+        agent_weight = [param[i] for i in range(len(param))]
+
     # Parameters
     if "global" in agents_list:
         global_depth = utility_param["global_depth"]
@@ -314,7 +316,6 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
         pessimistic_ghost_attractive_thr = utility_param["pessimistic_ghost_attractive_thr"]
         pessimistic_fruit_attractive_thr = utility_param["pessimistic_fruit_attractive_thr"]
         pessimistic_ghost_repulsive_thr = utility_param["pessimistic_ghost_repulsive_thr"]
-    agent_weight = list(param)
     # Compute estimation error
     ee = 0  # estimation error
     estimation_prob_trajectory = []
@@ -343,7 +344,7 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
             fruit_pos = each.fruitPos
         # Construct agents
         if "global" in agents_list:
-            global_agent = PathTree( # TODO: parameters change to two parts: constant and game status
+            global_agent = PathTree(
                 adjacent_data,
                 locs_df,
                 reward_amount,
@@ -481,7 +482,7 @@ def MLE(config):
         cons.append(l)
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})# TODO: summation
-    func = lambda parameter: negativeLogLikelihood(
+    func = lambda params: negativeLogLikelihood(
         params,
         config["utility_param"],
         all_data,
@@ -558,7 +559,11 @@ def MEE(config):
         cons.append(l)
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
-    func = lambda parameter: estimationError(
+    # Notes [Jiaqi Aug. 13]: -- about the lambda function --
+    # params = [0, 0, 0, 0]
+    # func = lambda parameter: func() [WRONG]
+    # func = lambda params: func() [CORRECT]
+    func = lambda params: estimationError(
         params,
         config["utility_param"],
         all_data,
@@ -637,7 +642,7 @@ def movingWindowAnalysis(config):
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
     if "MEE" == config["method"]:
-        func = lambda parameter: estimationError(
+        func = lambda params: estimationError(
             params,
             config["utility_param"],
             sub_X,
@@ -650,7 +655,7 @@ def movingWindowAnalysis(config):
             return_trajectory=False
         )
     elif "MLE" == config["method"]:
-        func = lambda parameter: negativeLogLikelihood(
+        func = lambda params: negativeLogLikelihood(
             params,
             config["utility_param"],
             sub_X,
@@ -669,7 +674,6 @@ def movingWindowAnalysis(config):
     all_success = []
     # Moving the window
     for index in subset_index:
-        # if index % 20 == 0:
         print("Window at {}...".format(index))
         sub_X = X[index - window:index + window]
         sub_Y = Y[index - window:index + window]
