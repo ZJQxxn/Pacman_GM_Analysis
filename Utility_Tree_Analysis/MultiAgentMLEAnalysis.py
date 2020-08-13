@@ -472,15 +472,15 @@ def MLE(config):
     true_prob = true_prob.iloc[:num_samples]
     print("Number of used samples : ", all_data.shape[0])
     # Optimization
-    bounds = [[0, 1]] * len(config["agents"])
-    params = np.array([0.0] * len(config["agents"]))
+    bounds = config["bounds"]
+    params = config["params"]
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: x[0] + x[1] + x[2] + x[3] - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})# TODO: summation
     func = lambda parameter: negativeLogLikelihood(
         params,
         config["utility_param"],
@@ -549,16 +549,15 @@ def MEE(config):
     # Optimization
     # bounds = [[0.0, 1.0]] * len(config["agents"])
     # params = np.array([0.25] * len(config["agents"]))
-    bounds = [[0.0, 1.0]] * len(config["agents"])
-    # params = np.array([0.0]  * len(config["agents"]))
-    params = [0.0, 0.0, 0.0, 1.0]
+    bounds = config["bounds"]
+    params = config["params"]
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: x[0]+x[1]+x[2]+x[3] - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
     func = lambda parameter: estimationError(
         params,
         config["utility_param"],
@@ -579,7 +578,7 @@ def MEE(config):
             x0 = params,
             method = "SLSQP",
             bounds = bounds,
-            tol = 1e-8,
+            tol = 1e-5,
             constraints = cons
         )
         is_success = res.success
@@ -628,15 +627,15 @@ def movingWindowAnalysis(config):
     Y = Y.iloc[:num_samples]
     print("Number of used samples : ", X.shape[0])
     # Construct optimizer
-    bounds = [[0, 1]] * len(config["agents"])
-    params = np.array([0.0] * len(config["agents"]))
+    bounds = config["bounds"]
+    params = config["params"]
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
     if "MEE" == config["method"]:
         func = lambda parameter: estimationError(
             params,
@@ -813,6 +812,10 @@ if __name__ == '__main__':
         "method": "MEE",
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
+        # Initial guess of parameters
+        "params": [0.0, 0.0, 0.0, 0.0],
+        # Bounds for optimization
+        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
         "agents":["global", "local", "lazy", "random"],
@@ -842,7 +845,7 @@ if __name__ == '__main__':
     }
 
     # ============ ESTIMATION =============
-    # MLE(config)
+    MLE(config)
     MEE(config)
 
     # ============ MOVING WINDOW =============
