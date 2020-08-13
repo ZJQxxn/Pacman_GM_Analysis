@@ -462,7 +462,9 @@ def MLE(config):
         num_samples = all_data.shape[0]
     else:
         num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
-    print("Number of used samples : ", num_samples)
+    all_data = all_data.iloc[:num_samples]
+    true_prob = true_prob.iloc[:num_samples]
+    print("Number of used samples : ", all_data.shape[0])
     # Optimization
     bounds = [[0, 1]] * len(config["agents"])
     params = np.array([0.0] * len(config["agents"]))
