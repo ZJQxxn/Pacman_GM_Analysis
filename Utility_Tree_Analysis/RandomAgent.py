@@ -49,8 +49,8 @@ class RandomAgent:
             choice = self.available_dir[choice]
         # else, stay moving to the same direction until the number of passed crossroads surpasses a threshold (default = 5)
         else:
-            if self.opposite_dir[self.last_dir] in self.available_dir:
-                self.available_dir.remove(self.opposite_dir[self.last_dir])
+            # if self.opposite_dir[self.last_dir] in self.available_dir:
+            #     self.available_dir.remove(self.opposite_dir[self.last_dir])
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
         return choice

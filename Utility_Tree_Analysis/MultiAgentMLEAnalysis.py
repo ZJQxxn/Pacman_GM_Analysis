@@ -69,6 +69,7 @@ def readDatasetFromPkl(filename, trial_name = None):
         all_data = all_data[all_data.file == trial_name]
     all_data = all_data.reset_index()
     true_prob = all_data.next_pacman_dir_fill
+    # true_prob = all_data.pacman_dir
     # TODO: when the pacman stays
     start_index = 0
     while pd.isna(true_prob[start_index]):
@@ -83,6 +84,10 @@ def readDatasetFromPkl(filename, trial_name = None):
     X = all_data
     Y = true_prob
     return X, Y
+
+
+def makeChoice(prob):
+    return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
 
 # ===========================================================
@@ -256,11 +261,12 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
         for i, agent in enumerate(agents_list):
             agent_estimation[:, i] = oneHot(agent_object_dict[agent].nextDir())
         dir_prob = agent_estimation @ agent_weight
-        best_dir_index = np.argmax(dir_prob)
+        # best_dir_index = np.argmax(dir_prob)
+        best_dir_index = makeChoice(dir_prob)
         exp_prob = np.exp(dir_prob)
         log_likelihood = dir_prob[best_dir_index] - np.log(np.sum(exp_prob))
         nll += (-log_likelihood)
-        estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob))
+        estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob)) #TODO: what to append in the estimation
     # print('Finished')
     if not return_trajectory:
         return nll
@@ -543,15 +549,16 @@ def MEE(config):
     # Optimization
     # bounds = [[0.0, 1.0]] * len(config["agents"])
     # params = np.array([0.25] * len(config["agents"]))
-    bounds = [[0, 1]] * len(config["agents"])
-    params = np.array([0.0]  * len(config["agents"]))
+    bounds = [[0.0, 1.0]] * len(config["agents"])
+    # params = np.array([0.0]  * len(config["agents"]))
+    params = [0.0, 0.0, 0.0, 1.0]
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+    cons.append({'type': 'eq', 'fun': lambda x: x[0]+x[1]+x[2]+x[3] - 1})
     func = lambda parameter: estimationError(
         params,
         config["utility_param"],
@@ -572,7 +579,7 @@ def MEE(config):
             x0 = params,
             method = "SLSQP",
             bounds = bounds,
-            tol = 1e-5,
+            tol = 1e-8,
             constraints = cons
         )
         is_success = res.success
@@ -835,7 +842,7 @@ if __name__ == '__main__':
     }
 
     # ============ ESTIMATION =============
-    MLE(config)
+    # MLE(config)
     MEE(config)
 
     # ============ MOVING WINDOW =============
