@@ -19,6 +19,7 @@ import h5py
 from scipy.io import loadmat
 import scipy.optimize
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import log_loss
 import itertools
 import sys
 
@@ -266,7 +267,7 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
         exp_prob = np.exp(dir_prob)
         log_likelihood = dir_prob[best_dir_index] - np.log(np.sum(exp_prob))
         nll += (-log_likelihood)
-        estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob)) #TODO: what to append in the estimation
+        estimation_prob_trajectory.append(exp_prob / np.sum(exp_prob))
     # print('Finished')
     if not return_trajectory:
         return nll
@@ -274,7 +275,7 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
         return (nll, estimation_prob_trajectory)
 
 
-def estimationError(param, utility_param, all_data, true_prob, adjacent_data, adjacent_path, locs_df, reward_amount, agents_list, return_trajectory = False):
+def estimationError(param, loss_func, utility_param, all_data, true_prob, adjacent_data, adjacent_path, locs_df, reward_amount, agents_list, return_trajectory = False):
     '''
     Compute the estimation error with global/local/lazy/random agents.
     :param param: Parameters.
@@ -287,7 +288,6 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
     :param return_trajectory: Whether return the estimated probability for each sample.
     :return: 
     '''
-    #TODO: two loss function
     if 0 == len(agents_list) or None == agents_list:
         raise ValueError("Undefined agents list!")
     else:
@@ -443,9 +443,14 @@ def estimationError(param, utility_param, all_data, true_prob, adjacent_data, ad
         for i, agent in enumerate(agents_list):
             agent_estimation[:, i] = oneHot(agent_object_dict[agent].nextDir())
         dir_prob = agent_estimation @ agent_weight
-        error = np.linalg.norm(dir_prob - true_prob.values[index]
-                               if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
-                               else dir_prob - true_prob[index])
+        if "l2-norm" == loss_func:
+            error = np.linalg.norm(dir_prob - true_prob.values[index]
+                                if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
+                                else dir_prob - true_prob[index])
+        elif "cross-entropy" == loss_func:
+            error = log_loss(true_prob.values[index], dir_prob)
+        else:
+            raise ValueError("Undefined loss function {}!".format(loss_func))
         ee += error
         estimation_prob_trajectory.append(dir_prob)
     if not return_trajectory:
@@ -565,6 +570,7 @@ def MEE(config):
     # func = lambda params: func() [CORRECT]
     func = lambda params: estimationError(
         params,
+        config["loss-func"],
         config["utility_param"],
         all_data,
         true_prob,
@@ -596,6 +602,7 @@ def MEE(config):
     # Estimation
     _, estimated_prob = estimationError(
         res.x,
+        config["loss-func"],
         config["utility_param"],
         all_data,
         true_prob,
@@ -644,6 +651,7 @@ def movingWindowAnalysis(config):
     if "MEE" == config["method"]:
         func = lambda params: estimationError(
             params,
+            config["loss-func"],
             config["utility_param"],
             sub_X,
             sub_Y,
@@ -711,6 +719,7 @@ def movingWindowAnalysis(config):
         elif "MLE" == config["method"]:
             _, estimated_prob = negativeLogLikelihood(
                 res.x,
+                config["loss-func"],
                 config["utility_param"],
                 sub_X,
                 adjacent_data,
@@ -822,7 +831,7 @@ if __name__ == '__main__':
         "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents":["global", "local", "lazy", "random"],
+        "agents":["global", "local", "optimistic", "pessimistic"],
         # Parameters for computing the utility
         "utility_param":{
             # for global agent
@@ -849,7 +858,7 @@ if __name__ == '__main__':
     }
 
     # ============ ESTIMATION =============
-    MLE(config)
+    # MLE(config)
     MEE(config)
 
     # ============ MOVING WINDOW =============

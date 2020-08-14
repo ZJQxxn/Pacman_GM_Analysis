@@ -26,7 +26,7 @@ class PathTree:
     #TODO: convert ``PathTree'' to an abstract class;
 
     def __init__(self, adjacent_data, locs_df, reward_amount, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status,
-                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
+                 depth = 10, ignore_depth = 5, ghost_attractive_thr = 34, ghost_repulsive_thr = 10, fruit_attractive_thr = 10):
         '''
         Initialization.
         :param adjacent_data: Map adjacent data (dict).
@@ -40,6 +40,7 @@ class PathTree:
         :param fruit_pos: The position of fruit. Should be a 2-tuple.
         :param ghost_status: A list of ghost status. Each status should be either 1(normal) or 4 (scared). If no ghost exists, pass np.nan.
         :param depth: The maximum depth of tree. 
+        :param ignore_depth: Ignore this depth of nodes. 
         :param ghost_attractive_thr: Ghost attractive threshold.
         :param ghost_repulsive_thr: Ghost repulsive threshold.
         :param fruit_attractive_thr: Fruit attractive threshold.
@@ -74,6 +75,8 @@ class PathTree:
         self.node_queue.append(self.root)
         # The maximize depth (i.e., the path length)
         self.depth = depth
+        # The ignore depth (i.e., exclude this depth of nodes)
+        self.ignore_depth = ignore_depth
         # Game status
         self.energizer_data = energizer_data
         self.bean_data = bean_data
@@ -101,15 +104,19 @@ class PathTree:
         :return: The tree root node (anytree.Node).
         '''
         # construct the first layer firstly (depth = 1)
-        self._attachNode() # attach all children of the root (depth = 1)
+        self._attachNode(ignore = True if self.ignore_depth > 0 else False) # attach all children of the root (depth = 1)
         self.node_queue.append(None) # the end of layer with depth = 1
         self.node_queue.popleft()
         self.current_node = self.node_queue.popleft()
         cur_depth = 2
         # construct the other parts
         while cur_depth <= self.depth:
+            if cur_depth <= self.ignore_depth:
+                ignore = True
+            else:
+                ignore = False
             while None != self.current_node :
-                self._attachNode()
+                self._attachNode(ignore = ignore)
                 self.current_node = self.node_queue.popleft()
             self.node_queue.append(None)
             if 0 == len(self.node_queue):
@@ -127,16 +134,12 @@ class PathTree:
         return self.root, highest_utility, best_path
 
 
-    def nextDir(self):
-        _, highest_utility, best_path = self._construct()
-        return best_path[0][1]
-
-    def _attachNode(self):
+    def _attachNode(self, ignore = False):
         # Find adjacent positions and the corresponding moving directions for the current node
         tmp_data = self.adjacent_data[self.current_node.name]
         for each in ["left", "right", "up", "down"]:
             # do not walk on the wall or walk out of boundary
-            # do not turn back
+            # do not turn back # TODO: turn back?
             if None == self.current_node.parent and isinstance(tmp_data[each], float):
                 continue
             elif None != self.current_node.parent and \
@@ -146,8 +149,12 @@ class PathTree:
             else:
                 # Compute utility
                 cur_pos = tmp_data[each]
-                cur_reward = self._computeReward(cur_pos)
-                cur_risk = self._computeRisk(cur_pos)
+                if ignore:
+                    cur_reward = 0.0
+                    cur_risk = 0.0
+                else:
+                    cur_reward = self._computeReward(cur_pos)
+                    cur_risk = self._computeRisk(cur_pos)
                 # Construct the new node
                 new_node = anytree.Node(
                         cur_pos,
@@ -281,6 +288,13 @@ class PathTree:
         else:
             risk = 0
         return risk
+
+
+    def nextDir(self):
+        _, highest_utility, best_path = self._construct()
+        return best_path[0][1]
+
+
 
 
 #TODO: move to a new file later
