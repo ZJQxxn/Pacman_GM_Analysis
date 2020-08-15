@@ -115,6 +115,7 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
     # Parameters
     if "global" in agents_list:
         global_depth = utility_param["global_depth"]
+        ignore_depth = utility_param["ignore_depth"] #TODO: change to local depth
         global_ghost_attractive_thr = utility_param["global_ghost_attractive_thr"]
         global_fruit_attractive_thr = utility_param["global_fruit_attractive_thr"]
         global_ghost_repulsive_thr = utility_param["global_ghost_repulsive_thr"]
@@ -175,6 +176,7 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
                 fruit_pos,
                 ghost_status,
                 depth = global_depth,
+                ignore_depth = ignore_depth,
                 ghost_attractive_thr = global_ghost_attractive_thr,
                 fruit_attractive_thr = global_fruit_attractive_thr,
                 ghost_repulsive_thr = global_ghost_repulsive_thr
@@ -298,6 +300,7 @@ def estimationError(param, loss_func, utility_param, all_data, true_prob, adjace
     # Parameters
     if "global" in agents_list:
         global_depth = utility_param["global_depth"]
+        ignore_depth = utility_param["ignore_depth"] #TODO: change to local depth
         global_ghost_attractive_thr = utility_param["global_ghost_attractive_thr"]
         global_fruit_attractive_thr = utility_param["global_fruit_attractive_thr"]
         global_ghost_repulsive_thr = utility_param["global_ghost_repulsive_thr"]
@@ -356,6 +359,7 @@ def estimationError(param, loss_func, utility_param, all_data, true_prob, adjace
                 fruit_pos,
                 ghost_status,
                 depth = global_depth,
+                ignore_depth = ignore_depth,
                 ghost_attractive_thr = global_ghost_attractive_thr,
                 fruit_attractive_thr = global_fruit_attractive_thr,
                 ghost_repulsive_thr = global_ghost_repulsive_thr
@@ -812,7 +816,8 @@ if __name__ == '__main__':
     # Configurations
     config = {
         # Filename
-        "data_filename" : "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
+        # "data_filename" : "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
+        "data_filename" : "../common_data/global_data.pkl",
         "map_filename" : "extracted_data/adjacent_map.csv",
         "loc_distance_filename" : "extracted_data/dij_distance_map.csv",
         # The number of samples used for estimation: None for using all the data
@@ -831,11 +836,12 @@ if __name__ == '__main__':
         "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents":["global", "local", "optimistic", "pessimistic"],
+        "agents":["global", "local", "lazy", "random"],
         # Parameters for computing the utility
         "utility_param":{
             # for global agent
             "global_depth" : 15,
+            "ignore_depth" : 5, # basically, this is set to be the local depth
             "global_ghost_attractive_thr" : 34,
             "global_fruit_attractive_thr" : 34,
             "global_ghost_repulsive_thr" : 12,
