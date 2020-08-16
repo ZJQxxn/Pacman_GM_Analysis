@@ -55,7 +55,7 @@ def oneHot(val):
     return onehot_vec
 
 
-def readDatasetFromPkl(filename, trial_name = None):
+def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
     '''
     Construct dataset from a .pkl file.
     :param filename: Filename.
@@ -82,8 +82,15 @@ def readDatasetFromPkl(filename, trial_name = None):
             true_prob[index] = true_prob[index - 1]
     true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
     # Construct the dataset
-    X = all_data
-    Y = true_prob
+    if only_necessary and "at_cross" in all_data.columns.values:
+        print("--- Only Necessary ---")
+        at_cross_index = np.where(all_data.at_cross)
+        X = all_data.iloc[at_cross_index]
+        Y = true_prob.iloc[at_cross_index]
+        # print("--- Data Shape {} ---".format(len(at_cross_index[0])))
+    else:
+        X = all_data
+        Y = true_prob
     return X, Y
 
 
@@ -92,7 +99,7 @@ def makeChoice(prob):
 
 
 # ===========================================================
-#                      ESTIMATION
+#                      OPTIMIZATION
 # ===========================================================
 def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacent_path, locs_df, reward_amount, agents_list, return_trajectory = False):
     '''
@@ -329,6 +336,9 @@ def estimationError(param, loss_func, utility_param, all_data, true_prob, adjace
         # Extract game status and Pacman status
         each = all_data.iloc[index]
         cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
+        # TODO: In case the Pacman position does not exists (0, 18)
+        if cur_pos not in adjacent_data:
+            continue
         energizer_data = eval(each.energizers) if isinstance(each.energizers, str) else each.energizers
         bean_data = eval(each.beans) if isinstance(each.beans, str) else each.beans
         ghost_data = np.array([eval(each.ghost1_pos), eval(each.ghost2_pos)]) \
@@ -472,7 +482,7 @@ def MLE(config):
     adjacent_path = readAdjacentPath(config["loc_distance_filename"])
     reward_amount = readRewardAmount()
     # Load experiment data
-    all_data, true_prob = readDatasetFromPkl(config["data_filename"]) # TODO: trial name
+    all_data, true_prob = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"]) # TODO: trial name
     print("Number of samples : ", all_data.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = all_data.shape[0]
@@ -547,7 +557,7 @@ def MEE(config):
     adjacent_path = readAdjacentPath(config["loc_distance_filename"])
     reward_amount = readRewardAmount()
     # Load experiment data
-    all_data, true_prob = readDatasetFromPkl(config["data_filename"])  # TODO: trial name
+    all_data, true_prob = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])  # TODO: trial name
     print("Number of samples : ", all_data.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = all_data.shape[0]
@@ -633,7 +643,7 @@ def movingWindowAnalysis(config):
     adjacent_path = readAdjacentPath(config["loc_distance_filename"])
     reward_amount = readRewardAmount()
     # Load experiment data
-    X, Y = readDatasetFromPkl(config["data_filename"])
+    X, Y = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])
     print("Number of samples : ", X.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = X.shape[0]
@@ -710,6 +720,7 @@ def movingWindowAnalysis(config):
         if "MEE" == config["method"]:
             _, estimated_prob = estimationError(
                 res.x,
+                config["loss-func"],
                 config["utility_param"],
                 sub_X,
                 sub_Y,
@@ -723,7 +734,6 @@ def movingWindowAnalysis(config):
         elif "MLE" == config["method"]:
             _, estimated_prob = negativeLogLikelihood(
                 res.x,
-                config["loss-func"],
                 config["utility_param"],
                 sub_X,
                 adjacent_data,
@@ -816,12 +826,14 @@ if __name__ == '__main__':
     # Configurations
     config = {
         # Filename
-        # "data_filename" : "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "data_filename" : "../common_data/global_data.pkl",
+        "data_filename" : "../common_data/local_data.pkl",
+        # "data_filename" : "../common_data/global_data.pkl",
         "map_filename" : "extracted_data/adjacent_map.csv",
         "loc_distance_filename" : "extracted_data/dij_distance_map.csv",
+        # Only making decisions when necessary
+        "only_necessary" : True,
         # The number of samples used for estimation: None for using all the data
-        "clip_samples" : 50,
+        "clip_samples" : 20,
         # The window size
         "window" : 10,
         # Maximum try of estimation, in case the optimization will fail
@@ -831,17 +843,17 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0, 0.0],
+        "params": [0.0, 0.0, 0.0],
         # Bounds for optimization
-        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
+        "bounds": [[0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents":["global", "local", "lazy", "random"],
+        "agents":["global", "local", "random"],
         # Parameters for computing the utility
         "utility_param":{
             # for global agent
             "global_depth" : 15,
-            "ignore_depth" : 5, # basically, this is set to be the local depth
+            "ignore_depth" : 5, # basically, this is set to be the "local_depth"
             "global_ghost_attractive_thr" : 34,
             "global_fruit_attractive_thr" : 34,
             "global_ghost_repulsive_thr" : 12,
@@ -871,7 +883,7 @@ if __name__ == '__main__':
     # movingWindowAnalysis(config)
 
     # ============ PLOTTING =============
-    # Load the log of moving window analysis; log files are created in the analysis
+    # # Load the log of moving window analysis; log files are created in the analysis
     # agent_weight = np.load("MEE-agent_weight-window10-global_local_lazy_random.npy")
     # is_success = np.load("MEE-is_success-window10-global_local_lazy_random.npy")
     # plotWeightVariation(agent_weight, config["agents"], config["window"], is_success,
