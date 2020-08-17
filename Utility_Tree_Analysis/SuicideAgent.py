@@ -89,22 +89,27 @@ class SuicideAgent:
             choice = self.available_dir[choice]
             return choice
         #Else if ghosts are scared
-        P_G_distance = np.array([
-            self.locs_df[self.cur_pos][each]
-            for each in self.ghost_pos
-        ])# distance between Pacman and ghosts
-        P_R_distance = np.array([
-            self.locs_df[self.cur_pos][each]
-            for each in self.reward_pos
-        ])  # distance between Pacman and rewards
-        R_R_distance = np.array([
-            self.locs_df[self.reborn_pos][each]
-            for each in self.reward_pos
-        ]) # distance between reborn point and rewards
-
-        # # determine whether ghosts are closer than rewards
-        # is_ghosts_closer = [np.all(each < P_R_distance) for each in P_G_distance] #TODO: do not need this
-
+        P_G_distance = [] # distance between Pacman and ghosts
+        for each in self.ghost_pos:
+            if each in self.locs_df[self.cur_pos]:
+                P_G_distance.append(self.locs_df[self.cur_pos][each])
+            else:
+                print("Lost path : {} to {}".format(self.cur_pos, each))
+        P_G_distance = np.array(P_G_distance)
+        P_R_distance = [] # distance between Pacman and rewards
+        for each in self.reward_pos:
+            if each in self.locs_df[self.cur_pos]:
+                P_R_distance.append(self.locs_df[self.cur_pos][each])
+            else:
+                print("Lost path : {} to {}".format(self.cur_pos, each))
+        P_R_distance = np.array(P_R_distance)
+        R_R_distance = [] # distance between reborn point and rewards
+        for each in self.reward_pos:
+            if each in self.locs_df[self.reborn_pos]:
+                R_R_distance.append(self.locs_df[self.reborn_pos][each])
+            else:
+                print("Lost path : {} to {}".format(self.reborn_pos, each))
+        R_R_distance = np.array(R_R_distance)
         # determine whether suicide is better
         is_suicide_better = [np.all(each < P_R_distance) for each in R_R_distance]
         closest_ghost_index = np.argmin(P_G_distance)

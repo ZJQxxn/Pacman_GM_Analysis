@@ -68,10 +68,10 @@ def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
         all_data = pickle.load(file)
     if trial_name is not None: # explicitly indicate the trial
         all_data = all_data[all_data.file == trial_name]
-    all_data = all_data.reset_index()
+    if "level_0" not in all_data.columns.values:
+        all_data = all_data.reset_index()
     true_prob = all_data.next_pacman_dir_fill
     # true_prob = all_data.pacman_dir
-    # TODO: when the pacman stays
     start_index = 0
     while pd.isna(true_prob[start_index]):
         start_index += 1
@@ -250,10 +250,10 @@ def negativeLogLikelihood(param, utility_param, all_data, adjacent_data, adjacen
             random_agent = RandomAgent(adjacent_data, cur_pos, last_dir[index], None)
             agent_object_dict["random"] = random_agent
         if "suicide" in agents_list:
-            reward_data = bean_data if bean_data is not None else []
-            if not isinstance(energizer_data, float) and energizer_data is not None:
+            reward_data = bean_data if bean_data is not None and not isinstance(bean_data, float) else []
+            if not isinstance(energizer_data, float) and energizer_data is not None and not isinstance(energizer_data, float):
                 reward_data.extend(energizer_data)
-            if not isinstance(fruit_pos, float) and fruit_pos is not None:
+            if not isinstance(fruit_pos, float) and fruit_pos is not None and not isinstance(fruit_pos, float):
                 reward_data.append(fruit_pos)
             suicide_agent = SuicideAgent(
                 adjacent_data,
@@ -436,10 +436,10 @@ def estimationError(param, loss_func, utility_param, all_data, true_prob, adjace
             random_agent = RandomAgent(adjacent_data, cur_pos, last_dir[index], None)
             agent_object_dict["random"] = random_agent
         if "suicide" in agents_list:
-            reward_data = bean_data if bean_data is not None else []
-            if not isinstance(energizer_data, float) and energizer_data is not None:
+            reward_data = bean_data if bean_data is not None and not isinstance(bean_data, float) else []
+            if not isinstance(energizer_data, float) and energizer_data is not None and not isinstance(energizer_data,float):
                 reward_data.extend(energizer_data)
-            if not isinstance(fruit_pos, float) and fruit_pos is not None:
+            if not isinstance(fruit_pos, float) and fruit_pos is not None and not isinstance(fruit_pos, float):
                 reward_data.append(fruit_pos)
             suicide_agent = SuicideAgent(
                 adjacent_data,
