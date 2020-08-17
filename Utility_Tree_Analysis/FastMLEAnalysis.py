@@ -367,11 +367,6 @@ def movingWindowAnalysis(config):
     print("=" * 20, " Moving Window ", "=" * 20)
     print("Agent List :", config["agents"])
     window = config["window"]
-    # Load pre-computed data
-    adjacent_data = readAdjacentMap(config["map_filename"])
-    locs_df = readLocDistance(config["loc_distance_filename"])
-    adjacent_path = readAdjacentPath(config["loc_distance_filename"])
-    reward_amount = readRewardAmount()
     # Load experiment data
     X, Y = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])
     print("Number of samples : ", X.shape[0])
@@ -392,17 +387,14 @@ def movingWindowAnalysis(config):
         cons.append(l)
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
-    if "MEE" == config["method"]:
-        func = lambda params: estimationError(
-            params,
-            config["loss-func"],
-            sub_X,
-            sub_Y,
-            config["agents"],
-            return_trajectory=False
-        )
-    else:
-        raise ValueError('Undefined optimizer {}! Should be "MEE".'.format(config["method"]))
+    func = lambda params: estimationError(
+        params,
+        config["loss-func"],
+        sub_X,
+        sub_Y,
+        config["agents"],
+        return_trajectory=False
+    )
     subset_index = np.arange(window, len(Y) - window)
     all_coeff = []
     all_correct_rate = []
@@ -482,6 +474,7 @@ if __name__ == '__main__':
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config)
 
+    # TODO: need more test and debugging
     # ============ PLOTTING =============
     # # Load the log of moving window analysis; log files are created in the analysis
     # agent_weight = np.load("MEE-agent_weight-window10-global_local_lazy_random.npy")
