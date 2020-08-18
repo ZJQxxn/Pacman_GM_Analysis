@@ -445,12 +445,16 @@ def movingWindowAnalysis(config):
 
 
 if __name__ == '__main__':
+    # # Pre-estimation
+    # preEstimation()
+
+
     # Configurations
     config = {
         # Filename
-        "data_filename": "../common_data/global_data.pkl-with_estimation.pkl",
+        "data_filename": "../common_data/local_data.pkl-with_estimation.pkl",
         # Only making decisions when necessary
-        "only_necessary": False,
+        "only_necessary": True,
         # The number of samples used for estimation: None for using all the data
         "clip_samples": None,
         # The window size

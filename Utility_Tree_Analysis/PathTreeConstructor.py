@@ -26,7 +26,7 @@ class PathTree:
     #TODO: convert ``PathTree'' to an abstract class;
 
     def __init__(self, adjacent_data, locs_df, reward_amount, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status,
-                 depth = 10, ignore_depth = 5, ghost_attractive_thr = 34, ghost_repulsive_thr = 10, fruit_attractive_thr = 10):
+                 depth = 10, ignore_depth = 0, ghost_attractive_thr = 34, ghost_repulsive_thr = 10, fruit_attractive_thr = 10):
         '''
         Initialization.
         :param adjacent_data: Map adjacent data (dict).
