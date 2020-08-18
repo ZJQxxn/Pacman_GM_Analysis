@@ -183,7 +183,6 @@ def extractLocalData():
     df_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/all_data_with_label.pkl"
     reward_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/df_total_with_reward.pkl"
     adjacent_data = readAdjacentMap("/home/qlyang/jiaqi/Pacman-Analysis/Utility_Tree_Analysis/extracted_data/adjacent_map.csv")
-
     # Read data
     with open(data_filename, "rb") as file:
         all_data = pickle.load(file)
@@ -210,11 +209,84 @@ def extractLocalData():
     print("=" * 20)
 
 
-def extractOptimisticData():
+def extractGlobalTestingData():
+    # Configurations
+    print("=" * 20)
+    print("EXTRACT GLOBAL DATA")
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    global_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/global_testing_data.pkl"
+    df_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/all_data_with_label.pkl"
+    reward_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/df_total_with_reward.pkl"
+    adjacent_data = readAdjacentMap("/home/qlyang/jiaqi/Pacman-Analysis/Utility_Tree_Analysis/extracted_data/adjacent_map.csv")
+
+    # Read data
+    with open(data_filename, "rb") as file:
+        all_data = pickle.load(file)
+    all_data_with_label = all_data["df_total"]
+    print(all_data_with_label.shape)
+    with open(reward_data_filename, "rb") as file:
+        reward_data = pickle.load(file)
+    all_data_with_label["Reward"] = reward_data.Reward
+    all_data_with_label["fruitPos"] = reward_data.fruitPos
+    print("Finished reading.")
+    # Extract global data
+    print("-" * 20)
+    global_data = all_data_with_label[
+        _isGlobal(all_data_with_label.label_global,
+                  all_data_with_label.label_global_optimal,
+                  all_data_with_label.label_global_notoptimal)
+    ]
+    global_data = global_data.iloc[1000:2000] # take out the second 1000 samples for testing
+    global_data["at_cross"] = _ifAtCross(adjacent_data, global_data.pacmanPos)
+    print("Data Shape : ", len(global_data))
+    print("Finished extracting global.")
+    with open(global_data_filename, "wb") as file:
+        pickle.dump(global_data, file)
+    print("Finished writing the second 1000 global data.")
+    print("=" * 20)
+
+
+def extractLocalTestingData():
+    # Configurations
+    print("=" * 20)
+    print("EXTRACT LOCAL DATA")
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    local_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/local_testing_data.pkl"
+    df_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/all_data_with_label.pkl"
+    reward_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/df_total_with_reward.pkl"
+    adjacent_data = readAdjacentMap("/home/qlyang/jiaqi/Pacman-Analysis/Utility_Tree_Analysis/extracted_data/adjacent_map.csv")
+    # Read data
+    with open(data_filename, "rb") as file:
+        all_data = pickle.load(file)
+    all_data_with_label = all_data["df_total"]
+    print(all_data_with_label.shape)
+    with open(reward_data_filename, "rb") as file:
+        reward_data = pickle.load(file)
+    all_data_with_label["Reward"] = reward_data.Reward
+    all_data_with_label["fruitPos"] = reward_data.fruitPos
+    print("Finished reading.")
+    # Extract global data
+    print("-" * 20)
+    local_data = all_data_with_label[
+        _isLocal(all_data_with_label.label_local_graze,
+                  all_data_with_label.label_local_graze_noghost)
+    ]
+    local_data = local_data.iloc[1000:2000]
+    local_data["at_cross"] = _ifAtCross(adjacent_data, local_data.pacmanPos)
+    print("Data Shape : ", len(local_data))
+    print("Finished extracting local.")
+    with open(local_data_filename, "wb") as file:
+        pickle.dump(local_data, file)
+    print("Finished writing the second 1000 local data.")
+    print("=" * 20)
+
+
+
+def extractOptimisticData(): #TODO:
     pass
 
 
-def extractPessimisticData():
+def extractPessimisticData(): # TODO:
     pass
 
 
@@ -242,7 +314,11 @@ if __name__ == '__main__':
 
     # # Extract label data
     # extractGlobalData()
-    extractLocalData()
+    # extractLocalData()
+
+    # Extract testing data
+    extractGlobalTestingData()
+    extractLocalTestingData()
 
 
 

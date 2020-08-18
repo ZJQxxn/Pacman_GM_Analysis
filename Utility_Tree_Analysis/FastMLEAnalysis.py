@@ -22,7 +22,7 @@ from PathTreeConstructor import PathTree, OptimisticAgent, PessimisticAgent
 from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
 from SuicideAgent import SuicideAgent
-from MultiAgentMLEAnalysis import oneHot, makeChoice, readDatasetFromPkl
+from MultiAgentMLEAnalysis import oneHot, makeChoice, readDatasetFromPkl, readTestingDatasetFromPkl
 from MultiAgentMLEAnalysis import plotWeightVariation
 
 # ===================================
@@ -235,10 +235,12 @@ def preEstimation():
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/global_data.pkl",
-        "../common_data/local_data.pkl"
+        # "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
+        # "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
+        # "../common_data/global_data.pkl",
+        # "../common_data/local_data.pkl",
+        "../common_data/global_testing_data.pkl",
+        "../common_data/local_testing_data.pkl"
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -254,6 +256,9 @@ def preEstimation():
 # ===================================
 #         FAST OPTIMIZATION
 # ===================================
+def correctRate(estimation, true_prob):
+    pass
+
 
 def estimationError(param, loss_func, all_data, true_prob, agents_list, return_trajectory = False):
     if 0 == len(agents_list) or None == agents_list:
@@ -349,18 +354,23 @@ def MEE(config):
     print("Estimated Parameter : ", res.x)
     print(res)
     # Estimation
+    testing_data, testing_true_prob = readTestingDatasetFromPkl(
+        config["testing_data_filename"],
+        only_necessary = config["only_necessary"])
+    # not_nan_index = [each for each in not_nan_index if ]
+    print("Testing data num : ", testing_data.shape[0])
     _, estimated_prob = estimationError(
         res.x,
         config["loss-func"],
-        all_data,
-        true_prob,
+        testing_data,
+        testing_true_prob,
         config["agents"],
         return_trajectory = True
     )
-    true_dir = np.array([np.argmax(each) for each in true_prob])
+    true_dir = np.array([np.argmax(each) for each in testing_true_prob])
     estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
-    print("Correct rate : ", correct_rate / len(true_dir))
+    print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
 
 
 def movingWindowAnalysis(config):
@@ -452,11 +462,15 @@ if __name__ == '__main__':
     # Configurations
     config = {
         # Filename
-        "data_filename": "../common_data/local_data.pkl-with_estimation.pkl",
+        "data_filename": "../common_data/global_data.pkl-with_estimation.pkl",
+        # Testing data filename
+        "testing_data_filename": "../common_data/global_testing_data.pkl-with_estimation.pkl",
         # Only making decisions when necessary
         "only_necessary": True,
+        # Need a intercept term
+        "need_intercept": False, #TODO: intercept; for every direction?
         # The number of samples used for estimation: None for using all the data
-        "clip_samples": None,
+        "clip_samples": 100,
         # The window size
         "window": 10,
         # Maximum try of estimation, in case the optimization will fail
@@ -464,12 +478,12 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0],
+        "params": [0.0, 0.0, 0.0, 0.0],
         # Bounds for optimization
-        "bounds": [[0, 1], [0, 1], [0, 1]],
+        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents": ["global", "local", "random"],
+        "agents": ["global", "local", "random", "lazy"],
     }
 
     # ============ ESTIMATION =============
@@ -478,7 +492,6 @@ if __name__ == '__main__':
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config)
 
-    # TODO: need more test and debugging
     # ============ PLOTTING =============
     # # Load the log of moving window analysis; log files are created in the analysis
     # agent_weight = np.load("MEE-agent_weight-window10-global_local_lazy_random.npy")

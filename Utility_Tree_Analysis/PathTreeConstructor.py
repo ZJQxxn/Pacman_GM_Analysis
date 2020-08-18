@@ -198,9 +198,12 @@ class PathTree:
                     elif 3 == ifscared2:
                         ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
                     else:
-                        ghost_dist = min(
-                            self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
-                        )
+                        if cur_position != self.ghost_data[0] and cur_position != self.ghost_data[1]:
+                            ghost_dist = min(
+                                self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
+                            )
+                        else:
+                            ghost_dist = 1 #TODO: change to 0 and revise the division
                     if ghost_dist < self.ghost_attractive_thr:
                         reward += self.reward_amount[8] * (1 / ghost_dist)
             else:
@@ -464,9 +467,12 @@ class OptimisticAgent:
                     elif 3 == ifscared2:
                         ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
                     else:
-                        ghost_dist = min(
-                            self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
-                        )
+                        if cur_position != self.ghost_data[0] and cur_position != self.ghost_data[1]:
+                            ghost_dist = min(
+                                self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
+                            )
+                        else:
+                            ghost_dist = 1 #TODO: change to 0 and revise the division
                     if ghost_dist < self.ghost_attractive_thr:
                         reward += self.reward_amount[8] * (1 / ghost_dist)
             else:

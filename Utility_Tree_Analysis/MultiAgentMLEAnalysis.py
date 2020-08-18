@@ -71,7 +71,13 @@ def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
     if "level_0" not in all_data.columns.values:
         all_data = all_data.reset_index()
     true_prob = all_data.next_pacman_dir_fill
-    # true_prob = all_data.pacman_dir
+    # The indeices of data with a direction rather than nan
+    if only_necessary:
+        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float) and x.at_cross
+    else:
+        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float)
+    not_nan_index = np.where(all_data.apply(lambda x: not_nan_indication(x), axis = 1))[0]
+    # Fill nan direction for optimization use
     start_index = 0
     while pd.isna(true_prob[start_index]):
         start_index += 1
@@ -80,6 +86,44 @@ def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
     for index in range(1, true_prob.shape[0]):
         if pd.isna(true_prob[index]):
             true_prob[index] = true_prob[index - 1]
+    true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+    # Construct the dataset
+    if only_necessary and "at_cross" in all_data.columns.values:
+        print("--- Only Necessary ---")
+        at_cross_index = np.where(all_data.at_cross)
+        X = all_data.iloc[at_cross_index]
+        Y = true_prob.iloc[at_cross_index]
+        # print("--- Data Shape {} ---".format(len(at_cross_index[0])))
+    else:
+        X = all_data
+        Y = true_prob
+    return X, Y
+
+
+def readTestingDatasetFromPkl(filename, trial_name = None, only_necessary = False):
+    '''
+    Construct dataset from a .pkl file.
+    :param filename: Filename.
+    :param trial_name: Trial name.
+    :return: 
+    '''
+    # Read data and pre-processing
+    with open(filename, "rb") as file:
+        # file.seek(0) # deal with the error that "could not find MARK"
+        all_data = pickle.load(file)
+    if trial_name is not None: # explicitly indicate the trial
+        all_data = all_data[all_data.file == trial_name]
+    if "level_0" not in all_data.columns.values:
+        all_data = all_data.reset_index()
+    true_prob = all_data.next_pacman_dir_fill
+    # The indeices of data with a direction rather than nan
+    if only_necessary:
+        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float) and x.at_cross
+    else:
+        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float)
+    not_nan_index = np.where(all_data.apply(lambda x: not_nan_indication(x), axis = 1))[0]
+    all_data = all_data.iloc[not_nan_index]
+    true_prob = true_prob.iloc[not_nan_index]
     true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
     # Construct the dataset
     if only_necessary and "at_cross" in all_data.columns.values:
