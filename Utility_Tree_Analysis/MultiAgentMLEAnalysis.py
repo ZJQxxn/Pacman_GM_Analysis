@@ -71,12 +71,6 @@ def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
     if "level_0" not in all_data.columns.values:
         all_data = all_data.reset_index()
     true_prob = all_data.next_pacman_dir_fill
-    # The indeices of data with a direction rather than nan
-    if only_necessary:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float) and x.at_cross
-    else:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float)
-    not_nan_index = np.where(all_data.apply(lambda x: not_nan_indication(x), axis = 1))[0]
     # Fill nan direction for optimization use
     start_index = 0
     while pd.isna(true_prob[start_index]):
@@ -115,12 +109,13 @@ def readTestingDatasetFromPkl(filename, trial_name = None, only_necessary = Fals
         all_data = all_data[all_data.file == trial_name]
     if "level_0" not in all_data.columns.values:
         all_data = all_data.reset_index()
-    true_prob = all_data.next_pacman_dir_fill
+    # true_prob = all_data.next_pacman_dir_fill
+    true_prob = all_data.next_pacman_dir
     # The indeices of data with a direction rather than nan
     if only_necessary:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float) and x.at_cross
+        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir, float) and x.at_cross
     else:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir_fill, float)
+        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir, float)
     not_nan_index = np.where(all_data.apply(lambda x: not_nan_indication(x), axis = 1))[0]
     all_data = all_data.iloc[not_nan_index]
     true_prob = true_prob.iloc[not_nan_index]

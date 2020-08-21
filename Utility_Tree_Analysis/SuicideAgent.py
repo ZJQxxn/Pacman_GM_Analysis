@@ -6,36 +6,86 @@ Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
-    25 July 2020
+    21 Aug. 2020
 '''
 
 import numpy as np
 
 
+import sys
+sys.path.append("./")
+from PathTreeConstructor import PathTree
+
 class SuicideAgent:
 
-    def __init__(self, adjacent_data, adjacent_path, locs_df, cur_pos, ghost_pos, ghost_status, reward_pos, last_dir, random_seed = None):
+    def __init__(self, adjacent_data, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
+                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
         '''
-        Initialization of suicide agent.
-        :param adjacent_data: The adjacent tiles of each tile in the map. Should be a data with the type pf pandas.DataFrame.
-        :param adjacent_path: 
-        :param locs_df: 
-        :param cur_pos: The current position of Pacman, should be a 2-tuple.
-        :param ghost_pos: 
-        :param ghost_status: 4/5 for scared ghosts, 3 for dead ghosts, and others for normal ghosts
-        :param reward_pos: 
-        :param last_dir: The moving direction of the last time step, should be a string from {``left'', ``right'', ``up'',`down''}.
-        :param random_seed: The random seed.
+        Initialization.
+        :param adjacent_data: Map adjacent data (dict).
+        :param locs_df: Locations distance (dict).
+        :param reward_amount: Reward amount (dict).
+        :param root: Pacman position of 2-tuple.
+        :param energizer_data: A list of positions of energizers. Each position should be a 2-tuple.
+        :param bean_data: A list of positions of bens. Each position should be a 2-tuple.
+        :param ghost_data: A list of positions of ghosts. Each position should be a 2-tuple. If no ghost exists, pass np.nan.
+        :param reward_type: The type pf reward (int).
+        :param fruit_pos: The position of fruit. Should be a 2-tuple.
+        :param ghost_status: A list of ghost status. Each status should be either 1(normal) or 4 (scared). If no ghost exists, pass np.nan.
+        :param depth: The maximum depth of tree. 
+        :param ghost_attractive_thr: Ghost attractive threshold.
+        :param ghost_repulsive_thr: Ghost repulsive threshold.
+        :param fruit_attractive_thr: Fruit attractive threshold.
         '''
-        # Initialization
-        np.random.seed(random_seed)
-        self.adjaccent_path = adjacent_path # path from one location to another
-        self.locs_df = locs_df # distance between locations
+        # Parameter type check
+        if not isinstance(cur_pos, tuple):
+            raise TypeError("The root should be a 2-tuple, but got a {}.".format(type(cur_pos)))
+        if not isinstance(depth, int):
+            raise TypeError("The depth should be a integer, but got a {}.".format(type(depth)))
+        if depth <= 0:
+            raise ValueError("The depth should be a positive integer.")
+        # Game status
+        self.reborn_pos = (14, 27)
         self.cur_pos = cur_pos
-        self.ghost_pos = ghost_pos
+        self.cur_pos = cur_pos
+        self.ghost_pos = ghost_data
         self.ghost_status = ghost_status
         self.reward_pos = reward_pos
-        self.reborn_pos = (14, 27) #TODO: specify the reborn position
+        self.last_dir = last_dir
+        self.is_suicide = False
+        # Construct two utility tree with current position and reborn position as the tree root
+        self.cur_pos_tree = PathTree(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            self.cur_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth = depth,
+            ghost_attractive_thr = ghost_attractive_thr,
+            ghost_repulsive_thr = ghost_repulsive_thr,
+            fruit_attractive_thr = fruit_attractive_thr
+        )
+        self.reborn_pos_tree = PathTree(
+            adjacent_data,
+            locs_df,
+            reward_amount,
+            self.reborn_pos,
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            depth=depth,
+            ghost_attractive_thr=ghost_attractive_thr,
+            ghost_repulsive_thr=ghost_repulsive_thr,
+            fruit_attractive_thr = fruit_attractive_thr
+        )
         # Obtain available directions from the current location
         self.adjacent_pos = adjacent_data[self.cur_pos]
         self.available_dir = []
@@ -44,10 +94,15 @@ class SuicideAgent:
                 self.available_dir.append(dir)
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))
-        self.last_dir = last_dir  # moving direction for the last time step
+        # Directions
         self.dir_list = ['left', 'right', 'up', 'down']
-        # opposite direction; to evade from ghosts
         self.opposite_dir = {"left": "right", "right": "left", "up": "down", "down": "up"}
+        # Other pre-computed data
+        self.adjacent_data = adjacent_data
+        self.adjacent_path = adjacent_path
+        self.locs_df = locs_df
+        self.reward_amount = reward_amount
+        self.locs_df = locs_df  # distance between locations
 
 
     def _relativeDir(self, cur_pos, destination):
@@ -70,65 +125,35 @@ class SuicideAgent:
 
 
     def nextDir(self):
-        '''
-        Estimate the moving direction. 
-        :return: The moving direction {`left'', ``right'', ``up'', ``down''}.
-        '''
-        #TODO: if suicide, run to the closest ghost; If evade, run to the opposite directions of ghosts,
-        #TODO: if not avaialble, randomly choose a direction
-        self.is_scared = False
-        self.is_suicide = False
-        # Do not go back
-        if self.last_dir is not None:
-            if self.opposite_dir[self.last_dir] in self.available_dir:
-                self.available_dir.remove(self.opposite_dir[self.last_dir])
-        # If ghosts are scared, degenerate to the random agent
-        if  np.any(np.array(self.ghost_status) in np.array([4, 5])):
-            self.is_scared = True
-            choice = np.random.choice(range(len(self.available_dir)), 1).item()
-            choice = self.available_dir[choice]
-            return choice
-        #Else if ghosts are scared
-        P_G_distance = [] # distance between Pacman and ghosts
-        for each in self.ghost_pos:
-            if each in self.locs_df[self.cur_pos]:
-                P_G_distance.append(self.locs_df[self.cur_pos][each])
-            else:
-                print("Lost path : {} to {}".format(self.cur_pos, each))
-        P_G_distance = np.array(P_G_distance)
-        P_R_distance = [] # distance between Pacman and rewards
-        for each in self.reward_pos:
-            if each in self.locs_df[self.cur_pos]:
-                P_R_distance.append(self.locs_df[self.cur_pos][each])
-            else:
-                print("Lost path : {} to {}".format(self.cur_pos, each))
-        P_R_distance = np.array(P_R_distance)
-        R_R_distance = [] # distance between reborn point and rewards
-        for each in self.reward_pos:
-            if each in self.locs_df[self.reborn_pos]:
-                R_R_distance.append(self.locs_df[self.reborn_pos][each])
-            else:
-                print("Lost path : {} to {}".format(self.reborn_pos, each))
-        R_R_distance = np.array(R_R_distance)
-        # determine whether suicide is better
-        is_suicide_better = [np.all(each < P_R_distance) for each in R_R_distance]
-        closest_ghost_index = np.argmin(P_G_distance)
+        # Construct paths and compute global utilities
+        self.cur_pos_tree, _, _ = self.cur_pos_tree._construct()
+        self.reborn_pos_tree, _, _ = self.reborn_pos_tree._construct()
+        cur_pos_utility = sum([each.cumulative_utility for each in self.cur_pos_tree.leaves])
+        reborn_pos_utility = sum([each.cumulative_utility for each in self.reborn_pos_tree.leaves])
+        is_suicide_better = (reborn_pos_utility > cur_pos_utility)
         # Suicide. Run to ghosts.
-        if True in is_suicide_better:
-            if True in is_suicide_better:
-                self.is_suicide = True
-                if self.cur_pos != self.ghost_pos[closest_ghost_index]:
-                    choice = self._relativeDir(
-                        self.cur_pos,
-                        self.adjaccent_path[
-                            (self.adjaccent_path.pos1 == self.cur_pos) & (self.adjaccent_path.pos2 == self.ghost_pos[
-                                closest_ghost_index])].path.values[0][0][1]
-                    )
-                else: # Pacman meets the ghost
-                    choice = self.last_dir
-                if choice is None:
-                    choice = np.random.choice(range(len(self.available_dir)), 1).item()
-                    choice = self.available_dir[choice]
+        if is_suicide_better:
+            self.is_suicide = True
+            P_G_distance = []  # distance between Pacman and ghosts
+            for each in self.ghost_pos:
+                if each in self.locs_df[self.cur_pos]:
+                    P_G_distance.append(self.locs_df[self.cur_pos][each])
+                else:
+                    print("Lost path : {} to {}".format(self.cur_pos, each))
+            P_G_distance = np.array(P_G_distance)
+            closest_ghost_index = np.argmin(P_G_distance)
+            if self.cur_pos != self.ghost_pos[closest_ghost_index]:
+                choice = self._relativeDir(
+                    self.cur_pos,
+                    self.adjacent_path[
+                        (self.adjacent_path.pos1 == self.cur_pos) & (self.adjacent_path.pos2 == self.ghost_pos[
+                            closest_ghost_index])].path.values[0][0][1]
+                )
+            else:  # Pacman meets the ghost
+                choice = self.last_dir
+            if choice is None:
+                choice = np.random.choice(range(len(self.available_dir)), 1).item()
+                choice = self.available_dir[choice]
         # Evade. Run away to the opposite direction
         elif self.last_dir is not None:
             cur_opposite_dir = self.opposite_dir[self.last_dir]
@@ -137,31 +162,45 @@ class SuicideAgent:
             else:
                 choice = np.random.choice(range(len(self.available_dir)), 1).item()
                 choice = self.available_dir[choice]
+        # Else, random choice
         else:
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
         return choice
 
+
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from TreeAnalysisUtils import readAdjacentMap, readAdjacentPath, readLocDistance
+    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
     adjacent_data = readAdjacentMap("./extracted_data/adjacent_map.csv")
     adjacent_path = readAdjacentPath("./extracted_data/dij_distance_map.csv")
-
+    reward_amount = readRewardAmount()
+    print("Finished reading auxiliary data!")
     # Suicide agent
-    cur_pos = (22, 24)
-    ghost_pos = [(21, 5), (22, 5)]
-    ghost_status = [1, 1]
+    cur_pos = (7, 16)
+    ghost_data = [(21, 5), (22, 5)]
+    ghost_status = [4, 4]
     reward_pos = [(13, 9)]
-    last_dir = "right"
+    energizer_data = [(19, 27)]
+    bean_data = [(20, 27)]
+    reward_type = 3
+    fruit_pos = (22, 27)
+    last_dir = "down"
     agent = SuicideAgent(
-        adjacent_data, adjacent_path, locs_df,
-        cur_pos, ghost_pos, ghost_status, reward_pos, last_dir)
+        adjacent_data, locs_df, reward_amount,
+        cur_pos,
+        energizer_data,
+        bean_data,
+        ghost_data,
+        reward_type,
+        fruit_pos,
+        ghost_status,
+        last_dir,
+        depth = 10, ghost_attractive_thr = 34, ghost_repulsive_thr = 34, fruit_attractive_thr = 34)
     choice= agent.nextDir()
     print("Choice : ", choice)
-    print("Is scared : ", agent.is_scared)
     print("Is suicide : ", agent.is_suicide)
