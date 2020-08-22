@@ -18,7 +18,7 @@ from PathTreeConstructor import PathTree
 
 class SuicideAgent:
 
-    def __init__(self, adjacent_data, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
+    def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
                  depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
         '''
         Initialization.
@@ -50,7 +50,7 @@ class SuicideAgent:
         self.cur_pos = cur_pos
         self.ghost_pos = ghost_data
         self.ghost_status = ghost_status
-        self.reward_pos = reward_pos
+        self.reward_pos = fruit_pos
         self.last_dir = last_dir
         self.is_suicide = False
         # Construct two utility tree with current position and reborn position as the tree root
@@ -136,18 +136,20 @@ class SuicideAgent:
             self.is_suicide = True
             P_G_distance = []  # distance between Pacman and ghosts
             for each in self.ghost_pos:
+                each = tuple(each)
                 if each in self.locs_df[self.cur_pos]:
                     P_G_distance.append(self.locs_df[self.cur_pos][each])
                 else:
                     print("Lost path : {} to {}".format(self.cur_pos, each))
             P_G_distance = np.array(P_G_distance)
             closest_ghost_index = np.argmin(P_G_distance)
-            if self.cur_pos != self.ghost_pos[closest_ghost_index]:
+            if self.cur_pos != tuple(self.ghost_pos[closest_ghost_index]):
                 choice = self._relativeDir(
                     self.cur_pos,
                     self.adjacent_path[
-                        (self.adjacent_path.pos1 == self.cur_pos) & (self.adjacent_path.pos2 == self.ghost_pos[
-                            closest_ghost_index])].path.values[0][0][1]
+                        (self.adjacent_path.pos1 == self.cur_pos) &
+                        (self.adjacent_path.pos2 == tuple(self.ghost_pos[closest_ghost_index]))
+                    ].path.values[0][0][1]
                 )
             else:  # Pacman meets the ghost
                 choice = self.last_dir
@@ -191,7 +193,7 @@ if __name__ == '__main__':
     fruit_pos = (22, 27)
     last_dir = "down"
     agent = SuicideAgent(
-        adjacent_data, locs_df, reward_amount,
+        adjacent_data, adjacent_path, locs_df, reward_amount,
         cur_pos,
         energizer_data,
         bean_data,

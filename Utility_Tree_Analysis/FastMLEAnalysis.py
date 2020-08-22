@@ -22,6 +22,7 @@ from PathTreeConstructor import PathTree, OptimisticAgent, PessimisticAgent
 from LazyAgent import LazyAgent
 from RandomAgent import RandomAgent
 from SuicideAgent import SuicideAgent
+from PlannedHuntingAgent import PlannedHuntingAgent
 from MultiAgentMLEAnalysis import oneHot, makeChoice, readDatasetFromPkl, readTestingDatasetFromPkl
 from MultiAgentMLEAnalysis import plotWeightVariation
 
@@ -68,7 +69,12 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_ghost_attractive_thr = 34
     pessimistic_fruit_attractive_thr = 34
     pessimistic_ghost_repulsive_thr = 12
-    # Configuration (for lazy, random, and suicide agent)
+    # Configuration (for suicide agent)
+    suicide_depth = 15
+    suicide_ghost_attractive_thr = 34
+    suicide_fruit_attractive_thr = 34
+    suicide_ghost_repulsive_thr = 12
+    # Configuration (for lazy, random)
     last_dir = all_data.pacman_dir.values
     last_dir[np.where(pd.isna(last_dir))] = None
     # Estimation
@@ -79,6 +85,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     optimistic_estimation = []
     pessimistic_estimation = []
     suicide_estimation = []
+    planned_hunting_estimation = []
     num_samples = all_data.shape[0]
     print("Sample Num : ", num_samples)
     estimated_index = []
@@ -189,22 +196,37 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
         random_agent = RandomAgent(adjacent_data, cur_pos, last_dir[index], None)
         random_estimation.append(random_agent.nextDir())
         # Suicide agent
-        reward_data = bean_data if bean_data is not None and not isinstance(bean_data, float) else []
-        if not isinstance(energizer_data, float) and energizer_data is not None and not isinstance(energizer_data, float) :
-            reward_data.extend(energizer_data)
-        if not isinstance(fruit_pos, float) and fruit_pos is not None and not isinstance(fruit_pos, float):
-            reward_data.append(fruit_pos)
         suicide_agent = SuicideAgent(
             adjacent_data,
             adjacent_path,
             locs_df,
+            reward_amount,
             cur_pos,
-            [tuple(each) for each in ghost_data],
-            [int(each) for each in ghost_status],
-            reward_data,
-            last_dir[index]
+            energizer_data,
+            bean_data,
+            ghost_data,
+            reward_type,
+            fruit_pos,
+            ghost_status,
+            last_dir[index],
+            depth = suicide_depth,
+            ghost_attractive_thr = suicide_ghost_attractive_thr,
+            ghost_repulsive_thr = suicide_fruit_attractive_thr,
+            fruit_attractive_thr = suicide_ghost_repulsive_thr
         )
         suicide_estimation.append(suicide_agent.nextDir())
+        # Planned hunting agent
+        planned_hunting_agent = PlannedHuntingAgent(
+            adjacent_data,
+            adjacent_path,
+            locs_df,
+            reward_amount,
+            cur_pos,
+            energizer_data,
+            ghost_data,
+            ghost_status
+        )
+        planned_hunting_estimation.append(planned_hunting_agent.nextDir())
     # Assign new columns
     print("Estimation length : ", len(global_estimation))
     print("Data Shape : ", all_data.shape)
@@ -222,10 +244,12 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     all_data["random_estimation"].iloc[estimated_index] = random_estimation
     all_data["suicide_estimation"] = np.tile(np.nan, num_samples)
     all_data["suicide_estimation"].iloc[estimated_index] = suicide_estimation
+    all_data["planned_hunting_estimation"] = np.tile(np.nan, num_samples)
+    all_data["planned_hunting_estimation"].iloc[estimated_index] = planned_hunting_estimation
     print("\n")
     print(all_data[["global_estimation", "local_estimation", "optimistic_estimation",
                     "pessimistic_estimation", "lazy_estimation", "random_estimation",
-                    "suicide_estimation"]].iloc[:5])
+                    "suicide_estimation", "planned_hunting_estimation"]].iloc[:5])
     return all_data
 
 
@@ -235,10 +259,10 @@ def preEstimation():
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        # "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        # "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        # "../common_data/global_data.pkl",
-        # "../common_data/local_data.pkl",
+        "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
+        "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
+        "../common_data/global_data.pkl",
+        "../common_data/local_data.pkl",
         "../common_data/global_testing_data.pkl",
         "../common_data/local_testing_data.pkl"
     ]
@@ -456,7 +480,7 @@ def movingWindowAnalysis(config):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    # preEstimation()
+    preEstimation()
 
 
     # Configurations
@@ -468,7 +492,7 @@ if __name__ == '__main__':
         # Only making decisions when necessary
         "only_necessary": True,
         # Need a intercept term
-        "need_intercept": False, #TODO: intercept; for every direction?
+        "need_intercept": False, # TODO: intercept; for every direction?
         # The number of samples used for estimation: None for using all the data
         "clip_samples": 100,
         # The window size
@@ -481,13 +505,13 @@ if __name__ == '__main__':
         "params": [0.0, 0.0, 0.0, 0.0],
         # Bounds for optimization
         "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
-        # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide".
+        # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide", "planned_hunting".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
         "agents": ["global", "local", "random", "lazy"],
     }
 
     # ============ ESTIMATION =============
-    MEE(config)
+    # MEE(config)
 
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config)
