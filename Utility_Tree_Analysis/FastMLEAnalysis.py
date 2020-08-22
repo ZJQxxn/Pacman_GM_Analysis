@@ -77,7 +77,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     # Configuration (for lazy, random)
     last_dir = all_data.pacman_dir.values
     last_dir[np.where(pd.isna(last_dir))] = None
-    # Estimation
+    # Direction sstimation
     global_estimation = []
     local_estimation = []
     lazy_estimation = []
@@ -86,6 +86,15 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_estimation = []
     suicide_estimation = []
     planned_hunting_estimation = []
+    # Q-value (utility)
+    global_Q = []
+    local_Q = []
+    lazy_Q = []
+    random_Q = []
+    optimistic_Q = []
+    pessimistic_Q = []
+    suicide_Q = []
+    planned_hunting_Q = []
     num_samples = all_data.shape[0]
     print("Sample Num : ", num_samples)
     estimated_index = []
@@ -97,6 +106,14 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
         cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
         # In case the Pacman position does not exists, e.g. (0, 18)
         if cur_pos not in adjacent_data:
+            global_Q.append([0.0, 0.0, 0.0, 0.0])
+            local_Q.append([0.0, 0.0, 0.0, 0.0])
+            optimistic_Q.append([0.0, 0.0, 0.0, 0.0])
+            pessimistic_Q.append([0.0, 0.0, 0.0, 0.0])
+            random_Q.append([0.0, 0.0, 0.0, 0.0])
+            lazy_Q.append([0.0, 0.0, 0.0, 0.0])
+            suicide_Q.append([0.0, 0.0, 0.0, 0.0])
+            planned_hunting_Q.append([0.0, 0.0, 0.0, 0.0])
             continue
         else:
             estimated_index.append(index)
@@ -134,7 +151,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=global_fruit_attractive_thr,
             ghost_repulsive_thr=global_ghost_repulsive_thr
         )
-        global_estimation.append(global_agent.nextDir())
+        global_result = global_agent.nextDir(return_Q=True)
+        global_estimation.append(global_result[0])
+        global_Q.append(global_result[1])
         # Local estimation
         local_agent = PathTree(
             adjacent_data,
@@ -152,7 +171,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=local_fruit_attractive_thr,
             ghost_repulsive_thr=local_ghost_repulsive_thr
         )
-        local_estimation.append(local_agent.nextDir())
+        local_result = local_agent.nextDir(return_Q=True)
+        local_estimation.append(local_result[0])
+        local_Q.append(local_result[1])
         # Optimistic agent
         optimistic_agent = OptimisticAgent(
             adjacent_data,
@@ -170,7 +191,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=optimistic_fruit_attractive_thr,
             ghost_repulsive_thr=optimistic_ghost_repulsive_thr
         )
-        optimistic_estimation.append(optimistic_agent.nextDir())
+        optimistic_result = optimistic_agent.nextDir(return_Q=True)
+        optimistic_estimation.append(optimistic_result[0])
+        optimistic_Q.append(optimistic_result[1])
         # Pessimistic agent
         pessimistic_agent = PessimisticAgent(
             adjacent_data,
@@ -188,13 +211,19 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=pessimistic_fruit_attractive_thr,
             ghost_repulsive_thr=pessimistic_ghost_repulsive_thr
         )
-        pessimistic_estimation.append(pessimistic_agent.nextDir())
+        pessimistic_result = pessimistic_agent.nextDir(return_Q=True)
+        pessimistic_estimation.append(pessimistic_result[0])
+        pessimistic_Q.append(pessimistic_result[1])
         # Lazy agent
         lazy_agent = LazyAgent(adjacent_data, cur_pos, last_dir[index])
-        lazy_estimation.append(lazy_agent.nextDir())
+        lazy_result = lazy_agent.nextDir(return_Q=True)
+        lazy_estimation.append(lazy_result[0])
+        lazy_Q.append(lazy_result[1])
         # Random agent
         random_agent = RandomAgent(adjacent_data, cur_pos, last_dir[index], None)
-        random_estimation.append(random_agent.nextDir())
+        random_result = random_agent.nextDir(return_Q=True)
+        random_estimation.append(random_result[0])
+        random_Q.append(random_result[1])
         # Suicide agent
         suicide_agent = SuicideAgent(
             adjacent_data,
@@ -214,7 +243,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             ghost_repulsive_thr = suicide_fruit_attractive_thr,
             fruit_attractive_thr = suicide_ghost_repulsive_thr
         )
-        suicide_estimation.append(suicide_agent.nextDir())
+        suicide_result = suicide_agent.nextDir(return_Q=True)
+        suicide_estimation.append(suicide_result[0])
+        suicide_Q.append(suicide_result[1])
         # Planned hunting agent
         planned_hunting_agent = PlannedHuntingAgent(
             adjacent_data,
@@ -226,34 +257,68 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             ghost_data,
             ghost_status
         )
-        planned_hunting_estimation.append(planned_hunting_agent.nextDir())
+        planned_hunting_result = planned_hunting_agent.nextDir(return_Q=True)
+        planned_hunting_estimation.append(planned_hunting_result[0])
+        planned_hunting_Q.append(planned_hunting_result[1])
     # Assign new columns
+    # TODO: simplify; directly assign a vector to cells of the pd.DataFrame
     print("Estimation length : ", len(global_estimation))
     print("Data Shape : ", all_data.shape)
     all_data["global_estimation"] = np.tile(np.nan, num_samples)
-    all_data["global_estimation"].iloc[estimated_index] = global_estimation
+    all_data["global_estimation"][estimated_index] = global_estimation
+    all_data["global_Q"] = np.tile(np.nan, num_samples)
+    all_data["global_Q"] = all_data["global_Q"].apply(np.array)
+    all_data["global_Q"] = global_Q
     all_data["local_estimation"] = np.tile(np.nan, num_samples)
-    all_data["local_estimation"].iloc[estimated_index] = local_estimation
+    all_data["local_estimation"][estimated_index] = local_estimation
+    all_data["local_Q"] = np.tile(np.nan, num_samples)
+    all_data["local_Q"] = all_data["local_Q"].apply(np.array)
+    all_data["local_Q"] = local_Q
     all_data["optimistic_estimation"] = np.tile(np.nan, num_samples)
-    all_data["optimistic_estimation"].iloc[estimated_index] = optimistic_estimation
+    all_data["optimistic_estimation"][estimated_index] = optimistic_estimation
+    all_data["optimistic_Q"] = np.tile(np.nan, num_samples)
+    all_data["optimistic_Q"] = all_data["optimistic_Q"].apply(np.array)
+    all_data["optimistic_Q"] = optimistic_Q
     all_data["pessimistic_estimation"] = np.tile(np.nan, num_samples)
-    all_data["pessimistic_estimation"].iloc[estimated_index] = pessimistic_estimation
+    all_data["pessimistic_estimation"][estimated_index] = pessimistic_estimation
+    all_data["pessimistic_Q"] = np.tile(np.nan, num_samples)
+    all_data["pessimistic_Q"] = all_data["pessimistic_Q"].apply(np.array)
+    all_data["pessimistic_Q"] = pessimistic_Q
     all_data["lazy_estimation"] = np.tile(np.nan, num_samples)
-    all_data["lazy_estimation"].iloc[estimated_index] = lazy_estimation
+    all_data["lazy_estimation"][estimated_index] = lazy_estimation
+    all_data["lazy_Q"] = np.tile(np.nan, num_samples)
+    all_data["lazy_Q"] = all_data["lazy_Q"].apply(np.array)
+    all_data["lazy_Q"] = lazy_Q
     all_data["random_estimation"] = np.tile(np.nan, num_samples)
-    all_data["random_estimation"].iloc[estimated_index] = random_estimation
+    all_data["random_estimation"][estimated_index] = random_estimation
+    all_data["random_Q"] = np.tile(np.nan, num_samples)
+    all_data["random_Q"] = all_data["random_Q"].apply(np.array)
+    all_data["random_Q"] = random_Q
     all_data["suicide_estimation"] = np.tile(np.nan, num_samples)
-    all_data["suicide_estimation"].iloc[estimated_index] = suicide_estimation
+    all_data["suicide_estimation"][estimated_index] = suicide_estimation
+    all_data["suicide_Q"] = np.tile(np.nan, num_samples)
+    all_data["suicide_Q"] = all_data["suicide_Q"].apply(np.array)
+    all_data["suicide_Q"] = suicide_Q
     all_data["planned_hunting_estimation"] = np.tile(np.nan, num_samples)
-    all_data["planned_hunting_estimation"].iloc[estimated_index] = planned_hunting_estimation
+    all_data["planned_hunting_estimation"][estimated_index] = planned_hunting_estimation
+    all_data["planned_hunting_Q"] = np.tile(np.nan, num_samples)
+    all_data["planned_hunting_Q"] = all_data["planned_hunting_Q"].apply(np.array)
+    all_data["planned_hunting_Q"] = planned_hunting_Q
     print("\n")
+    print("Direction Estimation :")
     print(all_data[["global_estimation", "local_estimation", "optimistic_estimation",
                     "pessimistic_estimation", "lazy_estimation", "random_estimation",
                     "suicide_estimation", "planned_hunting_estimation"]].iloc[:5])
+    print("\n")
+    print("Q value :")
+    print(all_data[["global_Q", "local_Q", "optimistic_Q",
+                    "pessimistic_Q", "lazy_Q", "random_Q",
+                    "suicide_Q", "planned_hunting_Q"]].iloc[:5])
     return all_data
 
 
 def preEstimation():
+    pd.options.mode.chained_assignment = None
     # Individual Estimation
     print("=" * 15, " Individual Estimation ", "=" * 15)
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
@@ -275,6 +340,7 @@ def preEstimation():
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
         with open("{}-with_estimation.pkl".format(filename), "wb") as file:
             pickle.dump(all_data, file)
+    pd.options.mode.chained_assignment = "warn"
 
 
 # ===================================
@@ -315,6 +381,46 @@ def estimationError(param, loss_func, all_data, true_prob, agents_list, return_t
         return ee
     else:
         return (ee, estimation_prob_trajectory)
+
+
+def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajectory = False):
+    '''
+    Estimate agent weights with utility (Q-value).
+    :param param: 
+    :param all_data: 
+    :param agent_list: 
+    :param return_trajectory: 
+    :return: 
+    '''
+    if 0 == len(agents_list) or None == agents_list:
+        raise ValueError("Undefined agents list!")
+    else:
+        agent_weight = [param[i] for i in range(len(param))]
+    # Compute estimation error
+    nll = 0  # negative log likelihood
+    num_samples = all_data.shape[0]
+    agents_list = ["{}_Q".format(each) for each in agents_list]
+    pre_estimation = all_data[agents_list].values
+    agent_Q_value = np.zeros((num_samples, 4, len(agents_list)))
+    for each_sample in range(num_samples):
+        for each_agent in range(len(agents_list)):
+            agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
+    dir_Q_value = agent_Q_value @ agent_weight
+    # TODO: previous version is incorrrect; the direction should be the real direction.
+    true_dir = true_prob.apply(lambda x: np.argmax(x)).values
+    # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
+    exp_prob = np.exp(dir_Q_value)
+    for each_sample in range(num_samples):
+        # In computing the Q-value, divided-by-zero might exists when normalizing the Q
+        # TODO: fix this in  Q-value computing
+        if np.isnan(dir_Q_value[each_sample][0]):
+            continue
+        log_likelihood = dir_Q_value[each_sample, true_dir[each_sample]] - np.log(np.sum(exp_prob[each_sample]))
+        nll = nll -log_likelihood
+    if not return_trajectory:
+        return nll
+    else:
+        return (nll, dir_Q_value)
 
 
 def MEE(config):
@@ -397,6 +503,83 @@ def MEE(config):
     print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
 
 
+def MLE(config):
+    print("=" * 20, " MLE ", "=" * 20)
+    print("Agent List :", config["agents"])
+    # Load experiment data
+    all_data, true_prob = readDatasetFromPkl(config["data_filename"], only_necessary=config["only_necessary"])
+    feasible_data_index = np.where(
+        all_data["{}_Q".format(config["agents"][0])].apply(lambda x: not isinstance(x, float))
+    )[0]
+    all_data = all_data.iloc[feasible_data_index]
+    true_prob = true_prob.iloc[feasible_data_index]
+    print("Number of samples : ", all_data.shape[0])
+    if "clip_samples" not in config or config["clip_samples"] is None:
+        num_samples = all_data.shape[0]
+    else:
+        num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
+    all_data = all_data.iloc[:num_samples]
+    true_prob = true_prob.iloc[:num_samples]
+    print("Number of used samples : ", all_data.shape[0])
+    # TODO: some bad data; np.nan or np.inf in the Q-value vector
+    # Optimization
+    bounds = config["bounds"]
+    params = config["params"]
+    cons = []  # construct the bounds in the form of constraints
+    for par in range(len(bounds)):
+        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+        cons.append(l)
+        cons.append(u)
+    cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
+    # Notes [Jiaqi Aug. 13]: -- about the lambda function --
+    # params = [0, 0, 0, 0]
+    # func = lambda parameter: func() [WRONG]
+    # func = lambda params: func() [CORRECT]
+    func = lambda params: negativeLikelihood(
+        params,
+        all_data,
+        true_prob,
+        config["agents"],
+        return_trajectory = False
+    )
+    is_success = False
+    retry_num = 0
+    while not is_success and retry_num < config["maximum_try"]:
+        res = scipy.optimize.minimize(
+            func,
+            x0=params,
+            method="SLSQP",
+            bounds=bounds,
+            tol=1e-5,
+            constraints=cons
+        )
+        is_success = res.success
+        if not is_success:
+            retry_num += 1
+            print("Failed, retrying...")
+    print("Initial guess : ", params)
+    print("Estimated Parameter : ", res.x)
+    print(res)
+    # Estimation
+    testing_data, testing_true_prob = readTestingDatasetFromPkl(
+        config["testing_data_filename"],
+        only_necessary=config["only_necessary"])
+    # not_nan_index = [each for each in not_nan_index if ]
+    print("Testing data num : ", testing_data.shape[0])
+    _, estimated_prob = negativeLikelihood(
+        res.x,
+        testing_data,
+        testing_true_prob,
+        config["agents"],
+        return_trajectory = True
+    )
+    true_dir = np.array([np.argmax(each) for each in testing_true_prob])
+    estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    correct_rate = np.sum(estimated_dir == true_dir)
+    print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
+
+
 def movingWindowAnalysis(config):
     print("=" * 20, " Moving Window ", "=" * 20)
     print("Agent List :", config["agents"])
@@ -421,14 +604,23 @@ def movingWindowAnalysis(config):
         cons.append(l)
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
-    func = lambda params: estimationError(
-        params,
-        config["loss-func"],
-        sub_X,
-        sub_Y,
-        config["agents"],
-        return_trajectory=False
-    )
+    if "MEE" == config["method"]:
+        func = lambda params: estimationError(
+            params,
+            config["loss-func"],
+            sub_X,
+            sub_Y,
+            config["agents"],
+            return_trajectory=False
+        )
+    elif "MLE" == config["method"]:
+        func = lambda params: negativeLikelihood(
+            params,
+            sub_X,
+            sub_Y,
+            config["agents"],
+            return_trajectory=False
+        )
     subset_index = np.arange(window, len(Y) - window)
     all_coeff = []
     all_correct_rate = []
@@ -456,14 +648,23 @@ def movingWindowAnalysis(config):
                 retry_num += 1
         all_success.append(is_success)
         # Correct rate
-        _, estimated_prob = estimationError(
-            res.x,
-            config["loss-func"],
-            sub_X,
-            sub_Y,
-            config["agents"],
-            return_trajectory=True
-        )
+        if "MEE" == config["method"]:
+            _, estimated_prob = estimationError(
+                res.x,
+                config["loss-func"],
+                sub_X,
+                sub_Y,
+                config["agents"],
+                return_trajectory = True
+            )
+        elif "MLE" == config["method"]:
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                sub_X,
+                sub_Y,
+                config["agents"],
+                return_trajectory = True
+            )
         estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
         true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
         correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
@@ -474,8 +675,8 @@ def movingWindowAnalysis(config):
     print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
     # Save estimated agent weights
     type = "_".join(config['agents'])
-    np.save("MEE-agent_weight-window{}-{}.npy".format(window, type), all_coeff)
-    np.save("MEE-is_success-window{}-{}.npy".format(window, type), all_success)
+    np.save("{}-agent_weight-window{}-{}.npy".format(config["method"], window, type), all_coeff)
+    np.save("{}-is_success-window{}-{}.npy".format(config["method"], window, type), all_success)
 
 
 if __name__ == '__main__':
@@ -489,12 +690,14 @@ if __name__ == '__main__':
         "data_filename": "../common_data/global_data.pkl-with_estimation.pkl",
         # Testing data filename
         "testing_data_filename": "../common_data/global_testing_data.pkl-with_estimation.pkl",
+        # Method: "MLE" or "MEE"
+        "method": "MEE",
         # Only making decisions when necessary
         "only_necessary": True,
         # Need a intercept term
         "need_intercept": False, # TODO: intercept; for every direction?
         # The number of samples used for estimation: None for using all the data
-        "clip_samples": 100,
+        "clip_samples": None,
         # The window size
         "window": 10,
         # Maximum try of estimation, in case the optimization will fail
@@ -502,19 +705,19 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "params": [0.0, 0.0, 0.0],
         # Bounds for optimization
-        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]],
+        "bounds": [[0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents": ["global", "local", "random", "lazy", "suicide", "planned_hunting"],
+        "agents": ["global", "local", "random"],
     }
 
     # ============ ESTIMATION =============
-    MEE(config)
+    # MEE(config)
+    # MLE(config)
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    movingWindowAnalysis(config)
 
     # ============ PLOTTING =============
     # # Load the log of moving window analysis; log files are created in the analysis

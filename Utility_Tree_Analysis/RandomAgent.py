@@ -33,27 +33,30 @@ class RandomAgent:
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))
         self.last_dir = last_dir  # moving direction for the last time step
-        self.dir_list = ['left', 'right', 'up', 'down']
         # opposite direction; to avoid turn back
         self.opposite_dir = {"left": "right", "right": "left", "up": "down", "down": "up"}
+        # Utility (Q-value) for every direction
+        self.Q_value = [0, 0, 0, 0]
+        # Direction list
+        self.dir_list = ['left', 'right', 'up', 'down']
 
 
-    def nextDir(self):
+    def nextDir(self, return_Q = False):
         '''
         Estimate the moving direction. 
         :return: The moving direction {`left'', ``right'', ``up'', ``down''}.
         '''
-        # If this is the starting of the game, randomly choose a direction among available choices
-        if None == self.last_dir:
-            choice = np.random.choice(range(len(self.available_dir)), 1).item()
-            choice = self.available_dir[choice]
-        # else, stay moving to the same direction until the number of passed crossroads surpasses a threshold (default = 5)
+        choice = np.random.choice(range(len(self.available_dir)), 1).item()
+        choice = self.available_dir[choice]
+        random_Q_value = np.tile(1 / len(self.available_dir), len(self.available_dir))
+        for index, each in enumerate(self.available_dir):
+            self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
+        self.Q_value = np.array(self.Q_value)
+        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        if return_Q:
+            return choice, self.Q_value
         else:
-            # if self.opposite_dir[self.last_dir] in self.available_dir:
-            #     self.available_dir.remove(self.opposite_dir[self.last_dir])
-            choice = np.random.choice(range(len(self.available_dir)), 1).item()
-            choice = self.available_dir[choice]
-        return choice
+            return choice
 
 if __name__ == '__main__':
     import sys
@@ -62,7 +65,6 @@ if __name__ == '__main__':
     adjacent_data = readAdjacentMap("./extracted_data/adjacent_map.csv")
     cur_pos = (22, 24)
     last_dir = "right"
-    loop_count = 1
     agent = RandomAgent(adjacent_data, cur_pos, last_dir)
-    choice = agent.nextDir()
-    print(choice)
+    choice = agent.nextDir(return_Q = True)
+    print("Choice : ", choice)

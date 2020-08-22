@@ -35,15 +35,27 @@ class PlannedHuntingAgent:
         if 0 == len(self.available_dir) or 1 == len(self.available_dir):
             raise ValueError("The position {} has {} adjacent positions.".format(self.cur_pos, len(self.available_dir)))
         self.adjacent_pos = [self.adjacent_pos[each] for each in self.available_dir]
+        # Utility (Q-value) for every direction
+        self.Q_value = [0, 0, 0, 0]
+        # Direction list
+        self.dir_list = ['left', 'right', 'up', 'down']
 
 
-    def nextDir(self):
+    def nextDir(self, return_Q = False):
         # If ghosts are scared or no energizer exists, degenerate to random agent
         if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float):
             # self.is_planned = False
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
-            return choice
+            random_Q_value = np.tile(1 / len(self.available_dir), len(self.available_dir))
+            for index, each in enumerate(self.available_dir):
+                self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
+            self.Q_value = np.array(self.Q_value)
+            self.Q_value = self.Q_value / np.sum(self.Q_value)
+            if return_Q:
+                return choice, self.Q_value
+            else:
+                return choice
         # Else, the Pacman has chances to plan hunting
         P_G_distance = []  # distance between adjacent positions of Pacman and ghosts
         P_E_distance = []  # distance between adjacent positions of Pacman and energizers
@@ -74,7 +86,7 @@ class PlannedHuntingAgent:
         P_G_distance = np.array(P_G_distance)
         P_E_distance = np.array(P_E_distance)
         # compute utility of each adjacent positions (i.e., each moving direction)
-        dir_utility= []
+        available_dir_utility= []
         for adjacent_index in range(len(self.available_dir)):
             temp_utility = 0.0
             temp_P_G_distance = P_G_distance[adjacent_index]
@@ -82,10 +94,23 @@ class PlannedHuntingAgent:
             for P_G in temp_P_G_distance:
                 for P_E in temp_P_E_distance:
                     temp_utility += (P_G - P_E)
-            dir_utility.append(temp_utility)
-        choice = np.argmax(dir_utility).item()
+            available_dir_utility.append(temp_utility)
+        choice = np.argmax(available_dir_utility).item()
         choice = self.available_dir[choice]
-        return choice
+        # Compute Q-value
+        available_dir_utility = np.array(available_dir_utility)
+        if np.all(available_dir_utility == 0):
+            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
+        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(available_dir_utility < 0) \
+            else available_dir_utility
+        for index, each in enumerate(self.available_dir):
+            self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+        self.Q_value = np.array(self.Q_value)
+        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        if return_Q:
+            return choice, self.Q_value
+        else:
+            return choice
 
 
 if __name__ == '__main__':
@@ -116,7 +141,7 @@ if __name__ == '__main__':
         ghost_data,
         ghost_status
     )
-    choice = agent.nextDir()
+    choice = agent.nextDir(return_Q = True)
     print("Position : ", agent.cur_pos)
     print("Available directions : ", agent.available_dir)
     print("Choice : ", choice)

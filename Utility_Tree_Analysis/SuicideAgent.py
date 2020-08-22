@@ -103,6 +103,10 @@ class SuicideAgent:
         self.locs_df = locs_df
         self.reward_amount = reward_amount
         self.locs_df = locs_df  # distance between locations
+        # Utility (Q-value) for every direction
+        self.Q_value = [0, 0, 0, 0]
+        # Direction list
+        self.dir_list = ['left', 'right', 'up', 'down']
 
 
     def _relativeDir(self, cur_pos, destination):
@@ -118,31 +122,33 @@ class SuicideAgent:
             return "left"
         elif cur_pos[1] > destination[1]:
             return "up"
-        elif cur_pos[1] > destination[1]:
+        elif cur_pos[1] < destination[1]:
             return "down"
         else:
             return None
 
 
-    def nextDir(self):
+    def nextDir(self, return_Q = False):
+        # TODO: need reconstruction; this function is a little complicated; simplify
         # Construct paths and compute global utilities
         self.cur_pos_tree, _, _ = self.cur_pos_tree._construct()
         self.reborn_pos_tree, _, _ = self.reborn_pos_tree._construct()
         cur_pos_utility = sum([each.cumulative_utility for each in self.cur_pos_tree.leaves])
         reborn_pos_utility = sum([each.cumulative_utility for each in self.reborn_pos_tree.leaves])
         is_suicide_better = (reborn_pos_utility > cur_pos_utility)
+        # Compute istance between Pacman and ghosts
+        P_G_distance = []  # d
+        for each in self.ghost_pos:
+            each = tuple(each)
+            if each in self.locs_df[self.cur_pos]:
+                P_G_distance.append(self.locs_df[self.cur_pos][each])
+            else:
+                print("Lost path : {} to {}".format(self.cur_pos, each))
+        P_G_distance = np.array(P_G_distance)
+        closest_ghost_index = np.argmin(P_G_distance)
         # Suicide. Run to ghosts.
         if is_suicide_better:
             self.is_suicide = True
-            P_G_distance = []  # distance between Pacman and ghosts
-            for each in self.ghost_pos:
-                each = tuple(each)
-                if each in self.locs_df[self.cur_pos]:
-                    P_G_distance.append(self.locs_df[self.cur_pos][each])
-                else:
-                    print("Lost path : {} to {}".format(self.cur_pos, each))
-            P_G_distance = np.array(P_G_distance)
-            closest_ghost_index = np.argmin(P_G_distance)
             if self.cur_pos != tuple(self.ghost_pos[closest_ghost_index]):
                 choice = self._relativeDir(
                     self.cur_pos,
@@ -151,16 +157,41 @@ class SuicideAgent:
                         (self.adjacent_path.pos2 == tuple(self.ghost_pos[closest_ghost_index]))
                     ].path.values[0][0][1]
                 )
+                # TODO: the escape direction and suicide direction
+                # The escape direction (cur_opposite_dir) should be not the same as the suicide direction (choice)
+                available_wo_suicide_dir = self.available_dir.copy()
+                available_wo_suicide_dir.remove(choice)
+                if self.last_dir is not None and self.opposite_dir[self.last_dir] in available_wo_suicide_dir:
+                    cur_opposite_dir = self.opposite_dir[self.last_dir]
+                else:
+                    cur_opposite_dir = np.random.choice(available_wo_suicide_dir, 1).item()
+                self.Q_value[self.dir_list.index(cur_opposite_dir)] = cur_pos_utility
+                self.Q_value[self.dir_list.index(choice)] = reborn_pos_utility
             else:  # Pacman meets the ghost
                 choice = self.last_dir
+                self.Q_value[self.dir_list.index(self.last_dir)] = 1
             if choice is None:
                 choice = np.random.choice(range(len(self.available_dir)), 1).item()
                 choice = self.available_dir[choice]
+                random_Q_value = np.tile(1 / len(self.available_dir), len(self.available_dir))
+                for index, each in enumerate(self.available_dir):
+                    self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
         # Evade. Run away to the opposite direction
         elif self.last_dir is not None:
             cur_opposite_dir = self.opposite_dir[self.last_dir]
             if cur_opposite_dir in self.available_dir:
                 choice = cur_opposite_dir
+                if self.cur_pos != tuple(self.ghost_pos[closest_ghost_index]):
+                    suicide_direction = self._relativeDir(
+                        self.cur_pos,
+                        self.adjacent_path[
+                            (self.adjacent_path.pos1 == self.cur_pos) &
+                            (self.adjacent_path.pos2 == tuple(self.ghost_pos[closest_ghost_index]))
+                            ].path.values[0][0][1]
+                    )
+                    self.Q_value[self.dir_list.index(suicide_direction)] = reborn_pos_utility
+                self.Q_value[self.dir_list.index(cur_opposite_dir)] = cur_pos_utility
+
             else:
                 choice = np.random.choice(range(len(self.available_dir)), 1).item()
                 choice = self.available_dir[choice]
@@ -168,7 +199,16 @@ class SuicideAgent:
         else:
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
-        return choice
+            random_Q_value = np.tile(1 / len(self.available_dir), len(self.available_dir))
+            for index, each in enumerate(self.available_dir):
+                self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
+        # Normalization
+        self.Q_value = np.array(self.Q_value)
+        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        if return_Q:
+            return choice, self.Q_value
+        else:
+            return choice
 
 
 if __name__ == '__main__':
@@ -203,6 +243,6 @@ if __name__ == '__main__':
         ghost_status,
         last_dir,
         depth = 10, ghost_attractive_thr = 34, ghost_repulsive_thr = 34, fruit_attractive_thr = 34)
-    choice= agent.nextDir()
+    choice= agent.nextDir(return_Q = True)
     print("Choice : ", choice)
     print("Is suicide : ", agent.is_suicide)

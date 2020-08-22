@@ -96,6 +96,10 @@ class PathTree:
         self.existing_bean = bean_data
         self.existing_energizer = energizer_data
         self.existing_fruit = fruit_pos
+        # Utility (Q-value) for every direction
+        self.Q_value = [0, 0, 0, 0]
+        # Direction list
+        self.dir_list = ['left', 'right', 'up', 'down']
 
 
     def _construct(self):
@@ -293,9 +297,23 @@ class PathTree:
         return risk
 
 
-    def nextDir(self):
+    def nextDir(self, return_Q = False):
         _, highest_utility, best_path = self._construct()
-        return best_path[0][1]
+        available_directions = [each.dir_from_parent for each in self.root.children]
+        available_dir_utility = np.array([each.cumulative_utility for each in self.root.children])
+        # When utilities are all 0, randomly choose a direction
+        if np.all(available_dir_utility == 0):
+            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
+        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(available_dir_utility < 0) \
+            else available_dir_utility
+        for index, each in enumerate(available_directions):
+            self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+        self.Q_value = np.array(self.Q_value)
+        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        if return_Q:
+            return best_path[0][1], self.Q_value
+        else:
+            return best_path[0][1]
 
 
 
@@ -371,6 +389,10 @@ class OptimisticAgent:
         self.existing_bean = bean_data
         self.existing_energizer = energizer_data
         self.existing_fruit = fruit_pos
+        # Utility (Q-value) for every direction
+        self.Q_value = [0, 0, 0, 0]
+        # Direction list
+        self.dir_list = ['left', 'right', 'up', 'down']
 
 
     def _construct(self):
@@ -405,9 +427,24 @@ class OptimisticAgent:
         return self.root, highest_utility, best_path
 
 
-    def nextDir(self):
+    def nextDir(self, return_Q = False):
         _, highest_utility, best_path = self._construct()
-        return best_path[0][1]
+        available_directions = [each.dir_from_parent for each in self.root.children]
+        available_dir_utility = np.array([each.cumulative_utility for each in self.root.children])
+        # When utilities are all 0, randomly choose a direction
+        if np.all(available_dir_utility == 0):
+            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
+        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(
+            available_dir_utility < 0) \
+            else available_dir_utility
+        for index, each in enumerate(available_directions):
+            self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+        self.Q_value = np.array(self.Q_value)
+        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        if return_Q:
+            return best_path[0][1], self.Q_value
+        else:
+            return best_path[0][1]
 
 
     def _attachNode(self):
@@ -587,6 +624,10 @@ class PessimisticAgent:
         self.existing_bean = bean_data
         self.existing_energizer = energizer_data
         self.existing_fruit = fruit_pos
+        # Utility (Q-value) for every direction
+        self.Q_value = [0, 0, 0, 0]
+        # Direction list
+        self.dir_list = ['left', 'right', 'up', 'down']
 
 
     def _construct(self):
@@ -621,9 +662,24 @@ class PessimisticAgent:
         return self.root, highest_utility, best_path
 
 
-    def nextDir(self):
+    def nextDir(self, return_Q = False):
         _, highest_utility, best_path = self._construct()
-        return best_path[0][1]
+        available_directions = [each.dir_from_parent for each in self.root.children]
+        available_dir_utility = np.array([each.cumulative_utility for each in self.root.children])
+        # When utilities are all 0, randomly choose a direction
+        if np.all(available_dir_utility == 0):
+            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
+        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(
+            available_dir_utility < 0) \
+            else available_dir_utility
+        for index, each in enumerate(available_directions):
+            self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+        self.Q_value = np.array(self.Q_value)
+        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        if return_Q:
+            return best_path[0][1], self.Q_value
+        else:
+            return best_path[0][1]
 
 
     def _attachNode(self):
@@ -701,3 +757,68 @@ class PessimisticAgent:
         else:
             risk = 0
         return risk
+
+
+
+if __name__ == '__main__':
+    import sys
+    sys.path.append('./')
+    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
+
+    # Read data
+    locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
+    adjacent_data = readAdjacentMap("./extracted_data/adjacent_map.csv")
+    adjacent_path = readAdjacentPath("./extracted_data/dij_distance_map.csv")
+    reward_amount = readRewardAmount()
+    print("Finished reading auxiliary data!")
+
+    cur_pos = (7, 16)
+    ghost_data = [(21, 5), (22, 5)]
+    ghost_status = [4, 4]
+    reward_pos = [(13, 9)]
+    energizer_data = [(19, 27)]
+    bean_data = [(20, 27)]
+    reward_type = 3
+    fruit_pos = (22, 27)
+    agent = PathTree(
+        adjacent_data,
+        locs_df,
+        reward_amount,
+        cur_pos,
+        energizer_data,
+        bean_data,
+        ghost_data,
+        reward_type,
+        fruit_pos,
+        ghost_status
+    )
+    choice = agent.nextDir(return_Q = True)
+    print("Path Tree Q : ", choice)
+    agent = OptimisticAgent(
+        adjacent_data,
+        locs_df,
+        reward_amount,
+        cur_pos,
+        energizer_data,
+        bean_data,
+        ghost_data,
+        reward_type,
+        fruit_pos,
+        ghost_status
+    )
+    choice = agent.nextDir(return_Q=True)
+    print("Optimistic Q : ", choice)
+    agent = PessimisticAgent(
+        adjacent_data,
+        locs_df,
+        reward_amount,
+        cur_pos,
+        energizer_data,
+        bean_data,
+        ghost_data,
+        reward_type,
+        fruit_pos,
+        ghost_status
+    )
+    choice = agent.nextDir(return_Q=True)
+    print("Pessimistic Q : ", choice)
