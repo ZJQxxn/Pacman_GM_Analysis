@@ -480,7 +480,7 @@ def movingWindowAnalysis(config):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    preEstimation()
+    # preEstimation()
 
 
     # Configurations
@@ -502,16 +502,16 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0, 0.0],
+        "params": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         # Bounds for optimization
-        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
+        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide", "planned_hunting".
         # "agents":["global", "local", "random", "lazy", "random", "optimistic", "pessimistic", "suicide"],
-        "agents": ["global", "local", "random", "lazy"],
+        "agents": ["global", "local", "random", "lazy", "suicide", "planned_hunting"],
     }
 
     # ============ ESTIMATION =============
-    # MEE(config)
+    MEE(config)
 
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config)
