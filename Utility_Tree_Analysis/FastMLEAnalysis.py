@@ -718,6 +718,7 @@ if __name__ == '__main__':
 
 
     # Configurations
+    pd.options.mode.chained_assignment = None
     config = {
         # Filename
         "data_filename": "../common_data/local_data.pkl-with_estimation.pkl",
