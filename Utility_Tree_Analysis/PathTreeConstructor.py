@@ -296,20 +296,23 @@ class PathTree:
             risk = 0
         return risk
 
+    def _descendantUtility(self, node):
+        utility = 0.0
+        for each in node.leaves:
+            utility += each.cumulative_utility
+        return utility
 
     def nextDir(self, return_Q = False):
         _, highest_utility, best_path = self._construct()
         available_directions = [each.dir_from_parent for each in self.root.children]
-        available_dir_utility = np.array([each.cumulative_utility for each in self.root.children])
+        available_dir_utility = np.array([self._descendantUtility(each) for each in self.root.children])
         # When utilities are all 0, randomly choose a direction
         if np.all(available_dir_utility == 0):
-            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
-        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(available_dir_utility < 0) \
-            else available_dir_utility
+            available_dir_utility = np.tile(1, len(available_dir_utility))
         for index, each in enumerate(available_directions):
             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
         self.Q_value = np.array(self.Q_value)
-        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        # self.Q_value = self.Q_value / np.sum(self.Q_value)
         if return_Q:
             return best_path[0][1], self.Q_value
         else:
@@ -426,21 +429,24 @@ class OptimisticAgent:
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
         return self.root, highest_utility, best_path
 
+    def _descendantUtility(self, node):
+        utility = 0.0
+        for each in node.leaves:
+            utility += each.cumulative_utility
+        return utility
+
 
     def nextDir(self, return_Q = False):
         _, highest_utility, best_path = self._construct()
         available_directions = [each.dir_from_parent for each in self.root.children]
-        available_dir_utility = np.array([each.cumulative_utility for each in self.root.children])
+        available_dir_utility = np.array([self._descendantUtility(each) for each in self.root.children])
         # When utilities are all 0, randomly choose a direction
         if np.all(available_dir_utility == 0):
-            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
-        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(
-            available_dir_utility < 0) \
-            else available_dir_utility
+            available_dir_utility = np.tile(1, len(available_dir_utility))
         for index, each in enumerate(available_directions):
             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
         self.Q_value = np.array(self.Q_value)
-        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        # self.Q_value = self.Q_value / np.sum(self.Q_value)
         if return_Q:
             return best_path[0][1], self.Q_value
         else:
@@ -661,21 +667,24 @@ class PessimisticAgent:
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
         return self.root, highest_utility, best_path
 
+    def _descendantUtility(self, node):
+        utility = 0.0
+        for each in node.leaves:
+            utility += each.cumulative_utility
+        return utility
+
 
     def nextDir(self, return_Q = False):
         _, highest_utility, best_path = self._construct()
         available_directions = [each.dir_from_parent for each in self.root.children]
-        available_dir_utility = np.array([each.cumulative_utility for each in self.root.children])
+        available_dir_utility = np.array([self._descendantUtility(each) for each in self.root.children])
         # When utilities are all 0, randomly choose a direction
         if np.all(available_dir_utility == 0):
-            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
-        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(
-            available_dir_utility < 0) \
-            else available_dir_utility
+            available_dir_utility = np.tile(1, len(available_dir_utility))
         for index, each in enumerate(available_directions):
             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
         self.Q_value = np.array(self.Q_value)
-        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        # self.Q_value = self.Q_value / np.sum(self.Q_value)
         if return_Q:
             return best_path[0][1], self.Q_value
         else:

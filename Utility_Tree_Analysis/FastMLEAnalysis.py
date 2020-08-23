@@ -346,8 +346,32 @@ def preEstimation():
 # ===================================
 #         FAST OPTIMIZATION
 # ===================================
-def correctRate(estimation, true_prob):
-    pass
+def _preProcessingQ(Q_value):
+    '''
+    Preprocessing for Q-value, including convert negative utility to non-negative, set utilities of unavailable 
+    directions to -inf, and normalize utilities.
+    :param Q_value: 
+    :return: 
+    '''
+    num_samples = Q_value.shape[0]
+    temp_Q = []
+    # Convert negative to non-negative
+    for index in range(num_samples):
+        cur_Q = Q_value.iloc[index]
+        if np.any(cur_Q < 0):
+            available_index = np.where(cur_Q != 0)
+            Q_value.iloc[index][available_index] = Q_value.iloc[index][available_index] + np.min(Q_value.iloc[index][available_index])
+        temp_Q.extend(Q_value.iloc[index])
+    # Normalizing
+    normalizing_factor = np.nanmax(temp_Q)
+    normalizing_factor = 1 if 0 == normalizing_factor else normalizing_factor
+    # Set unavailable directions
+    for index in range(num_samples):
+        cur_Q = Q_value.iloc[index]
+        unavailable_index = np.where(cur_Q == 0)
+        Q_value.iloc[index] = Q_value.iloc[index] / normalizing_factor
+        Q_value.iloc[index][unavailable_index] = -999
+    return (normalizing_factor, Q_value)
 
 
 def estimationError(param, loss_func, all_data, true_prob, agents_list, return_trajectory = False):
@@ -406,9 +430,8 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
         for each_agent in range(len(agents_list)):
             agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
     dir_Q_value = agent_Q_value @ agent_weight
-    # TODO: previous version is incorrrect; the direction should be the real direction.
-    true_dir = true_prob.apply(lambda x: np.argmax(x)).values
-    # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
+    # true_dir = true_prob.apply(lambda x: np.argmax(x)).values
+    true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
     exp_prob = np.exp(dir_Q_value)
     for each_sample in range(num_samples):
         # In computing the Q-value, divided-by-zero might exists when normalizing the Q
@@ -482,7 +505,7 @@ def MEE(config):
             print("Failed, retrying...")
     print("Initial guess : ", params)
     print("Estimated Parameter : ", res.x)
-    print(res)
+    print("Message : ", res.message)
     # Estimation
     testing_data, testing_true_prob = readTestingDatasetFromPkl(
         config["testing_data_filename"],
@@ -498,7 +521,8 @@ def MEE(config):
         return_trajectory = True
     )
     true_dir = np.array([np.argmax(each) for each in testing_true_prob])
-    estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
 
@@ -520,7 +544,14 @@ def MLE(config):
         num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
     all_data = all_data.iloc[:num_samples]
     true_prob = true_prob.iloc[:num_samples]
+    # pre-processing of Q-value
+    agent_normalizing_factors = []
+    for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
+        preprocessing_res = _preProcessingQ(all_data[agent_name])
+        agent_normalizing_factors.append(preprocessing_res[0])
+        all_data[agent_name] = preprocessing_res[1]
     print("Number of used samples : ", all_data.shape[0])
+    print("Agent Normalizing Factors : ", agent_normalizing_factors)
     # TODO: some bad data; np.nan or np.inf in the Q-value vector
     # Optimization
     bounds = config["bounds"]
@@ -560,7 +591,7 @@ def MLE(config):
             print("Failed, retrying...")
     print("Initial guess : ", params)
     print("Estimated Parameter : ", res.x)
-    print(res)
+    print("Message : ", res.message)
     # Estimation
     testing_data, testing_true_prob = readTestingDatasetFromPkl(
         config["testing_data_filename"],
@@ -575,7 +606,8 @@ def MLE(config):
         return_trajectory = True
     )
     true_dir = np.array([np.argmax(each) for each in testing_true_prob])
-    estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
 
@@ -665,7 +697,8 @@ def movingWindowAnalysis(config):
                 config["agents"],
                 return_trajectory = True
             )
-        estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+        # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+        estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
         true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
         correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
         all_correct_rate.append(correct_rate)
@@ -687,9 +720,9 @@ if __name__ == '__main__':
     # Configurations
     config = {
         # Filename
-        "data_filename": "../common_data/global_data.pkl-with_estimation.pkl",
+        "data_filename": "../common_data/local_data.pkl-with_estimation.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/global_testing_data.pkl-with_estimation.pkl",
+        "testing_data_filename": "../common_data/local_testing_data.pkl-with_estimation.pkl",
         # Method: "MLE" or "MEE"
         "method": "MEE",
         # Only making decisions when necessary
@@ -705,19 +738,19 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0],
+        "params": [0.0, 0.0, 0.0, 0.0],
         # Bounds for optimization
-        "bounds": [[0, 1], [0, 1], [0, 1]],
+        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["global", "local", "random"],
+        "agents": ["global", "local", "random", "pessimistic"]
     }
 
     # ============ ESTIMATION =============
-    # MEE(config)
-    # MLE(config)
+    MEE(config)
+    MLE(config)
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config)
+    # movingWindowAnalysis(config)
 
     # ============ PLOTTING =============
     # # Load the log of moving window analysis; log files are created in the analysis

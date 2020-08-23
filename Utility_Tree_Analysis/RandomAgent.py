@@ -48,11 +48,11 @@ class RandomAgent:
         '''
         choice = np.random.choice(range(len(self.available_dir)), 1).item()
         choice = self.available_dir[choice]
-        random_Q_value = np.tile(1 / len(self.available_dir), len(self.available_dir))
+        random_Q_value = np.tile(1, len(self.available_dir))
         for index, each in enumerate(self.available_dir):
             self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
         self.Q_value = np.array(self.Q_value)
-        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        # self.Q_value = self.Q_value / np.sum(self.Q_value)
         if return_Q:
             return choice, self.Q_value
         else:

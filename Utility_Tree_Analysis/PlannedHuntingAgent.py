@@ -47,11 +47,11 @@ class PlannedHuntingAgent:
             # self.is_planned = False
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
-            random_Q_value = np.tile(1 / len(self.available_dir), len(self.available_dir))
+            random_Q_value = np.tile(1, len(self.available_dir))
             for index, each in enumerate(self.available_dir):
                 self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
             self.Q_value = np.array(self.Q_value)
-            self.Q_value = self.Q_value / np.sum(self.Q_value)
+            # self.Q_value = self.Q_value / np.sum(self.Q_value)
             if return_Q:
                 return choice, self.Q_value
             else:
@@ -100,13 +100,11 @@ class PlannedHuntingAgent:
         # Compute Q-value
         available_dir_utility = np.array(available_dir_utility)
         if np.all(available_dir_utility == 0):
-            available_dir_utility = np.tile(1 / len(available_dir_utility), len(available_dir_utility))
-        available_dir_utility = available_dir_utility + np.min(available_dir_utility) if np.any(available_dir_utility < 0) \
-            else available_dir_utility
+            available_dir_utility = np.tile(1, len(available_dir_utility))
         for index, each in enumerate(self.available_dir):
             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
         self.Q_value = np.array(self.Q_value)
-        self.Q_value = self.Q_value / np.sum(self.Q_value)
+        # self.Q_value = self.Q_value / np.sum(self.Q_value)
         if return_Q:
             return choice, self.Q_value
         else:
