@@ -355,22 +355,25 @@ def _preProcessingQ(Q_value):
     '''
     num_samples = Q_value.shape[0]
     temp_Q = []
+    unavailable_index = []
     # Convert negative to non-negative
     for index in range(num_samples):
         cur_Q = Q_value.iloc[index]
+        unavailable_index.append(np.where(cur_Q == 0))
         if np.any(cur_Q < 0):
             available_index = np.where(cur_Q != 0)
-            Q_value.iloc[index][available_index] = Q_value.iloc[index][available_index] + np.min(Q_value.iloc[index][available_index])
+            Q_value.iloc[index][available_index] = Q_value.iloc[index][available_index] - np.min(Q_value.iloc[index][available_index]) + 1
         temp_Q.extend(Q_value.iloc[index])
     # Normalizing
     normalizing_factor = np.nanmax(temp_Q)
     normalizing_factor = 1 if 0 == normalizing_factor else normalizing_factor
     # Set unavailable directions
-    for index in range(num_samples):
-        cur_Q = Q_value.iloc[index]
-        unavailable_index = np.where(cur_Q == 0)
-        Q_value.iloc[index] = Q_value.iloc[index] / normalizing_factor
-        Q_value.iloc[index][unavailable_index] = -999
+    for index_ in range(num_samples):
+        # cur_Q = Q_value.iloc[index]
+        # unavailable_index = np.where(cur_Q == 0)
+        Q_value.iloc[index_] = Q_value.iloc[index] / normalizing_factor
+        # Q_value.iloc[index_][unavailable_index[index_]] = -999
+        Q_value.iloc[index_][unavailable_index[index_]] = 0
     return (normalizing_factor, Q_value)
 
 
@@ -721,9 +724,9 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/local_data.pkl-with_estimation.pkl",
+        "data_filename": "../common_data/global_data.pkl-with_estimation.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/local_testing_data.pkl-with_estimation.pkl",
+        "testing_data_filename": "../common_data/global_testing_data.pkl-with_estimation.pkl",
         # Method: "MLE" or "MEE"
         "method": "MEE",
         # Only making decisions when necessary
@@ -739,15 +742,15 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0, 0.0],
+        "params": [0.0, 0.0, 0.0],
         # Bounds for optimization
-        "bounds": [[0, 1], [0, 1], [0, 1], [0, 1]],
+        "bounds": [[0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["global", "local", "random", "pessimistic"]
+        "agents": ["global", "local", "random"],
     }
 
     # ============ ESTIMATION =============
-    MEE(config)
+    # MEE(config)
     MLE(config)
 
     # ============ MOVING WINDOW =============
