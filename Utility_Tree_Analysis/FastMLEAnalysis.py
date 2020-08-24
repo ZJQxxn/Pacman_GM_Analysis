@@ -356,14 +356,19 @@ def _preProcessingQ(Q_value):
     num_samples = Q_value.shape[0]
     temp_Q = []
     unavailable_index = []
+    available_index = []
     # Convert negative to non-negative
     for index in range(num_samples):
         cur_Q = Q_value.iloc[index]
         unavailable_index.append(np.where(cur_Q == 0))
-        if np.any(cur_Q < 0):
-            available_index = np.where(cur_Q != 0)
-            Q_value.iloc[index][available_index] = Q_value.iloc[index][available_index] - np.min(Q_value.iloc[index][available_index]) + 1
+        available_index.append(np.where(cur_Q != 0))
         temp_Q.extend(Q_value.iloc[index])
+    # Convert  negative to non-negative
+    offset = 0.0
+    if np.any(np.array(temp_Q) < 0):
+        offset = np.min(temp_Q)
+    for index in range(num_samples):
+        Q_value.iloc[index][available_index[index]] = Q_value.iloc[index][available_index[index]] - offset + 1
     # Normalizing
     normalizing_factor = np.nanmax(temp_Q)
     normalizing_factor = 1 if 0 == normalizing_factor else normalizing_factor
@@ -374,7 +379,7 @@ def _preProcessingQ(Q_value):
         Q_value.iloc[index] = Q_value.iloc[index] / normalizing_factor
         # Q_value.iloc[index_][unavailable_index[index_]] = -999
         Q_value.iloc[index][unavailable_index[index]] = 0
-    return (normalizing_factor, Q_value)
+    return (offset, normalizing_factor, Q_value)
 
 
 def estimationError(param, loss_func, all_data, true_prob, agents_list, return_trajectory = False):
@@ -433,8 +438,8 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
         for each_agent in range(len(agents_list)):
             agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
     dir_Q_value = agent_Q_value @ agent_weight
-    # true_dir = true_prob.apply(lambda x: np.argmax(x)).values
-    true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
+    true_dir = true_prob.apply(lambda x: makeChoice(x)).values
+    # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
     exp_prob = np.exp(dir_Q_value)
     for each_sample in range(num_samples):
         # In computing the Q-value, divided-by-zero might exists when normalizing the Q
@@ -549,12 +554,15 @@ def MLE(config):
     true_prob = true_prob.iloc[:num_samples]
     # pre-processing of Q-value
     agent_normalizing_factors = []
+    agent_offset = []
     for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
         preprocessing_res = _preProcessingQ(all_data[agent_name])
-        agent_normalizing_factors.append(preprocessing_res[0])
-        all_data[agent_name] = preprocessing_res[1]
+        agent_offset.append(preprocessing_res[0])
+        agent_normalizing_factors.append(preprocessing_res[1])
+        all_data[agent_name] = preprocessing_res[2]
     print("Number of used samples : ", all_data.shape[0])
     print("Agent Normalizing Factors : ", agent_normalizing_factors)
+    print("Agent Offset : ", agent_offset)
     # TODO: some bad data; np.nan or np.inf in the Q-value vector
     # Optimization
     bounds = config["bounds"]
@@ -730,7 +738,7 @@ if __name__ == '__main__':
         # Testing data filename
         "testing_data_filename": "../common_data/global_testing_data.pkl-with_estimation.pkl",
         # Method: "MLE" or "MEE"
-        "method": "MEE",
+        "method": "MLE",
         # Only making decisions when necessary
         "only_necessary": True,
         # The number of samples used for estimation: None for using all the data
@@ -742,7 +750,7 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [0.0, 0.0, 0.0],
+        "params": [1, 1, 1],
         # Bounds for optimization
         "bounds": [[0, 1], [0, 1], [0, 1]],
         # Agents: at least one of "global", "local", "lazy", "random", "optimistic", "pessimistic", "suicide", "planned_hunting".
