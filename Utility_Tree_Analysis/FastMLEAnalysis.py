@@ -368,12 +368,12 @@ def _preProcessingQ(Q_value):
     normalizing_factor = np.nanmax(temp_Q)
     normalizing_factor = 1 if 0 == normalizing_factor else normalizing_factor
     # Set unavailable directions
-    for index_ in range(num_samples):
+    for index in range(num_samples):
         # cur_Q = Q_value.iloc[index]
         # unavailable_index = np.where(cur_Q == 0)
-        Q_value.iloc[index_] = Q_value.iloc[index] / normalizing_factor
+        Q_value.iloc[index] = Q_value.iloc[index] / normalizing_factor
         # Q_value.iloc[index_][unavailable_index[index_]] = -999
-        Q_value.iloc[index_][unavailable_index[index_]] = 0
+        Q_value.iloc[index][unavailable_index[index]] = 0
     return (normalizing_factor, Q_value)
 
 
@@ -566,6 +566,7 @@ def MLE(config):
         cons.append(l)
         cons.append(u)
     cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
+
     # Notes [Jiaqi Aug. 13]: -- about the lambda function --
     # params = [0, 0, 0, 0]
     # func = lambda parameter: func() [WRONG]
@@ -584,9 +585,9 @@ def MLE(config):
             func,
             x0=params,
             method="SLSQP",
-            bounds=bounds,
+            # bounds=bounds, # exclude bounds and cons because the Q-value has different scales for different agents
             tol=1e-5,
-            constraints=cons
+            # constraints=cons
         )
         is_success = res.success
         if not is_success:
@@ -594,6 +595,7 @@ def MLE(config):
             print("Failed, retrying...")
     print("Initial guess : ", params)
     print("Estimated Parameter : ", res.x)
+    print("Normalized Parameter (res / sum(res)): ", res.x / np.sum(res.x))
     print("Message : ", res.message)
     # Estimation
     testing_data, testing_true_prob = readTestingDatasetFromPkl(
@@ -731,8 +733,6 @@ if __name__ == '__main__':
         "method": "MEE",
         # Only making decisions when necessary
         "only_necessary": True,
-        # Need a intercept term
-        "need_intercept": False, # TODO: intercept; for every direction?
         # The number of samples used for estimation: None for using all the data
         "clip_samples": None,
         # The window size

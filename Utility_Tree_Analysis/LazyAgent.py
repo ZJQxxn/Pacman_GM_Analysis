@@ -53,6 +53,10 @@ class LazyAgent:
         if self.last_dir is not None and self.last_dir in self.available_dir:
             choice = self.last_dir
             self.Q_value[self.dir_list.index(choice)] = 1
+            for each in self.available_dir:
+                if each != self.last_dir:
+                    # set to 1 because all the 0 will be considered as unavailable directions
+                    self.Q_value[self.dir_list.index(each)] = -1
         else:
             choice = np.random.choice(range(len(self.available_dir)), 1).item()
             choice = self.available_dir[choice]
