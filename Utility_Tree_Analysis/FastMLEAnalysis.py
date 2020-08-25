@@ -834,11 +834,11 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [1, 1, 1, 1],
+        "params": [1, 1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
+        "bounds": [[0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["global", "local", "pessimistic", "planned_hunting"],
+        "agents": ["global", "local", "pessimistic"],
     }
 
     # ============ ESTIMATION =============
