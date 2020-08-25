@@ -7,6 +7,9 @@ Author:
 
 Date:
     Apr. 30 2020
+    
+Update History:
+    25 Aug. 2020: Set (14, 16) and (15, 16) to be a wall in common_data/map_info_brian.csv; reconstruct map adjacent_map.csv
 '''
 
 
@@ -781,14 +784,14 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
 
-    cur_pos = (7, 16)
-    ghost_data = [(21, 5), (22, 5)]
-    ghost_status = [4, 4]
+    cur_pos = (19, 21)
+    ghost_data = [(17, 15), (15, 15)]
+    ghost_status = [1, 2]
     reward_pos = [(13, 9)]
-    energizer_data = [(19, 27)]
-    bean_data = [(20, 27)]
-    reward_type = 3
-    fruit_pos = (22, 27)
+    energizer_data = [(2,5)]
+    bean_data = [(18, 5), (20, 5), (21, 5), (22, 5), (27, 5), (27, 6), (22, 7), (27, 7), (27, 9), (27, 10), (22, 12), (24, 12)]
+    reward_type = 4
+    fruit_pos = (21, 9)
     agent = PathTree(
         adjacent_data,
         locs_df,
@@ -799,7 +802,12 @@ if __name__ == '__main__':
         ghost_data,
         reward_type,
         fruit_pos,
-        ghost_status
+        ghost_status,
+        15,
+        5,
+        34,
+        34,
+        34
     )
     choice = agent.nextDir(return_Q = True)
     print("Path Tree Q : ", choice)

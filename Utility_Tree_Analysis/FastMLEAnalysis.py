@@ -34,7 +34,6 @@ def _readData(filename):
         # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
     all_data = all_data.reset_index()
-
     return all_data
 
 

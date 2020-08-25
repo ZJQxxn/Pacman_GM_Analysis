@@ -160,7 +160,8 @@ class SuicideAgent:
                 # TODO: the escape direction and suicide direction
                 # The escape direction (cur_opposite_dir) should be not the same as the suicide direction (choice)
                 available_wo_suicide_dir = self.available_dir.copy()
-                available_wo_suicide_dir.remove(choice)
+                if choice in available_wo_suicide_dir:
+                    available_wo_suicide_dir.remove(choice)
                 if self.last_dir is not None and self.opposite_dir[self.last_dir] in available_wo_suicide_dir:
                     cur_opposite_dir = self.opposite_dir[self.last_dir]
                 else:
