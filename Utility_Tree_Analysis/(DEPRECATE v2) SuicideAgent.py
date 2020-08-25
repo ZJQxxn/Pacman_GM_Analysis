@@ -14,12 +14,12 @@ import numpy as np
 
 import sys
 sys.path.append("./")
-from PathTreeAgent import PathTree
+from PathTreeConstructor import PathTree
 
 class SuicideAgent:
 
     def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
-                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10, randomness_coeff = 1.0, laziness_offset = 10.0):
+                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10):
         '''
         Initialization.
         :param adjacent_data: Map adjacent data (dict).
@@ -65,7 +65,6 @@ class SuicideAgent:
             reward_type,
             fruit_pos,
             ghost_status,
-            last_dir,
             depth = depth,
             ghost_attractive_thr = ghost_attractive_thr,
             ghost_repulsive_thr = ghost_repulsive_thr,
@@ -82,7 +81,6 @@ class SuicideAgent:
             reward_type,
             fruit_pos,
             ghost_status,
-            last_dir,
             depth=depth,
             ghost_attractive_thr=ghost_attractive_thr,
             ghost_repulsive_thr=ghost_repulsive_thr,
@@ -109,11 +107,6 @@ class SuicideAgent:
         self.Q_value = [0, 0, 0, 0]
         # Direction list
         self.dir_list = ['left', 'right', 'up', 'down']
-        # For randomness
-        self.randomness_coeff = randomness_coeff
-        self.is_random = False
-        # For laziness
-        self.laziness_offset = laziness_offset
 
 
     def _relativeDir(self, cur_pos, destination):
@@ -136,77 +129,83 @@ class SuicideAgent:
 
 
     def nextDir(self, return_Q = False):
+        # TODO: need reconstruction; this function is a little complicated; simplify
         # Construct paths and compute global utilities
         self.cur_pos_tree, _, _ = self.cur_pos_tree._construct()
         self.reborn_pos_tree, _, _ = self.reborn_pos_tree._construct()
         cur_pos_utility = sum([each.cumulative_utility for each in self.cur_pos_tree.leaves])
         reborn_pos_utility = sum([each.cumulative_utility for each in self.reborn_pos_tree.leaves])
-        self.is_suicide_better = (reborn_pos_utility > cur_pos_utility)
-        # Compute distance between Pacman and ghosts
-        P_G_distance = []
+        is_suicide_better = (reborn_pos_utility > cur_pos_utility)
+        # Compute istance between Pacman and ghosts
+        P_G_distance = []  # d
         for each in self.ghost_pos:
             each = tuple(each)
             if each in self.locs_df[self.cur_pos]:
                 P_G_distance.append(self.locs_df[self.cur_pos][each])
             else:
-                P_G_distance.append(0.0)
                 print("Lost path : {} to {}".format(self.cur_pos, each))
         P_G_distance = np.array(P_G_distance)
-        # Determine the suicide direction and escape direction
-        if self.cur_pos != tuple(self.ghost_pos[0]) and self.cur_pos != tuple(self.ghost_pos[1]):
-            # The suicide direction: relative direction to all the ghosts
-            suicide_direction = [
-                self._relativeDir(
+        closest_ghost_index = np.argmin(P_G_distance)
+        # Suicide. Run to ghosts.
+        if is_suicide_better:
+            self.is_suicide = True
+            if self.cur_pos != tuple(self.ghost_pos[closest_ghost_index]):
+                choice = self._relativeDir(
                     self.cur_pos,
                     self.adjacent_path[
                         (self.adjacent_path.pos1 == self.cur_pos) &
-                        (self.adjacent_path.pos2 == tuple(self.ghost_pos[index]))
-                        ].path.values[0][0][1]
+                        (self.adjacent_path.pos2 == tuple(self.ghost_pos[closest_ghost_index]))
+                    ].path.values[0][0][1]
                 )
-                for index in range(2)
-            ]
-        # Pacman meets ghosts: can not be caught at the beginning, so doesn't have to consider last_dir == None
-        else:
-            suicide_direction = []
-            for index in range(2):
-                if self.cur_pos == tuple(self.ghost_pos[index]) and self.last_dir in self.available_dir:
-                    suicide_direction.append(self.last_dir)
-                elif self.cur_pos == tuple(self.ghost_pos[index]) and self.last_dir not in self.available_dir:
-                    suicide_direction.append(np.random.choice(self.available_dir, 1).item())
+                # TODO: the escape direction and suicide direction
+                # The escape direction (cur_opposite_dir) should be not the same as the suicide direction (choice)
+                available_wo_suicide_dir = self.available_dir.copy()
+                if choice in available_wo_suicide_dir:
+                    available_wo_suicide_dir.remove(choice)
+                if self.last_dir is not None and self.opposite_dir[self.last_dir] in available_wo_suicide_dir:
+                    cur_opposite_dir = self.opposite_dir[self.last_dir]
                 else:
-                    suicide_direction.append(self._relativeDir(
-                                        self.cur_pos,
-                                        self.adjacent_path[
-                                            (self.adjacent_path.pos1 == self.cur_pos) &
-                                            (self.adjacent_path.pos2 == tuple(self.ghost_pos[index]))
-                                        ].path.values[0][0][1])
+                    cur_opposite_dir = np.random.choice(available_wo_suicide_dir, 1).item()
+                self.Q_value[self.dir_list.index(cur_opposite_dir)] = cur_pos_utility
+                self.Q_value[self.dir_list.index(choice)] = reborn_pos_utility
+            else:  # Pacman meets the ghost
+                choice = self.last_dir
+                self.Q_value[self.dir_list.index(self.last_dir)] = 1
+            if choice is None:
+                choice = np.random.choice(range(len(self.available_dir)), 1).item()
+                choice = self.available_dir[choice]
+                random_Q_value = np.tile(1, len(self.available_dir))
+                for index, each in enumerate(self.available_dir):
+                    self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
+        # Evade. Run away to the opposite direction
+        elif self.last_dir is not None:
+            cur_opposite_dir = self.opposite_dir[self.last_dir]
+            if cur_opposite_dir in self.available_dir:
+                choice = cur_opposite_dir
+                if self.cur_pos != tuple(self.ghost_pos[closest_ghost_index]):
+                    suicide_direction = self._relativeDir(
+                        self.cur_pos,
+                        self.adjacent_path[
+                            (self.adjacent_path.pos1 == self.cur_pos) &
+                            (self.adjacent_path.pos2 == tuple(self.ghost_pos[closest_ghost_index]))
+                            ].path.values[0][0][1]
                     )
-        # The escape direction: directions other than the suicide direction
-        escape_dir = self.available_dir.copy()
-        for each in suicide_direction:
-            if each in escape_dir:
-                escape_dir.remove(each)
-        # Assign utilities for escape directions
-        for each in escape_dir:
-            self.Q_value[self.dir_list.index(each)] = cur_pos_utility
-        # Assign utilities for suicide directions:
-        # If relative directions w.r.t. two ghosts are the same, no need to normalize the utility.
-        if suicide_direction[0] == suicide_direction[1]:
-            self.Q_value[self.dir_list.index(suicide_direction[0])] = reborn_pos_utility
-        # Else, normalize the utility based on their distance, a closer ghost might have a larger utility
+                    self.Q_value[self.dir_list.index(suicide_direction)] = reborn_pos_utility
+                self.Q_value[self.dir_list.index(cur_opposite_dir)] = cur_pos_utility
+
+            else:
+                choice = np.random.choice(range(len(self.available_dir)), 1).item()
+                choice = self.available_dir[choice]
+        # Else, random choice
         else:
-            PG_normalizing_factor = P_G_distance / np.sum(P_G_distance) if np.sum(P_G_distance) != 0 else np.array([1.0, 1.0])
-            PG_normalizing_factor = PG_normalizing_factor[::-1]
-            for index, each in enumerate(suicide_direction):
-                self.Q_value[self.dir_list.index(each)] = reborn_pos_utility * PG_normalizing_factor[index]
-        # Add randomness and laziness
+            choice = np.random.choice(range(len(self.available_dir)), 1).item()
+            choice = self.available_dir[choice]
+            random_Q_value = np.tile(1, len(self.available_dir))
+            for index, each in enumerate(self.available_dir):
+                self.Q_value[self.dir_list.index(each)] = random_Q_value[index]
+        # Normalization
         self.Q_value = np.array(self.Q_value)
-        available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
-        self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
-        if self.last_dir in self.available_dir:
-            self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
-        choice = np.argmax(self.Q_value[available_directions_index])
-        choice = self.available_dir[choice]
+        # self.Q_value = self.Q_value / np.sum(self.Q_value)
         if return_Q:
             return choice, self.Q_value
         else:
@@ -244,9 +243,7 @@ if __name__ == '__main__':
         fruit_pos,
         ghost_status,
         last_dir,
-        depth = 10, ghost_attractive_thr = 34, ghost_repulsive_thr = 34, fruit_attractive_thr = 34,
-        randomness_coeff = 1.0, laziness_offset = 10.0
-    )
+        depth = 10, ghost_attractive_thr = 34, ghost_repulsive_thr = 34, fruit_attractive_thr = 34)
     choice= agent.nextDir(return_Q = True)
     print("Choice : ", choice)
     print("Is suicide : ", agent.is_suicide)
