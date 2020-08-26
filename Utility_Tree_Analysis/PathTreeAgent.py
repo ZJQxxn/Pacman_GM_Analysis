@@ -114,6 +114,8 @@ class PathTree:
         # For randomness and laziness
         self.randomness_coeff = randomness_coeff
         self.laziness_offset = laziness_offset
+        # Pacman is eaten? If so, the path will be ended
+        self.is_eaten = False
 
 
     def _construct(self):
@@ -149,6 +151,8 @@ class PathTree:
         highest_utility = best_leaf.cumulative_utility
         best_path = best_leaf.ancestors
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
+        if best_path == []: # only one step is taken
+            best_path = [(best_leaf.name, best_leaf.dir_from_parent)]
         return self.root, highest_utility, best_path
 
 
@@ -172,7 +176,11 @@ class PathTree:
                     cur_risk = 0.0
                 else:
                     cur_reward = self._computeReward(cur_pos)
-                    cur_risk = self._computeRisk(cur_pos)
+                    # if the position is visited before, do not add up the risk to cumulative
+                    if cur_pos in [each.name for each in self.current_node.path]:
+                        cur_risk = 0.0
+                    else:
+                        cur_risk = self._computeRisk(cur_pos)
                 # Construct the new node
                 new_node = anytree.Node(
                         cur_pos,
@@ -185,7 +193,11 @@ class PathTree:
                         cur_risk = cur_risk,
                         cumulative_risk = self.current_node.cumulative_risk + cur_risk
                         )
-                self.node_queue.append(new_node)
+                # If the Pacman is eaten, end this path
+                if self.is_eaten:
+                    self.is_eaten = False
+                else:
+                    self.node_queue.append(new_node)
 
 
     def _computeReward(self, cur_position):
@@ -267,33 +279,26 @@ class PathTree:
         # Compute ghost risk when ghosts are normal
         ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
         ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
-        if 1 == ifscared1 or 1 == ifscared2: # ghosts are normal; use "or" for dealing with dead ghosts
+        if ifscared1 <= 2 or ifscared2 <= 2: # ghosts are normal; use "or" for dealing with dead ghosts
             if 3 == ifscared1:
                 # Pacman is eaten
                 if cur_position == self.ghost_data[1]:
-                    risk = -self.reward_amount[8]
-                    self.ghost_data[1] = ()
-                    self.ghost_status[1] = 3
+                    risk = -self.reward_amount[9]
+                    self.is_eaten = True
                     return risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
             elif 3 == ifscared2:
                 # Pacman is eaten
                 if cur_position == self.ghost_data[0]:
-                    risk = -self.reward_amount[8]
-                    self.ghost_data[0] = ()
-                    self.ghost_status[0] = 3
+                    risk = -self.reward_amount[9]
+                    self.is_eaten = True
                     return risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
             else:
                 # Pacman is eaten
                 if cur_position == self.ghost_data[0] or cur_position == self.ghost_data[1]:
-                    if cur_position == self.ghost_data[0]:
-                        self.ghost_data[0] = ()
-                        self.ghost_status[0] = 3
-                    else:
-                        self.ghost_data[1] = ()
-                        self.ghost_status[1] = 3
-                    risk = -self.reward_amount[8]
+                    risk = -self.reward_amount[9]
+                    self.is_eaten = True
                     return risk
                 # Potential risk
                 else:
@@ -302,7 +307,7 @@ class PathTree:
                         self.locs_df[cur_position][self.ghost_data[1]]
                     )
             if ghost_dist < self.ghost_repulsive_thr:
-                risk = -self.reward_amount[8] * 1 / ghost_dist
+                risk = -self.reward_amount[9] * 1 / ghost_dist #TODO: [8] or [9] ?
             else:
                 risk = 0
         # Ghosts are not scared
@@ -351,16 +356,20 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
 
-    cur_pos = (19, 21)
-    ghost_data = [(17, 15), (15, 15)]
-    ghost_status = [1, 2]
-    reward_pos = [(13, 9)]
-    energizer_data = [(2,5)]
-    bean_data = [(18, 5), (20, 5), (21, 5), (22, 5), (27, 5), (27, 6), (22, 7),
-                 (27, 7), (27, 9), (27, 10), (22, 12), (24, 12)]
-    reward_type = 4
-    fruit_pos = (21, 9)
-    last_dir = "down"
+    cur_pos = (13, 27)
+    ghost_data = [(14, 17), (14, 18)]
+    ghost_status = [1, 1]
+    energizer_data = [(22,6)]
+    bean_data = [(22, 5), (23, 5), (24, 5), (26, 5), (27, 6), (16, 7), (22, 8), (17, 9), (19, 9), (22, 9), (23, 9),
+                 (24, 9), (27, 9), (19, 10), (22, 10), (19, 11), (19, 12), (22, 12), (23, 12), (25, 12), (22, 15),
+                 (1, 18), (5, 18), (6, 18), (22, 18), (23, 18), (26, 18), (27, 18), (22, 19), (27, 25), (2, 26), (27, 26),
+                 (2, 27), (27, 30), (27, 31), (3, 33), (8, 33), (19, 33), (20, 33), (22, 33), (23, 33), (27, 33), (22, 6),
+                 (27, 32)]
+    reward_type = 6
+    fruit_pos = (19, 23)
+    last_dir = "left"
+
+    # Global agent
     agent = PathTree(
         adjacent_data,
         locs_df,
@@ -382,7 +391,29 @@ if __name__ == '__main__':
     choice = agent.nextDir(return_Q = True)
     print("Global Agent Q : ", choice)
 
-    # Optimistic
+    # Local agent
+    agent = PathTree(
+        adjacent_data,
+        locs_df,
+        reward_amount,
+        cur_pos,
+        energizer_data,
+        bean_data,
+        ghost_data,
+        reward_type,
+        fruit_pos,
+        ghost_status,
+        last_dir,
+        5,
+        0,
+        5,
+        5,
+        5
+    )
+    choice = agent.nextDir(return_Q=True)
+    print("Local Agent Q : ", choice)
+
+    # Optimistice
     agent = PathTree(
         adjacent_data,
         locs_df,

@@ -48,29 +48,89 @@ class PlannedHuntingAgent:
         self.laziness_offset = laziness_offset
 
 
+    # def nextDir(self, return_Q = False):
+    #     # If ghosts are scared or no energizer exists, degenerate to random agent
+    #     if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float):
+    #         self.Q_value = np.array([0.0, 0.0, 0.0, 0.0])
+    #     # Else, has chance to plan hunting
+    #     else:
+    #         P_G_distance = []  # distance between adjacent positions of Pacman and ghosts
+    #         P_E_distance = []  # distance between adjacent positions of Pacman and energizers
+    #         for each_adjacent_pos in self.adjacent_pos:
+    #             temp_P_G_distance = []
+    #             temp_P_E_distance = []
+    #             # ghost distance
+    #             for index, each_ghost_pos in enumerate(self.ghost_data):
+    #                 each_ghost_pos = tuple(each_ghost_pos)
+    #                 if 3 == self.ghost_status[index]:  # in case one ghost is dead
+    #                     continue
+    #                 if each_ghost_pos in self.locs_df[each_adjacent_pos]:
+    #                     temp_P_G_distance.append(self.locs_df[each_adjacent_pos][each_ghost_pos])
+    #                 elif each_ghost_pos == each_adjacent_pos:
+    #                     temp_P_G_distance.append(1.0)
+    #                 else:
+    #                     print("Lost path : {} to {}".format(each_adjacent_pos, each_ghost_pos))
+    #             P_G_distance.append(temp_P_G_distance)
+    #             # energizer distance
+    #             for each_energizer_pos in self.energizer_data:
+    #                 if each_energizer_pos in self.locs_df[each_adjacent_pos]:
+    #                     temp_P_E_distance.append(self.locs_df[each_adjacent_pos][each_energizer_pos])
+    #                 elif each_energizer_pos == each_adjacent_pos:
+    #                     temp_P_E_distance.append(1.0)
+    #                 else:
+    #                     print("Lost path : {} to {}".format(each_adjacent_pos, each_energizer_pos))
+    #             P_E_distance.append(temp_P_E_distance)
+    #         P_G_distance = np.array(P_G_distance)
+    #         P_E_distance = np.array(P_E_distance)
+    #         # Compute utility of each adjacent positions (i.e., each moving direction)
+    #         available_dir_utility = []
+    #         for adjacent_index in range(len(self.available_dir)):
+    #             temp_utility = 0.0
+    #             temp_P_G_distance = P_G_distance[adjacent_index]
+    #             temp_P_E_distance = P_E_distance[adjacent_index]
+    #             for P_G in temp_P_G_distance:
+    #                 for P_E in temp_P_E_distance:
+    #                     temp_utility += (P_G - P_E)
+    #             # temp_utility = temp_utility / (len(temp_P_E_distance) * len(temp_P_G_distance))
+    #             available_dir_utility.append(temp_utility)
+    #         available_dir_utility = np.array(available_dir_utility)
+    #         for index, each in enumerate(self.available_dir):
+    #             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+    #         self.Q_value = np.array(self.Q_value)
+    #     # Add randomness and laziness
+    #     self.Q_value = np.array(self.Q_value)
+    #     available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
+    #     self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
+    #     if self.last_dir in self.available_dir:
+    #         self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
+    #     choice = np.argmax(self.Q_value[available_directions_index])
+    #     choice = self.available_dir[choice]
+    #     if return_Q:
+    #         return choice, self.Q_value
+    #     else:
+    #         return choice
+
     def nextDir(self, return_Q = False):
         # If ghosts are scared or no energizer exists, degenerate to random agent
-        if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float):
+        if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float) or self.energizer_data == []:
             self.Q_value = np.array([0.0, 0.0, 0.0, 0.0])
         # Else, has chance to plan hunting
         else:
-            P_G_distance = []  # distance between adjacent positions of Pacman and ghosts
-            P_E_distance = []  # distance between adjacent positions of Pacman and energizers
-            for each_adjacent_pos in self.adjacent_pos:
-                temp_P_G_distance = []
-                temp_P_E_distance = []
-                # ghost distance
-                for index, each_ghost_pos in enumerate(self.ghost_data):
-                    each_ghost_pos = tuple(each_ghost_pos)
-                    if 3 == self.ghost_status[index]:  # in case one ghost is dead
-                        continue
-                    if each_ghost_pos in self.locs_df[each_adjacent_pos]:
-                        temp_P_G_distance.append(self.locs_df[each_adjacent_pos][each_ghost_pos])
-                    elif each_ghost_pos == each_adjacent_pos:
-                        temp_P_G_distance.append(1.0)
+            # Compute the distance between energizers and ghosts
+            E_G_distance = [] # (# of energizers, # of ghosts)
+            for each_energizer in self.energizer_data:
+                temp_E_G_distance = []
+                for each_ghost in self.ghost_data:
+                    if tuple(each_ghost) != each_energizer:
+                        temp_E_G_distance.append(self.locs_df[each_energizer][tuple(each_ghost)])
                     else:
-                        print("Lost path : {} to {}".format(each_adjacent_pos, each_ghost_pos))
-                P_G_distance.append(temp_P_G_distance)
+                        temp_E_G_distance.append(0.0)
+                E_G_distance.append(temp_E_G_distance)
+            E_G_distance = np.array(E_G_distance)
+            # Compute the distance between adjacent positions of Pacman and energizers
+            P_E_distance = [] # (# of adjacent positions, # of energizers)
+            for each_adjacent_pos in self.adjacent_pos:
+                temp_P_E_distance = []
                 # energizer distance
                 for each_energizer_pos in self.energizer_data:
                     if each_energizer_pos in self.locs_df[each_adjacent_pos]:
@@ -80,17 +140,21 @@ class PlannedHuntingAgent:
                     else:
                         print("Lost path : {} to {}".format(each_adjacent_pos, each_energizer_pos))
                 P_E_distance.append(temp_P_E_distance)
-            P_G_distance = np.array(P_G_distance)
             P_E_distance = np.array(P_E_distance)
+            # distance for closest energizer and closest ghost
+            closest_energizer_index = np.argmin(P_E_distance, axis = 1) # closest energizer index for every adjacent position
+            closest_P_E_distance = []
+            for index, each in enumerate(closest_energizer_index):
+                closest_P_E_distance.append(P_E_distance[index][each])
+            closest_E_G_distance = []
+            for index, each in enumerate(closest_energizer_index):
+                closest_E_G_distance.append(np.min(E_G_distance[each]))
             # Compute utility of each adjacent positions (i.e., each moving direction)
             available_dir_utility = []
             for adjacent_index in range(len(self.available_dir)):
-                temp_utility = 0.0
-                temp_P_G_distance = P_G_distance[adjacent_index]
-                temp_P_E_distance = P_E_distance[adjacent_index]
-                for P_G in temp_P_G_distance:
-                    for P_E in temp_P_E_distance:
-                        temp_utility += (P_G - P_E)
+                P_E = closest_P_E_distance[adjacent_index]
+                E_G = closest_E_G_distance[adjacent_index]
+                temp_utility = (E_G - P_E) # pacman is closer to energizer compared with ghost
                 # temp_utility = temp_utility / (len(temp_P_E_distance) * len(temp_P_G_distance))
                 available_dir_utility.append(temp_utility)
             available_dir_utility = np.array(available_dir_utility)
@@ -98,12 +162,9 @@ class PlannedHuntingAgent:
                 self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
             self.Q_value = np.array(self.Q_value)
         # Add randomness and laziness
-        self.Q_value = np.array(self.Q_value)
+        self.Q_value = np.array(self.Q_value, dtype = np.float32)
         available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
-        try:
-            self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
-        except:
-            print()
+        self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
         if self.last_dir in self.available_dir:
             self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
         choice = np.argmax(self.Q_value[available_directions_index])
@@ -130,7 +191,7 @@ if __name__ == '__main__':
     cur_pos = (7, 16)
     ghost_data = [(21, 5), (22, 5)]
     ghost_status = [1, 1]
-    energizer_data = [(19, 27)]
+    energizer_data = [(19, 27), (19, 28)]
     last_dir = "up"
     agent = PlannedHuntingAgent(
         adjacent_data,

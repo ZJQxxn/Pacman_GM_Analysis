@@ -69,14 +69,15 @@ def readRewardAmount():
     :return: A dictionary denoting the reward amount of each type of reward.
     '''
     reward_amount = {
-        1:1, # bean
-        2:10, # energizer
+        1:2, # bean
+        2:4, # energizer
         3:3, # cherry
         4:5, # strawberry
         5:8, # orange
         6:12, # apple
         7:17, # melon
-        8:10 # ghost
+        8:8, # ghost
+        9:20 # eaten by ghost
     }
     return reward_amount
 

@@ -127,6 +127,15 @@ def makeChoice(prob):
     return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
 
+def scaleOfNumber(num):
+    '''
+    Obtain the scale of a number.
+    :param num: The number
+    :return: 
+    '''
+    order = len(str(num).split(".")[0])
+    return 10**(order - 1)
+
 # ===================================
 #       INDIVIDUAL ESTIMATION
 # ===================================
@@ -421,7 +430,7 @@ def preEstimation():
 # ===================================
 #         FAST OPTIMIZATION
 # ===================================
-def _preProcessingQ(Q_value, randomness_coeff = 1.0, laziness_offset = 10.0):
+def _preProcessingQ(Q_value, randomness_coeff = 1.0):
     '''
     Preprocessing for Q-value, including convert negative utility to non-negative, set utilities of unavailable 
     directions to -inf, and normalize utilities.
@@ -436,10 +445,12 @@ def _preProcessingQ(Q_value, randomness_coeff = 1.0, laziness_offset = 10.0):
         cur_Q = Q_value.iloc[index]
         unavailable_index.append(np.where(cur_Q == 0))
         available_index.append(np.where(cur_Q != 0))
-        # Add randomness and laziness
-        Q_value.iloc[index][available_index[index]] = Q_value.iloc[index][available_index[index]] \
-                                            + randomness_coeff * np.random.normal(size = len(available_index[index])) \
-                                            + laziness_offset
+        # Add randomness and lazines
+        Q_value.iloc[index][available_index[index]] = (
+            Q_value.iloc[index][available_index[index]]
+            + randomness_coeff * np.random.normal(size = len(available_index[index])) # randomness
+            + scaleOfNumber(np.max(np.abs(cur_Q))) # laziness
+        )
         temp_Q.extend(Q_value.iloc[index])
     # Convert  negative to non-negative
     offset = 0.0
@@ -520,27 +531,22 @@ def MLE(config):
     agent_normalizing_factors = []
     agent_offset = []
     for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-        preprocessing_res = _preProcessingQ(all_data[agent_name], randomness_coeff = 1.0, laziness_offset = 10.0)
+        preprocessing_res = _preProcessingQ(all_data[agent_name], randomness_coeff = 1.0)
         agent_offset.append(preprocessing_res[0])
         agent_normalizing_factors.append(preprocessing_res[1])
         all_data[agent_name] = preprocessing_res[2]
     print("Number of used samples : ", all_data.shape[0])
     print("Agent Normalizing Factors : ", agent_normalizing_factors)
     print("Agent Offset : ", agent_offset)
-    # TODO: some bad data; np.nan or np.inf in the Q-value vector
     # Optimization
     bounds = config["bounds"]
     params = config["params"]
     cons = []  # construct the bounds in the form of constraints
-    # for par in range(len(bounds)):
-    #     l = {'type': 'ineq', 'fun': lambda x: x[par] - 0.0}
-    #     cons.append(l)
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    # cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
 
     # Notes [Jiaqi Aug. 13]: -- about the lambda function --
     # params = [0, 0, 0, 0]
@@ -590,6 +596,97 @@ def MLE(config):
     estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
+
+
+def movingWindowAnalysis(config, save_res = True):
+    print("=" * 20, " Moving Window ", "=" * 20)
+    print("Agent List :", config["agents"])
+    window = config["window"]
+    # Load experiment data
+    X, Y = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])
+    print("Number of samples : ", X.shape[0])
+    if "clip_samples" not in config or config["clip_samples"] is None:
+        num_samples = X.shape[0]
+    else:
+        num_samples = X.shape[0] if config["clip_samples"] > X.shape[0] else config["clip_samples"]
+    X = X.iloc[:num_samples]
+    Y = Y.iloc[:num_samples]
+    # pre-processing of Q-value
+    agent_normalizing_factors = []
+    agent_offset = []
+    for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
+        preprocessing_res = _preProcessingQ(X[agent_name], randomness_coeff=1.0)
+        agent_offset.append(preprocessing_res[0])
+        agent_normalizing_factors.append(preprocessing_res[1])
+        X[agent_name] = preprocessing_res[2]
+    print("Number of used samples : ", X.shape[0])
+    print("Agent Normalizing Factors : ", agent_normalizing_factors)
+    print("Agent Offset : ", agent_offset)
+    print("Number of used samples : ", X.shape[0])
+    # Construct optimizer
+    bounds = config["bounds"]
+    params = config["params"]
+    cons = []  # construct the bounds in the form of constraints
+    for par in range(len(bounds)):
+        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+        cons.append(l)
+        cons.append(u)
+    func = lambda params: negativeLikelihood(
+        params,
+        sub_X,
+        sub_Y,
+        config["agents"],
+        return_trajectory=False
+    )
+    subset_index = np.arange(window, len(Y) - window)
+    all_coeff = []
+    all_correct_rate = []
+    all_success = []
+    # Moving the window
+    for index in subset_index:
+        print("Window at {}...".format(index))
+        sub_X = X[index - window:index + window]
+        sub_Y = Y[index - window:index + window]
+        # optimization in the window
+        is_success = False
+        retry_num = 0
+        while not is_success and retry_num < config["maximum_try"]:
+            res = scipy.optimize.minimize(
+                func,
+                x0 = params,
+                method="SLSQP",
+                bounds=bounds,
+                tol=1e-5,
+                constraints = cons
+            )
+            is_success = res.success
+            if not is_success:
+                print("Fail, retrying...")
+                retry_num += 1
+        all_success.append(is_success)
+        # Correct rate
+        _, estimated_prob = negativeLikelihood(
+            res.x,
+            sub_X,
+            sub_Y,
+            config["agents"],
+            return_trajectory = True
+        )
+        # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+        estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
+        true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+        correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+        all_correct_rate.append(correct_rate)
+        # The coefficient
+        all_coeff.append(res.x)
+    print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
+    print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
+    # Save estimated agent weights
+    if save_res:
+        type = "_".join(config['agents'])
+        np.save("{}-agent_weight-window{}-{}.npy".format(config["method"], window, type), all_coeff)
+        np.save("{}-is_success-window{}-{}.npy".format(config["method"], window, type), all_success)
 
 
 # ================================================================================================
@@ -706,104 +803,6 @@ def MEE(config):
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
 
-def movingWindowAnalysis(config):
-    print("=" * 20, " Moving Window ", "=" * 20)
-    print("Agent List :", config["agents"])
-    window = config["window"]
-    # Load experiment data
-    X, Y = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])
-    print("Number of samples : ", X.shape[0])
-    if "clip_samples" not in config or config["clip_samples"] is None:
-        num_samples = X.shape[0]
-    else:
-        num_samples = X.shape[0] if config["clip_samples"] > X.shape[0] else config["clip_samples"]
-    X = X.iloc[:num_samples]
-    Y = Y.iloc[:num_samples]
-    print("Number of used samples : ", X.shape[0])
-    # Construct optimizer
-    bounds = config["bounds"]
-    params = config["params"]
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
-    if "MEE" == config["method"]:
-        func = lambda params: estimationError(
-            params,
-            config["loss-func"],
-            sub_X,
-            sub_Y,
-            config["agents"],
-            return_trajectory=False
-        )
-    elif "MLE" == config["method"]:
-        func = lambda params: negativeLikelihood(
-            params,
-            sub_X,
-            sub_Y,
-            config["agents"],
-            return_trajectory=False
-        )
-    subset_index = np.arange(window, len(Y) - window)
-    all_coeff = []
-    all_correct_rate = []
-    all_success = []
-    # Moving the window
-    for index in subset_index:
-        print("Window at {}...".format(index))
-        sub_X = X[index - window:index + window]
-        sub_Y = Y[index - window:index + window]
-        # optimization in the window
-        is_success = False
-        retry_num = 0
-        while not is_success and retry_num < config["maximum_try"]:
-            res = scipy.optimize.minimize(
-                func,
-                x0 = params,
-                method="SLSQP",
-                bounds=bounds,
-                tol=1e-5,
-                constraints = cons
-            )
-            is_success = res.success
-            if not is_success:
-                print("Fail, retrying...")
-                retry_num += 1
-        all_success.append(is_success)
-        # Correct rate
-        if "MEE" == config["method"]:
-            _, estimated_prob = estimationError(
-                res.x,
-                config["loss-func"],
-                sub_X,
-                sub_Y,
-                config["agents"],
-                return_trajectory = True
-            )
-        elif "MLE" == config["method"]:
-            _, estimated_prob = negativeLikelihood(
-                res.x,
-                sub_X,
-                sub_Y,
-                config["agents"],
-                return_trajectory = True
-            )
-        # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-        estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
-        true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
-        correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-        all_correct_rate.append(correct_rate)
-        # The coefficient
-        all_coeff.append(res.x)
-    print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
-    print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
-    # Save estimated agent weights
-    type = "_".join(config['agents'])
-    np.save("{}-agent_weight-window{}-{}.npy".format(config["method"], window, type), all_coeff)
-    np.save("{}-is_success-window{}-{}.npy".format(config["method"], window, type), all_success)
 # ================================================================================================
 
 
@@ -818,9 +817,9 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/local_data.pkl-with_estimation.pkl",
+        "data_filename": "../common_data/local_data.pkl-new_agent.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/local_testing_data.pkl-with_estimation.pkl",
+        "testing_data_filename": "../common_data/local_testing_data.pkl-new_agent.pkl",
         # Method: "MLE" or "MEE"
         "method": "MLE",
         # Only making decisions when necessary
@@ -834,19 +833,18 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [1, 1, 1],
+        "params": [1, 1, 1, 1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
+        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["global", "local", "pessimistic"],
+        "agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
     }
 
     # ============ ESTIMATION =============
-    # MEE(config)
     MLE(config)
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    # movingWindowAnalysis(config, save_res = False)
 
     # ============ PLOTTING =============
     # # Load the log of moving window analysis; log files are created in the analysis
