@@ -109,3 +109,14 @@ def indicateFunc(x, y):
     return int(x == y)
 
 
+def scaleOfNumber(num):
+    '''
+    Obtain the scale of a number.
+    :param num: The number
+    :return: 
+    '''
+    order = len(str(num).split(".")[0])
+    return 10**(order - 1)
+
+
+

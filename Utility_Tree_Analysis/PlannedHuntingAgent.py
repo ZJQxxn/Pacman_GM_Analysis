@@ -14,11 +14,13 @@ Date:
 import numpy as np
 import sys
 sys.path.append("./")
+from TreeAnalysisUtils import scaleOfNumber
+
 
 class PlannedHuntingAgent:
 
     def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, ghost_data, ghost_status, last_dir,
-                 randomness_coeff = 1.0, laziness_offset = 10.0):
+                 randomness_coeff = 1.0, laziness_coeff = 1.0):
         # Game status (energizer)
         self.cur_pos = cur_pos
         self.energizer_data = energizer_data
@@ -45,7 +47,7 @@ class PlannedHuntingAgent:
         self.dir_list = ['left', 'right', 'up', 'down']
         # For randomness and laziness
         self.randomness_coeff = randomness_coeff
-        self.laziness_offset = laziness_offset
+        self.laziness_coeff = laziness_coeff
 
 
     # def nextDir(self, return_Q = False):
@@ -147,26 +149,33 @@ class PlannedHuntingAgent:
             for index, each in enumerate(closest_energizer_index):
                 closest_P_E_distance.append(P_E_distance[index][each])
             closest_E_G_distance = []
-            for index, each in enumerate(closest_energizer_index):
+            for each in closest_energizer_index:
                 closest_E_G_distance.append(np.min(E_G_distance[each]))
             # Compute utility of each adjacent positions (i.e., each moving direction)
             available_dir_utility = []
             for adjacent_index in range(len(self.available_dir)):
                 P_E = closest_P_E_distance[adjacent_index]
+                P_E = 1 if 0 == P_E else P_E
                 E_G = closest_E_G_distance[adjacent_index]
-                temp_utility = (E_G - P_E) # pacman is closer to energizer compared with ghost
-                # temp_utility = temp_utility / (len(temp_P_E_distance) * len(temp_P_G_distance))
+                E_G = 1 if 0 == E_G else E_G
+                # temp_utility = (E_G - P_E) # pacman is closer to energizer compared with ghost
+                temp_utility = (
+                    self.reward_amount[2] / P_E # reward for energizer
+                    + self.reward_amount[8] / E_G # reward for ghost
+                    + self.reward_amount[9] * (E_G - P_E) # risk for being eaten by ghost #TODO: this term is too large
+                )
                 available_dir_utility.append(temp_utility)
             available_dir_utility = np.array(available_dir_utility)
             for index, each in enumerate(self.available_dir):
                 self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
             self.Q_value = np.array(self.Q_value)
-        # Add randomness and laziness
         self.Q_value = np.array(self.Q_value, dtype = np.float32)
         available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
+        self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
+        # Add randomness and laziness
         self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
-        if self.last_dir in self.available_dir:
-            self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
+        if self.last_dir is not None and self.dir_list.index(self.last_dir) in available_directions_index:
+            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * scaleOfNumber(np.max(np.abs(self.Q_value))))
         choice = np.argmax(self.Q_value[available_directions_index])
         choice = self.available_dir[choice]
         if return_Q:
@@ -204,7 +213,7 @@ if __name__ == '__main__':
         ghost_status,
         last_dir,
         randomness_coeff = 1.0,
-        laziness_offset = 10.0
+        laziness_coeff = 1.0
     )
     choice = agent.nextDir(return_Q = True)
     print("Position : ", agent.cur_pos)

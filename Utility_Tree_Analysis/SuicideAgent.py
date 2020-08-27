@@ -15,11 +15,13 @@ import numpy as np
 import sys
 sys.path.append("./")
 from PathTreeAgent import PathTree
+from TreeAnalysisUtils import scaleOfNumber
+
 
 class SuicideAgent:
 
     def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
-                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10, randomness_coeff = 1.0, laziness_offset = 10.0):
+                 depth = 10, ghost_attractive_thr = 34,ghost_repulsive_thr = 10,  fruit_attractive_thr = 10, randomness_coeff = 1.0, laziness_coeff = 1.0):
         '''
         Initialization.
         :param adjacent_data: Map adjacent data (dict).
@@ -113,7 +115,7 @@ class SuicideAgent:
         self.randomness_coeff = randomness_coeff
         self.is_random = False
         # For laziness
-        self.laziness_offset = laziness_offset
+        self.laziness_coeff = laziness_coeff
 
 
     def _relativeDir(self, cur_pos, destination):
@@ -135,14 +137,23 @@ class SuicideAgent:
             return None
 
 
+    def _descendantUtility(self, node):
+        utility = 0.0
+        for each in node.leaves:
+            utility += each.cumulative_utility
+        return utility
+
+
     def nextDir(self, return_Q = False):
         # Construct paths and compute global utilities
         self.cur_pos_tree, _, _ = self.cur_pos_tree._construct()
         self.reborn_pos_tree, _, _ = self.reborn_pos_tree._construct()
-        cur_pos_utility = sum([each.cumulative_utility for each in self.cur_pos_tree.leaves])
-        reborn_pos_utility = sum([each.cumulative_utility for each in self.reborn_pos_tree.leaves])
-        self.is_suicide_better = (reborn_pos_utility > cur_pos_utility)
-        # Compute distance between Pacman and ghosts
+        cur_pos_utility = {each.dir_from_parent : self._descendantUtility(each) for each in self.cur_pos_tree.children}
+        reborn_pos_utility = np.max(
+            [self._descendantUtility(each) for each in self.reborn_pos_tree.children]
+        )
+        self.is_suicide_better = np.all(reborn_pos_utility > np.array(list(cur_pos_utility.values())))
+        # Compute distance between Pacman and ghosts for normalizing
         P_G_distance = []
         for each in self.ghost_pos:
             each = tuple(each)
@@ -188,7 +199,7 @@ class SuicideAgent:
                 escape_dir.remove(each)
         # Assign utilities for escape directions
         for each in escape_dir:
-            self.Q_value[self.dir_list.index(each)] = cur_pos_utility
+            self.Q_value[self.dir_list.index(each)] = cur_pos_utility[each]
         # Assign utilities for suicide directions:
         # If relative directions w.r.t. two ghosts are the same, no need to normalize the utility.
         if suicide_direction[0] == suicide_direction[1]:
@@ -199,12 +210,13 @@ class SuicideAgent:
             PG_normalizing_factor = PG_normalizing_factor[::-1]
             for index, each in enumerate(suicide_direction):
                 self.Q_value[self.dir_list.index(each)] = reborn_pos_utility * PG_normalizing_factor[index]
-        # Add randomness and laziness
         self.Q_value = np.array(self.Q_value)
         available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
+        self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
+        # Add randomness and laziness
         self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
-        if self.last_dir in self.available_dir:
-            self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
+        if self.last_dir is not None and self.dir_list.index(self.last_dir) in available_directions_index:
+            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * scaleOfNumber(np.max(np.abs(self.Q_value))))
         choice = np.argmax(self.Q_value[available_directions_index])
         choice = self.available_dir[choice]
         if return_Q:
@@ -225,15 +237,17 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Suicide agent
-    cur_pos = (7, 16)
-    ghost_data = [(21, 5), (22, 5)]
-    ghost_status = [4, 4]
+    cur_pos = (7, 18)
+    ghost_data = [(10, 15), (5, 18)]
+    ghost_status = [1, 2]
     reward_pos = [(13, 9)]
-    energizer_data = [(19, 27)]
-    bean_data = [(20, 27)]
+    energizer_data = [(2, 5), (16, 5), (6, 33)]
+    bean_data = [(3, 5), (11, 5), (18, 5), (20, 5), (21, 5), (22, 5), (27, 5), (27, 6), (22, 7), (27, 7), (13, 8),
+                 (14, 9), (16, 9), (18, 9), (27, 9), (27, 10), (19, 11), (16, 12), (19, 12), (22, 12), (24, 12),
+                 (16, 13), (13, 14), (16, 14), (2, 29), (2, 31), (7, 33), (8, 33), (2, 5), (16, 5), (6, 33)]
     reward_type = 3
-    fruit_pos = (22, 27)
-    last_dir = "down"
+    fruit_pos = (22, 13)
+    last_dir = "up"
     agent = SuicideAgent(
         adjacent_data, adjacent_path, locs_df, reward_amount,
         cur_pos,
@@ -244,8 +258,8 @@ if __name__ == '__main__':
         fruit_pos,
         ghost_status,
         last_dir,
-        depth = 10, ghost_attractive_thr = 34, ghost_repulsive_thr = 34, fruit_attractive_thr = 34,
-        randomness_coeff = 1.0, laziness_offset = 10.0
+        depth = 5, ghost_attractive_thr = 10, ghost_repulsive_thr = 10, fruit_attractive_thr = 10,
+        randomness_coeff = 0.0, laziness_coeff = 0.0
     )
     choice= agent.nextDir(return_Q = True)
     print("Choice : ", choice)

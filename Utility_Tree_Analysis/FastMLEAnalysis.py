@@ -14,10 +14,11 @@ import pandas as pd
 import numpy as np
 import scipy.optimize
 from sklearn.metrics import log_loss
+import matplotlib.pyplot as plt
 
 import sys
 sys.path.append("./")
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from PathTreeAgent import PathTree
 from SuicideAgent import SuicideAgent
 from PlannedHuntingAgent import PlannedHuntingAgent
@@ -60,6 +61,12 @@ def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
         all_data = all_data[all_data.file == trial_name]
     if "level_0" not in all_data.columns.values:
         all_data = all_data.reset_index()
+    # Exclude the (0, 18) position in data
+    normal_data_index = []
+    for index in range(all_data.shape[0]):
+        if not isinstance(all_data.global_Q[index], list): # what if no normal Q?
+            normal_data_index.append(index)
+    all_data = all_data.iloc[normal_data_index]
     true_prob = all_data.next_pacman_dir_fill
     # Fill nan direction for optimization use
     start_index = 0
@@ -127,15 +134,6 @@ def makeChoice(prob):
     return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
 
-def scaleOfNumber(num):
-    '''
-    Obtain the scale of a number.
-    :param num: The number
-    :return: 
-    '''
-    order = len(str(num).split(".")[0])
-    return 10**(order - 1)
-
 # ===================================
 #       INDIVIDUAL ESTIMATION
 # ===================================
@@ -144,6 +142,7 @@ def _readData(filename):
         # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
     all_data = all_data.reset_index()
+    print()
     return all_data
 
 
@@ -159,7 +158,7 @@ def _readAuxiliaryData():
 def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount):
     # Randomness and laziness
     randomness_coeff = 0.0
-    laziness_offset = 0.0
+    laziness_coeff = 0.0
     # Configuration (for global agent)
     global_depth = 15
     ignore_depth = 5
@@ -182,10 +181,10 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_fruit_attractive_thr = 34
     pessimistic_ghost_repulsive_thr = 12
     # Configuration (for suicide agent)
-    suicide_depth = 15
-    suicide_ghost_attractive_thr = 34
-    suicide_fruit_attractive_thr = 34
-    suicide_ghost_repulsive_thr = 12
+    suicide_depth = 5
+    suicide_ghost_attractive_thr = 5
+    suicide_fruit_attractive_thr = 5
+    suicide_ghost_repulsive_thr = 5
     # Configuration (flast direction)
     last_dir = all_data.pacman_dir.values
     last_dir[np.where(pd.isna(last_dir))] = None
@@ -258,7 +257,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=global_fruit_attractive_thr,
             ghost_repulsive_thr=global_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
-            laziness_offset = laziness_offset
+            laziness_coeff = laziness_coeff
         )
         global_result = global_agent.nextDir(return_Q=True)
         global_estimation.append(global_result[0])
@@ -277,11 +276,11 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             ghost_status,
             last_dir[index],
             depth=local_depth,
-            ghost_attractive_thr=local_ghost_attractive_thr,
-            fruit_attractive_thr=local_fruit_attractive_thr,
-            ghost_repulsive_thr=local_ghost_repulsive_thr,
-            randomness_coeff=randomness_coeff,
-            laziness_offset=laziness_offset
+            ghost_attractive_thr = local_ghost_attractive_thr,
+            fruit_attractive_thr = local_fruit_attractive_thr,
+            ghost_repulsive_thr = local_ghost_repulsive_thr,
+            randomness_coeff = randomness_coeff,
+            laziness_coeff = laziness_coeff
         )
         local_result = local_agent.nextDir(return_Q=True)
         local_estimation.append(local_result[0])
@@ -299,12 +298,14 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_pos,
             ghost_status,
             last_dir[index],
-            depth=optimistic_depth,
-            ghost_attractive_thr=optimistic_ghost_attractive_thr,
-            fruit_attractive_thr=optimistic_fruit_attractive_thr,
-            ghost_repulsive_thr=optimistic_ghost_repulsive_thr,
-            randomness_coeff=randomness_coeff,
-            laziness_offset=laziness_offset
+            depth = optimistic_depth,
+            ghost_attractive_thr = optimistic_ghost_attractive_thr,
+            fruit_attractive_thr = optimistic_fruit_attractive_thr,
+            ghost_repulsive_thr = optimistic_ghost_repulsive_thr,
+            randomness_coeff = randomness_coeff,
+            laziness_coeff = laziness_coeff,
+            reward_coeff = 1.0,
+            risk_coeff = 0.0
         )
         optimistic_result = optimistic_agent.nextDir(return_Q=True)
         optimistic_estimation.append(optimistic_result[0])
@@ -327,7 +328,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=pessimistic_fruit_attractive_thr,
             ghost_repulsive_thr=pessimistic_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
-            laziness_offset = laziness_offset
+            laziness_coeff = laziness_coeff,
+            reward_coeff = 0.0,
+            risk_coeff = 1.0
         )
         pessimistic_result = pessimistic_agent.nextDir(return_Q=True)
         pessimistic_estimation.append(pessimistic_result[0])
@@ -350,8 +353,8 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             ghost_attractive_thr = suicide_ghost_attractive_thr,
             ghost_repulsive_thr = suicide_fruit_attractive_thr,
             fruit_attractive_thr = suicide_ghost_repulsive_thr,
-            randomness_coeff=randomness_coeff,
-            laziness_offset=laziness_offset
+            randomness_coeff = randomness_coeff,
+            laziness_coeff = laziness_coeff
         )
         suicide_result = suicide_agent.nextDir(return_Q=True)
         suicide_estimation.append(suicide_result[0])
@@ -366,7 +369,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             energizer_data,
             ghost_data,
             ghost_status,
-            last_dir[index]
+            last_dir[index],
+            randomness_coeff = randomness_coeff,
+            laziness_coeff = laziness_coeff
         )
         planned_hunting_result = planned_hunting_agent.nextDir(return_Q=True)
         planned_hunting_estimation.append(planned_hunting_result[0])
@@ -410,10 +415,10 @@ def preEstimation():
     filename_list = [
         "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
         "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/global_data.pkl",
-        "../common_data/local_data.pkl",
-        "../common_data/global_testing_data.pkl",
-        "../common_data/local_testing_data.pkl"
+        # "../common_data/global_data.pkl",
+        # "../common_data/local_data.pkl",
+        # "../common_data/global_testing_data.pkl",
+        # "../common_data/local_testing_data.pkl"
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -430,7 +435,7 @@ def preEstimation():
 # ===================================
 #         FAST OPTIMIZATION
 # ===================================
-def _preProcessingQ(Q_value, randomness_coeff = 1.0):
+def _preProcessingQ(Q_value, last_dir, randomness_coeff = 1.0):
     '''
     Preprocessing for Q-value, including convert negative utility to non-negative, set utilities of unavailable 
     directions to -inf, and normalize utilities.
@@ -448,9 +453,13 @@ def _preProcessingQ(Q_value, randomness_coeff = 1.0):
         # Add randomness and lazines
         Q_value.iloc[index][available_index[index]] = (
             Q_value.iloc[index][available_index[index]]
-            + randomness_coeff * np.random.normal(size = len(available_index[index])) # randomness
-            + scaleOfNumber(np.max(np.abs(cur_Q))) # laziness
+            + randomness_coeff * np.random.normal(size = len(available_index[index][0])) # randomness
         )
+        if last_dir[index] is not None and dir_list.index(last_dir[index]) in available_index[index][0]:
+            Q_value.iloc[index][dir_list.index(last_dir[index])] = (
+                Q_value.iloc[index][dir_list.index(last_dir[index])]
+                + scaleOfNumber(np.max(np.abs(cur_Q)))
+            )  # laziness
         temp_Q.extend(Q_value.iloc[index])
     # Convert  negative to non-negative
     offset = 0.0
@@ -531,7 +540,7 @@ def MLE(config):
     agent_normalizing_factors = []
     agent_offset = []
     for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-        preprocessing_res = _preProcessingQ(all_data[agent_name], randomness_coeff = 1.0)
+        preprocessing_res = _preProcessingQ(all_data[agent_name], last_dir = all_data.pacman_dir.values, randomness_coeff = 1.0)
         agent_offset.append(preprocessing_res[0])
         agent_normalizing_factors.append(preprocessing_res[1])
         all_data[agent_name] = preprocessing_res[2]
@@ -615,7 +624,7 @@ def movingWindowAnalysis(config, save_res = True):
     agent_normalizing_factors = []
     agent_offset = []
     for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-        preprocessing_res = _preProcessingQ(X[agent_name], randomness_coeff=1.0)
+        preprocessing_res = _preProcessingQ(X[agent_name], X.pacman_dir.values, randomness_coeff=1.0)
         agent_offset.append(preprocessing_res[0])
         agent_normalizing_factors.append(preprocessing_res[1])
         X[agent_name] = preprocessing_res[2]
@@ -643,6 +652,8 @@ def movingWindowAnalysis(config, save_res = True):
     all_coeff = []
     all_correct_rate = []
     all_success = []
+    at_cross_index = np.where(X.at_cross.values)[0]
+    at_cross_accuracy = []
     # Moving the window
     for index in subset_index:
         print("Window at {}...".format(index))
@@ -680,13 +691,63 @@ def movingWindowAnalysis(config, save_res = True):
         all_correct_rate.append(correct_rate)
         # The coefficient
         all_coeff.append(res.x)
+        # Coefficient and accuracy for decision point
+        if index in at_cross_index:
+            at_cross_accuracy.append((index, res.x, correct_rate))
     print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
     print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
+    print("Average Correct Rate (Decision Position): {}".format(np.mean([each[2] for each in at_cross_accuracy])))
     # Save estimated agent weights
     if save_res:
         type = "_".join(config['agents'])
-        np.save("{}-agent_weight-window{}-{}.npy".format(config["method"], window, type), all_coeff)
-        np.save("{}-is_success-window{}-{}.npy".format(config["method"], window, type), all_success)
+        np.save("{}-agent_weight-window{}-{}-new_agent.npy".format(config["method"], window, type), all_coeff)
+        np.save("{}-is_success-window{}-{}-new_agent.npy".format(config["method"], window, type), all_success)
+        np.save("{}-at_cross_accuracy-window{}-{}-new_agent.npy".format(config["method"], window, type), at_cross_accuracy)
+
+
+# ===================================
+#         VISUALIZATION
+# ===================================
+def plotWeightVariation(all_agent_weight, window, is_success = None):
+    # Determine agent names
+    agent_name = ["Global", "Local", "Optimistic", "Pessimistic", "Suicide", "Planned Hunting"]
+    agent_color = ["red", "blue", "green", "cyan", "magenta", "black"]
+    # Plot weight variation
+    all_coeff = np.array(all_agent_weight)
+    if is_success is not None:
+        for index in range(1, is_success.shape[0]):
+            if not is_success[index]:
+                all_agent_weight[index] = all_agent_weight[index - 1]
+    # Noamalize
+    # for index in range(all_coeff.shape[0]):
+    #     all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
+    # plt.style.use("seaborn")
+    # plt.ylim(0, 1.0)
+    # plt.yticks(
+    #     np.arange(0.1, 1.1, 0.1),
+    #     ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(1, 11, 1)],
+    #     fontsize=20)
+
+    fig, ax1 = plt.subplots()
+    for index in [0, 1, 3]:
+        ax1.plot(all_coeff[:, index], color = agent_color[index], ms=3, lw=5, label = agent_name[index])
+    plt.legend(loc = "upper left", fontsize=15, ncol=3)
+    plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
+    plt.yticks(fontsize = 15)
+    plt.xlim(0, all_coeff.shape[0] - 1)
+    x_ticks = list(range(0, all_coeff.shape[0], 10))
+    if (all_coeff.shape[0] - 1) not in x_ticks:
+        x_ticks.append(all_coeff.shape[0] - 1)
+    x_ticks = np.array(x_ticks)
+    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
+    plt.xlabel("Time Step", fontsize = 20)
+
+    ax2 = ax1.twinx()
+    for index in [2, 4, 5]:
+        ax2.plot(all_coeff[:, index], color = agent_color[index], ms=3, lw=5, label = agent_name[index])
+    plt.legend(loc = "upper right", fontsize=15, ncol=3)
+    plt.yticks(fontsize=15)
+    plt.show()
 
 
 # ================================================================================================
@@ -817,38 +878,37 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/local_data.pkl-new_agent.pkl",
+        "data_filename": "../common_data/global_data.pkl-new_agent.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/local_testing_data.pkl-new_agent.pkl",
+        "testing_data_filename": "../common_data/global_data.pkl-new_agent.pkl",
         # Method: "MLE" or "MEE"
         "method": "MLE",
         # Only making decisions when necessary
-        "only_necessary": True,
+        "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
-        "clip_samples": None,
+        "clip_samples": 100,
         # The window size
-        "window": 10,
+        "window": 5,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [1, 1, 1, 1, 1],
+        "params": [1, 1, 1, 1, 1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
+        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
+        "agents": ["global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting"],
     }
 
     # ============ ESTIMATION =============
-    MLE(config)
+    # MLE(config)
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config, save_res = False)
+    movingWindowAnalysis(config, save_res = True)
 
     # ============ PLOTTING =============
-    # # Load the log of moving window analysis; log files are created in the analysis
-    # agent_weight = np.load("MEE-agent_weight-window10-global_local_lazy_random.npy")
-    # is_success = np.load("MEE-is_success-window10-global_local_lazy_random.npy")
-    # plotWeightVariation(agent_weight, config["agents"], config["window"], is_success,
-    #                     plot_label = True, filename = config["data_filename"])
+    # Load the log of moving window analysis; log files are created in the analysis
+    # agent_weight = np.load("MLE-agent_weight-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
+    # is_success = np.load("MLE-is_success-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
+    # plotWeightVariation(agent_weight, config["window"], is_success)

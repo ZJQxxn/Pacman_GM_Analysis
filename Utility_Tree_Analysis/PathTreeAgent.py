@@ -23,14 +23,14 @@ import sys
 import time
 
 sys.path.append('./')
-from TreeAnalysisUtils import unitStepFunc
+from TreeAnalysisUtils import unitStepFunc, scaleOfNumber
 
 
 class PathTree:
 
     def __init__(self, adjacent_data, locs_df, reward_amount, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
                  depth = 10, ignore_depth = 0, ghost_attractive_thr = 34, ghost_repulsive_thr = 10, fruit_attractive_thr = 10,
-                 randomness_coeff = 1, laziness_offset = 10, reward_coeff = 1.0, risk_coeff = 1.0):
+                 randomness_coeff = 1.0, laziness_coeff = 1.0, reward_coeff = 1.0, risk_coeff = 1.0):
         '''
         Initialization.
         :param adjacent_data: Map adjacent data (dict).
@@ -113,7 +113,7 @@ class PathTree:
         self.risk_coeff = risk_coeff
         # For randomness and laziness
         self.randomness_coeff = randomness_coeff
-        self.laziness_offset = laziness_offset
+        self.laziness_coeff = laziness_coeff
         # Pacman is eaten? If so, the path will be ended
         self.is_eaten = False
 
@@ -330,13 +330,12 @@ class PathTree:
         for index, each in enumerate(available_directions):
             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
         self.Q_value = np.array(self.Q_value)
-        # Add randomness
         available_directions_index = [self.dir_list.index(each) for each in available_directions]
-        self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size = len(available_directions_index)))
-        # Add laziness
-        if self.last_dir in available_directions:
-            self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
-        # self.Q_value = self.Q_value / np.sum(self.Q_value)
+        self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
+        # Add randomness and laziness
+        self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
+        if self.last_dir is not None and self.dir_list.index(self.last_dir) in available_directions_index:
+            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * scaleOfNumber(np.max(np.abs(self.Q_value))))
         if return_Q:
             return best_path[0][1], self.Q_value
         else:
