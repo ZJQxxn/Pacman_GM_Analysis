@@ -719,19 +719,12 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
             if not is_success[index]:
                 all_agent_weight[index] = all_agent_weight[index - 1]
     # Noamalize
-    # for index in range(all_coeff.shape[0]):
-    #     all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
-    # plt.style.use("seaborn")
-    # plt.ylim(0, 1.0)
-    # plt.yticks(
-    #     np.arange(0.1, 1.1, 0.1),
-    #     ["0.{}".format(each) if each < 10 else "1.0" for each in np.arange(1, 11, 1)],
-    #     fontsize=20)
-
-    fig, ax1 = plt.subplots()
-    for index in [0, 1, 3]:
-        ax1.plot(all_coeff[:, index], color = agent_color[index], ms=3, lw=5, label = agent_name[index])
-    plt.legend(loc = "upper left", fontsize=15, ncol=3)
+    # all_coeff = all_coeff / np.max(all_coeff)
+    for index in range(all_coeff.shape[0]):
+        all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
+        # all_coeff[index] = all_coeff[index] / np.linalg.norm(all_coeff[index])
+    for index in range(6):
+        plt.plot(all_coeff[:, index], color = agent_color[index], ms = 3, lw = 5,label = agent_name[index])
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize = 15)
     plt.xlim(0, all_coeff.shape[0] - 1)
@@ -741,12 +734,8 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
     x_ticks = np.array(x_ticks)
     plt.xticks(x_ticks, x_ticks + window, fontsize=20)
     plt.xlabel("Time Step", fontsize = 20)
-
-    ax2 = ax1.twinx()
-    for index in [2, 4, 5]:
-        ax2.plot(all_coeff[:, index], color = agent_color[index], ms=3, lw=5, label = agent_name[index])
-    plt.legend(loc = "upper right", fontsize=15, ncol=3)
     plt.yticks(fontsize=15)
+    plt.legend(fontsize=15, ncol=6)
     plt.show()
 
 
@@ -878,15 +867,15 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/global_data.pkl-new_agent.pkl",
+        "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/global_data.pkl-new_agent.pkl",
+        "testing_data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
         # Method: "MLE" or "MEE"
         "method": "MLE",
         # Only making decisions when necessary
         "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
-        "clip_samples": 100,
+        "clip_samples": None,
         # The window size
         "window": 5,
         # Maximum try of estimation, in case the optimization will fail
@@ -909,6 +898,6 @@ if __name__ == '__main__':
 
     # ============ PLOTTING =============
     # Load the log of moving window analysis; log files are created in the analysis
-    # agent_weight = np.load("MLE-agent_weight-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
-    # is_success = np.load("MLE-is_success-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
-    # plotWeightVariation(agent_weight, config["window"], is_success)
+    agent_weight = np.load("MLE-agent_weight-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
+    is_success = np.load("MLE-is_success-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
+    plotWeightVariation(agent_weight, config["window"], is_success)
