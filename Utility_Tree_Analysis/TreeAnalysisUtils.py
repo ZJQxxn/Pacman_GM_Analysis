@@ -119,4 +119,9 @@ def scaleOfNumber(num):
     return 10**(order - 1)
 
 
+def makeChoice(prob):
+    return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
+
+
+
 

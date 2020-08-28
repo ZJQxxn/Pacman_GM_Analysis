@@ -21,10 +21,10 @@ import warnings
 import json
 
 sys.path.append('./')
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount
-from PathTreeConstructor import PathTree
-from LazyAgent import LazyAgent
-from RandomAgent import RandomAgent
+from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
+from Utility_Tree_Analysis.PlannedHuntingAgent import PlannedHuntingAgent
+from Utility_Tree_Analysis.PathTreeAgent import PathTree
+from Utility_Tree_Analysis.SuicideAgent import SuicideAgent
 
 import time
 
@@ -59,24 +59,37 @@ class MultiAgentInteractor:
         # Pre-computed data
         self.adjacent_data = readAdjacentMap(config['map_file'])
         self.locs_df = readLocDistance(config['loc_distance_file'])
+        self.adjacent_path = readAdjacentPath(config['loc_distance_file'])
         self.reward_amount = readRewardAmount()
-        # Initialization for pre-defined parameters of global agents and local agents
-        self.global_depth = config['global_depth'] \
-            if 'global_depth' in config else 15
-        self.global_ghost_attractive_thr = config['global_ghost_attractive_thr']  \
-            if 'global_ghost_attractive_thr' in config else 34
-        self.global_ghost_repulsive_thr = config['global_ghost_repulsive_thr']  \
-            if 'global_ghost_repulsive_thr' in config else 34
-        self.global_fruit_attractive_thr = config['global_fruit_attractive_thr']  \
-            if 'global_fruit_attractive_thr' in config else 15
-        self.local_depth = config['local_depth']  \
-            if 'local_depth' in config else 5
-        self.local_ghost_attractive_thr = config['local_ghost_attractive_thr']  \
-            if 'local_ghost_attractive_thr' in config else 5
-        self.local_ghost_repulsive_thr = config['local_ghost_repulsive_thr']  \
-            if 'local_ghost_repulsive_thr' in config else 5
-        self.local_fruit_attractive_thr = config['local_fruit_attractive_thr']  \
-            if 'local_fruit_attractive_thr' in config else 5
+        # Randomness and laziness
+        self.randomness_coeff = 1.0
+        self.laziness_coeff = 1.0
+        # Configuration (for global agent)
+        self.global_depth = 15
+        self.ignore_depth = 5
+        self.global_ghost_attractive_thr = 34
+        self.global_fruit_attractive_thr = 34
+        self.global_ghost_repulsive_thr = 12
+        # Configuration (for local agent)
+        self.local_depth = 5
+        self.local_ghost_attractive_thr = 5
+        self.local_fruit_attractive_thr = 5
+        self.local_ghost_repulsive_thr = 5
+        # Configuration (for optimistic agent)
+        self.optimistic_depth = 5
+        self.optimistic_ghost_attractive_thr = 5
+        self.optimistic_fruit_attractive_thr = 5
+        self.optimistic_ghost_repulsive_thr = 5
+        # Configuration (for pessimistic agent)
+        self.pessimistic_depth = 5
+        self.pessimistic_ghost_attractive_thr = 5
+        self.pessimistic_fruit_attractive_thr = 5
+        self.pessimistic_ghost_repulsive_thr = 5
+        # Configuration (for suicide agent)
+        self.suicide_depth = 5
+        self.suicide_ghost_attractive_thr = 5
+        self.suicide_fruit_attractive_thr = 5
+        self.suicide_ghost_repulsive_thr = 5
         # Set of available directions
         self.dir_list = ['left', 'right', 'up', 'down']
         # Determine whether the game status is reseted after the last estimation. Notice that the game status should be
@@ -84,15 +97,15 @@ class MultiAgentInteractor:
         self.reset_flag = False
         # Moving direction of the last time step
         self.last_dir = None
-        # The number of crossroads passed wihtout turning for now
-        self.loop_count = 0
         # random seed for the random agent
         self.random_seed = config["random_seed"]
         # All the agents
         self.global_agent = None
         self.local_agent = None
-        self.lazy_agent = None
-        self.random_agent = None
+        self.optimistic_agent = None
+        self.pessimistic_agent = None
+        self.suicide_agent = None
+        self.planned_hunting_agent = None
         print("Finished all the pre-computation and initializations.")
 
 
@@ -130,23 +143,27 @@ class MultiAgentInteractor:
             self.reward_type,
             self.fruit_pos,
             self.ghost_status,
+            self.last_dir,
             depth = self.global_depth,
+            ignore_depth = self.ignore_depth,
             ghost_attractive_thr = self.global_ghost_attractive_thr,
             fruit_attractive_thr = self.global_fruit_attractive_thr,
-            ghost_repulsive_thr = self.global_ghost_repulsive_thr
+            ghost_repulsive_thr = self.global_ghost_repulsive_thr,
+            randomness_coeff = self.randomness_coeff,
+            laziness_coeff = self.laziness_coeff
         )
         # Estimate the moving direction
-        root, highest_utility, best_path = self.global_agent.construct()
-        # print("Global children:", len((self.global_agent.root.descendants)))
-        return self._oneHot(best_path[0][1])
+        global_result = self.global_agent.nextDir(return_Q = True)
+        global_Q =global_result[1]
+        return global_Q
 
 
     def _localAgent(self):
         '''
-        Use the local agent to predict the moving direction given game status of the current time step. 
-        :return: The one-hot vector denoting the direction estimation of local agent.
+        Use the global agent to predict the moving direction given game status of the current time step. 
+        :return: The one-hot vector denoting the direction estimation of global agent.
         '''
-        # Construct the decision tree for the local agent
+        # Construct the decision tree for the global agent
         self.local_agent = PathTree(
             self.adjacent_data,
             self.locs_df,
@@ -158,37 +175,141 @@ class MultiAgentInteractor:
             self.reward_type,
             self.fruit_pos,
             self.ghost_status,
-            depth=self.local_depth,
-            ghost_attractive_thr=self.local_ghost_attractive_thr,
-            fruit_attractive_thr=self.local_fruit_attractive_thr,
-            ghost_repulsive_thr=self.local_ghost_repulsive_thr
+            self.last_dir,
+            depth = self.local_depth,
+            ghost_attractive_thr = self.local_ghost_attractive_thr,
+            fruit_attractive_thr = self.local_fruit_attractive_thr,
+            ghost_repulsive_thr = self.local_ghost_repulsive_thr,
+            randomness_coeff = self.randomness_coeff,
+            laziness_coeff = self.laziness_coeff
         )
         # Estimate the moving direction
-        root, highest_utility, best_path = self.local_agent.construct()
-        # print("Local children:", len((self.local_agent.root.descendants)))
-        return self._oneHot(best_path[0][1])
+        local_result = self.local_agent.nextDir(return_Q = True)
+        local_Q =local_result[1]
+        return local_Q
 
 
-    def _lazyAgent(self):
+    def _optimisticAgent(self):
         '''
-        Use the lazy agent to predict the moving direction given game status of the current time step. 
-        :return: The one-hot vector denoting the direction estimation of lazy agent.
+        Use the global agent to predict the moving direction given game status of the current time step. 
+        :return: The one-hot vector denoting the direction estimation of global agent.
         '''
-        self.lazy_agent = LazyAgent(self.adjacent_data, self.cur_pos, self.last_dir, self.loop_count, max_loop = 5)
-        next_dir, not_turn = self.lazy_agent.nextDir()
-        if not_turn:
-            self.loop_count += 1
-        return self._oneHot(next_dir)
+        # Construct the decision tree for the global agent
+        self.optimistic_agent = PathTree(
+            self.adjacent_data,
+            self.locs_df,
+            self.reward_amount,
+            self.cur_pos,
+            self.energizer_data,
+            self.bean_data,
+            self.ghost_data,
+            self.reward_type,
+            self.fruit_pos,
+            self.ghost_status,
+            self.last_dir,
+            depth = self.optimistic_depth,
+            ghost_attractive_thr = self.optimistic_ghost_attractive_thr,
+            fruit_attractive_thr = self.optimistic_fruit_attractive_thr,
+            ghost_repulsive_thr = self.optimistic_ghost_repulsive_thr,
+            reward_coeff = 1.0,
+            risk_coeff = 0.0,
+            randomness_coeff = self.randomness_coeff,
+            laziness_coeff = self.laziness_coeff
+        )
+        # Estimate the moving direction
+        optimistic_result = self.optimistic_agent.nextDir(return_Q = True)
+        optimistic_Q = optimistic_result[1]
+        return optimistic_Q
 
 
-    def _randomAgent(self):
+    def _pessimisticAgent(self):
         '''
-        Use the random agent to predict the moving direction given game status of the current time step. 
-        :return: The one-hot vector denoting the direction estimation of random agent.
+        Use the global agent to predict the moving direction given game status of the current time step. 
+        :return: The one-hot vector denoting the direction estimation of global agent.
         '''
-        self.random_agent = RandomAgent(self.adjacent_data, self.cur_pos, self.last_dir, self.random_seed)
-        next_dir = self.random_agent.nextDir()
-        return self._oneHot(next_dir)
+        # Construct the decision tree for the global agent
+        self.pessimistic_agent = PathTree(
+            self.adjacent_data,
+            self.locs_df,
+            self.reward_amount,
+            self.cur_pos,
+            self.energizer_data,
+            self.bean_data,
+            self.ghost_data,
+            self.reward_type,
+            self.fruit_pos,
+            self.ghost_status,
+            self.last_dir,
+            depth = self.pessimistic_depth,
+            ghost_attractive_thr = self.pessimistic_ghost_attractive_thr,
+            fruit_attractive_thr = self.pessimistic_fruit_attractive_thr,
+            ghost_repulsive_thr = self.pessimistic_ghost_repulsive_thr,
+            reward_coeff = 0.0,
+            risk_coeff = 1.0,
+            randomness_coeff = self.randomness_coeff,
+            laziness_coeff = self.laziness_coeff
+        )
+        # Estimate the moving direction
+        pessimistic_result = self.pessimistic_agent.nextDir(return_Q = True)
+        pessimistic_Q = pessimistic_result[1]
+        return pessimistic_Q
+
+
+    def _suicideAgent(self):
+        '''
+        Use the global agent to predict the moving direction given game status of the current time step. 
+        :return: The one-hot vector denoting the direction estimation of global agent.
+        '''
+        # Construct the decision tree for the global agent
+        self.suicide_agent = SuicideAgent(
+            self.adjacent_data,
+            self.adjacent_path,
+            self.locs_df,
+            self.reward_amount,
+            self.cur_pos,
+            self.energizer_data,
+            self.bean_data,
+            self.ghost_data,
+            self.reward_type,
+            self.fruit_pos,
+            self.ghost_status,
+            self.last_dir,
+            depth=self.suicide_depth,
+            ghost_attractive_thr = self.suicide_ghost_attractive_thr,
+            ghost_repulsive_thr =self.suicide_fruit_attractive_thr,
+            fruit_attractive_thr = self.suicide_ghost_repulsive_thr,
+            randomness_coeff = self.randomness_coeff,
+            laziness_coeff = self.laziness_coeff
+        )
+        # Estimate the moving direction
+        suicide_result = self.suicide_agent.nextDir(return_Q = True)
+        suicide_Q = suicide_result[1]
+        return suicide_Q
+
+
+    def _plannedHuntingAgent(self):
+        '''
+        Use the global agent to predict the moving direction given game status of the current time step. 
+        :return: The one-hot vector denoting the direction estimation of global agent.
+        '''
+        # Construct the decision tree for the global agent
+        self.planned_hunting_agent = PlannedHuntingAgent(
+            self.adjacent_data,
+            self.adjacent_path,
+            self.locs_df,
+            self.reward_amount,
+            self.cur_pos,
+            self.energizer_data,
+            self.ghost_data,
+            self.ghost_status,
+            self.last_dir,
+            randomness_coeff = self.randomness_coeff,
+            laziness_coeff = self.laziness_coeff
+        )
+        # Estimate the moving direction
+        planned_hunting_result = self.planned_hunting_agent.nextDir(return_Q = True)
+        planned_hunting_Q = planned_hunting_result[1]
+        return planned_hunting_Q
 
 
     def estimateDir(self):
@@ -202,19 +323,21 @@ class MultiAgentInteractor:
             warnings.warn("The game status is not reset since the last direction estimation! "
                           "Are you sure you want to predict the moving direction in this case?")
         # Obtain estimations of all the agents
-        agent_estimation = np.zeros((4, 4))
+        agent_estimation = np.zeros((4, 6))
         agent_estimation[:, 0] = self._globalAgent()
         agent_estimation[:, 1] = self._localAgent()
-        agent_estimation[:, 2] = self._lazyAgent()
-        agent_estimation[:, 3] = self._randomAgent()
+        agent_estimation[:, 2] = self._optimisticAgent()
+        agent_estimation[:, 3] = self._pessimisticAgent()
+        agent_estimation[:, 4] = self._suicideAgent()
+        agent_estimation[:, 5] = self._plannedHuntingAgent()
         integrate_estimation = agent_estimation @ self.agent_weight
         self.reset_flag = False
         # If multiple directions have the highest score, choose the first occurrence
-        self.last_dir = self.dir_list[np.argmax(integrate_estimation)]
+        self.last_dir = self.dir_list[makeChoice(integrate_estimation)]
         return integrate_estimation, agent_estimation
 
 
-    def resetStatus(self, cur_pos, energizer_data, bean_data, ghost_data,reward_type,fruit_pos,ghost_status):
+    def resetStatus(self, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status):
         '''
         Reset the game stauts and Pacman status.
         :param cur_pos: The current position of Pacman with the shape of a 2-tuple.
@@ -249,18 +372,14 @@ class MultiAgentInteractor:
         self.reward_type = reward_type
         self.fruit_pos = fruit_pos
         self.reset_flag = True
-        if None != self.global_agent:
-            # self.global_agent.reset()
-            self.global_agent = None
-        if None != self.global_agent:
-            # self.local_agent.reset()
-            self.local_agent = None
-        if None != self.lazy_agent:
-            # self.local_agent.reset()
-            self.lazy_agent = None
-        if None != self.random_agent:
-            # self.local_agent.reset()
-            self.random_agent = None
+        # Reset all the agents
+        self.global_agent = None
+        self.local_agent = None
+        self.optimistic_agent = None
+        self.pessimistic_agent = None
+        self.suicide_agent = None
+        self.planned_hunting_agent = None
+
 
 
     def resetLastDir(self):
@@ -283,13 +402,13 @@ if __name__ == '__main__':
         cur_pos = each.pacmanPos
         energizer_data = each.energizers
         bean_data = each.beans
-        ghost_data = np.array([each.distance1, each.distance2])
+        ghost_data = np.array([each.ghost1Pos, each.ghost2Pos]) #TODO: revise to ghost position
         ghost_status = each[["ifscared1", "ifscared2"]].values
         reward_type = int(each.Reward)
         fruit_pos = each.fruitPos
-        multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data,reward_type,fruit_pos,ghost_status)
+        multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
         dir_prob, _ = multiagent.estimateDir()
-        cur_dir = multiagent.dir_list[np.argmax(dir_prob)]
+        cur_dir = multiagent.dir_list[makeChoice(dir_prob)]
         if "left" == cur_dir:
             next_pos = [cur_pos[0] - 1, cur_pos[1]]
         elif "right" == cur_dir:

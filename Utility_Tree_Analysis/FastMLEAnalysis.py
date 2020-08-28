@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 import sys
 sys.path.append("./")
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber, makeChoice
 from PathTreeAgent import PathTree
 from SuicideAgent import SuicideAgent
 from PlannedHuntingAgent import PlannedHuntingAgent
@@ -130,10 +130,6 @@ def readTestingDatasetFromPkl(filename, trial_name = None, only_necessary = Fals
     return X, Y
 
 
-def makeChoice(prob):
-    return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
-
-
 # ===================================
 #       INDIVIDUAL ESTIMATION
 # ===================================
@@ -171,15 +167,15 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     local_fruit_attractive_thr = 5
     local_ghost_repulsive_thr = 5
     # Configuration (for optimistic agent)
-    optimistic_depth = 10
-    optimistic_ghost_attractive_thr = 34
-    optimistic_fruit_attractive_thr = 34
-    optimistic_ghost_repulsive_thr = 12
+    optimistic_depth = 5
+    optimistic_ghost_attractive_thr = 5
+    optimistic_fruit_attractive_thr = 5
+    optimistic_ghost_repulsive_thr = 5
     # Configuration (for pessimistic agent)
-    pessimistic_depth = 10
-    pessimistic_ghost_attractive_thr = 34
-    pessimistic_fruit_attractive_thr = 34
-    pessimistic_ghost_repulsive_thr = 12
+    pessimistic_depth = 5
+    pessimistic_ghost_attractive_thr = 5
+    pessimistic_fruit_attractive_thr = 5
+    pessimistic_ghost_repulsive_thr = 5
     # Configuration (for suicide agent)
     suicide_depth = 5
     suicide_ghost_attractive_thr = 5
@@ -415,10 +411,10 @@ def preEstimation():
     filename_list = [
         "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
         "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        # "../common_data/global_data.pkl",
-        # "../common_data/local_data.pkl",
-        # "../common_data/global_testing_data.pkl",
-        # "../common_data/local_testing_data.pkl"
+        "../common_data/global_data.pkl",
+        "../common_data/local_data.pkl",
+        "../common_data/global_testing_data.pkl",
+        "../common_data/local_testing_data.pkl"
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -877,7 +873,7 @@ if __name__ == '__main__':
         # The number of samples used for estimation: None for using all the data
         "clip_samples": None,
         # The window size
-        "window": 5,
+        "window": 10,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
@@ -898,6 +894,6 @@ if __name__ == '__main__':
 
     # ============ PLOTTING =============
     # Load the log of moving window analysis; log files are created in the analysis
-    agent_weight = np.load("MLE-agent_weight-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
-    is_success = np.load("MLE-is_success-window5-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
+    agent_weight = np.load("MLE-agent_weight-window10-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
+    is_success = np.load("MLE-is_success-window10-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
     plotWeightVariation(agent_weight, config["window"], is_success)

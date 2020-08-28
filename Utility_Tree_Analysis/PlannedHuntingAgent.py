@@ -159,11 +159,13 @@ class PlannedHuntingAgent:
                 E_G = closest_E_G_distance[adjacent_index]
                 E_G = 1 if 0 == E_G else E_G
                 # temp_utility = (E_G - P_E) # pacman is closer to energizer compared with ghost
+
                 temp_utility = (
                     self.reward_amount[2] / P_E # reward for energizer
                     + self.reward_amount[8] / E_G # reward for ghost
-                    + self.reward_amount[9] * (E_G - P_E) # risk for being eaten by ghost #TODO: this term is too large
                 )
+                if -5 < (E_G - P_E) < 0: # only compute risk when ghost is more closer to energizer than the Pacman
+                    temp_utility = temp_utility + self.reward_amount[9] / (E_G - P_E) # risk for being eaten by ghost
                 available_dir_utility.append(temp_utility)
             available_dir_utility = np.array(available_dir_utility)
             for index, each in enumerate(self.available_dir):
@@ -212,8 +214,8 @@ if __name__ == '__main__':
         ghost_data,
         ghost_status,
         last_dir,
-        randomness_coeff = 1.0,
-        laziness_coeff = 1.0
+        randomness_coeff = 0.0,
+        laziness_coeff = 0.0
     )
     choice = agent.nextDir(return_Q = True)
     print("Position : ", agent.cur_pos)
