@@ -21,10 +21,10 @@ import warnings
 import json
 
 sys.path.append('./')
-from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
-from Utility_Tree_Analysis.PlannedHuntingAgent import PlannedHuntingAgent
-from Utility_Tree_Analysis.PathTreeAgent import PathTree
-from Utility_Tree_Analysis.SuicideAgent import SuicideAgent
+from MultiAgent_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
+from MultiAgent_Analysis.PlannedHuntingAgent import PlannedHuntingAgent
+from MultiAgent_Analysis.PathTreeAgent import PathTree
+from MultiAgent_Analysis.SuicideAgent import SuicideAgent
 
 import time
 
@@ -69,7 +69,7 @@ class MultiAgentInteractor:
         self.ignore_depth = 5
         self.global_ghost_attractive_thr = 34
         self.global_fruit_attractive_thr = 34
-        self.global_ghost_repulsive_thr = 12
+        self.global_ghost_repulsive_thr = 34
         # Configuration (for local agent)
         self.local_depth = 5
         self.local_ghost_attractive_thr = 5
@@ -393,29 +393,45 @@ class MultiAgentInteractor:
 
 if __name__ == '__main__':
     import pickle
-    with open("extracted_data/test_data.pkl", 'rb') as file:
-        all_data = pickle.load(file)
+    # with open("extracted_data/test_data.pkl", 'rb') as file:
+    #     all_data = pickle.load(file)
 
     multiagent = MultiAgentInteractor("config.json")
-    for index in range(15):
-        each = all_data.iloc[index]
-        cur_pos = each.pacmanPos
-        energizer_data = each.energizers
-        bean_data = each.beans
-        ghost_data = np.array([each.ghost1Pos, each.ghost2Pos]) #TODO: revise to ghost position
-        ghost_status = each[["ifscared1", "ifscared2"]].values
-        reward_type = int(each.Reward)
-        fruit_pos = each.fruitPos
-        multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
-        dir_prob, _ = multiagent.estimateDir()
-        cur_dir = multiagent.dir_list[makeChoice(dir_prob)]
-        if "left" == cur_dir:
-            next_pos = [cur_pos[0] - 1, cur_pos[1]]
-        elif "right" == cur_dir:
-                next_pos = [cur_pos[0] + 1, cur_pos[1]]
-        elif "up" == cur_dir:
-            next_pos = [cur_pos[0], cur_pos[1] - 1]
-        else:
-            next_pos = [cur_pos[0], cur_pos[1] + 1]
-        print(cur_dir, next_pos, dir_prob)
+
+    cur_pos = (22, 27)
+    ghost_data = [(18, 27), (10, 21)]
+    ghost_status = np.array([1, 1])
+    energizer_data = [(13, 9), (9, 24), (22, 26)]
+    bean_data = [(5, 5), (9, 5), (16, 5), (21, 5), (26, 5), (2, 6), (27, 6), (7, 7), (2, 8), (11, 9), (22, 10),
+                 (4, 12), (22, 12), (16, 13), (15, 15), (18, 15), (22, 15), (15, 16), (7, 19), (22, 20), (22, 24),
+                 (25, 24), (2, 29), (22, 29), (17, 30), (23, 30), (25, 30), (5, 33), (11, 33)]
+    reward_type = 4
+    fruit_pos = (2, 7)
+    last_dir = "right"
+
+    multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
+    multiagent.last_dir = last_dir
+    dir_prob, agent_Q = multiagent.estimateDir()
+    print("Q : ", agent_Q)
+    # for index in range(15):
+    #     each = all_data.iloc[index]
+    #     cur_pos = each.pacmanPos
+    #     energizer_data = each.energizers
+    #     bean_data = each.beans
+    #     ghost_data = np.array([each.ghost1Pos, each.ghost2Pos]) #TODO: revise to ghost position
+    #     ghost_status = each[["ifscared1", "ifscared2"]].values
+    #     reward_type = int(each.Reward)
+    #     fruit_pos = each.fruitPos
+    #     multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
+    #     dir_prob, _ = multiagent.estimateDir()
+    #     cur_dir = multiagent.dir_list[makeChoice(dir_prob)]
+    #     if "left" == cur_dir:
+    #         next_pos = [cur_pos[0] - 1, cur_pos[1]]
+    #     elif "right" == cur_dir:
+    #             next_pos = [cur_pos[0] + 1, cur_pos[1]]
+    #     elif "up" == cur_dir:
+    #         next_pos = [cur_pos[0], cur_pos[1] - 1]
+    #     else:
+    #         next_pos = [cur_pos[0], cur_pos[1] + 1]
+    #     print(cur_dir, next_pos, dir_prob)
 

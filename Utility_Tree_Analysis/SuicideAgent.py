@@ -10,7 +10,7 @@ Date:
 '''
 
 import numpy as np
-
+import copy
 
 import sys
 sys.path.append("./")
@@ -193,7 +193,8 @@ class SuicideAgent:
                                         ].path.values[0][0][1])
                     )
         # The escape direction: directions other than the suicide direction
-        escape_dir = self.available_dir.copy()
+        # escape_dir = self.available_dir.copy()
+        escape_dir = copy.deepcopy(self.available_dir)
         for each in suicide_direction:
             if each in escape_dir:
                 escape_dir.remove(each)

@@ -77,7 +77,7 @@ def readRewardAmount():
         6:12, # apple
         7:17, # melon
         8:8, # ghost
-        9:20 # eaten by ghost
+        9:8 # eaten by ghost
     }
     return reward_amount
 
@@ -120,6 +120,13 @@ def scaleOfNumber(num):
 
 
 def makeChoice(prob):
+    prob = np.array(prob)
+    # avoid non-negative, notice that this won't hurt the Q-value because we only need the direction
+    if np.any(prob < 0):
+        available_index = np.where(prob != 0)
+        # print("Index : ", available_index)
+        prob[available_index] = prob[available_index] - np.min(prob) + 1
+        # print("After processing: ", prob)
     return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
 
