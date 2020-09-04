@@ -421,9 +421,11 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
                 all_agent_weight[index] = all_agent_weight[index - 1]
     # Noamalize
     # all_coeff = all_coeff / np.max(all_coeff)
-    for index in range(all_coeff.shape[0]):
-        all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
+    # for index in range(all_coeff.shape[0]):
+    #     all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
         # all_coeff[index] = all_coeff[index] / np.linalg.norm(all_coeff[index])
+    for index in range(all_coeff.shape[1]):
+        all_coeff[:,index] = all_coeff[:,index] / np.max(all_coeff[:,index])
     for index in range(6):
         plt.plot(all_coeff[:, index], color = agent_color[index], ms = 3, lw = 5,label = agent_name[index])
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
@@ -436,7 +438,7 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
     plt.xticks(x_ticks, x_ticks + window, fontsize=20)
     plt.xlabel("Time Step", fontsize = 20)
     plt.yticks(fontsize=15)
-    plt.legend(fontsize=15, ncol=6)
+    plt.legend(loc = "upper left", fontsize=15, ncol=6)
     plt.show()
 
 
