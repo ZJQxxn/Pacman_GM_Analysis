@@ -21,6 +21,7 @@ from anytree.exporter import DotExporter
 from collections import deque
 import sys
 import time
+import copy
 
 sys.path.append('./')
 from TreeAnalysisUtils import unitStepFunc, scaleOfNumber
@@ -58,34 +59,13 @@ class PathTree:
             raise TypeError("The depth should be a integer, but got a {}.".format(type(depth)))
         if depth <= 0:
             raise ValueError("The depth should be a positive integer.")
-        # Other initialization
-        # The root node is the path starting point.
-        # Other tree nodes should contain:
-        #   (1) location ("name")
-        #   (2) parent location ("parent")
-        #   (3) the direction from its to parent to itself ("dir_from_parent")
-        #   (4) utility of this node, reward and  risk are separated ("cur_reward", "cur_risk", "cur_utility")
-        #   (5) the cumulative utility so far, reward and risk are separated ("cumulative_reward", "cumulative_risk", "cumulative_utility")
-        self.root = anytree.Node(root,
-                                 cur_utility = 0,
-                                 cumulative_utility = 0,
-                                 cur_reward = 0,
-                                 cumulative_reward = 0,
-                                 cur_risk = 0,
-                                 cumulative_risk = 0
-                                 )
-        # The current node
-        self.current_node = self.root
-        # A queue used for append nodes on the tree
-        self.node_queue = deque()
-        self.node_queue.append(self.root)
         # The maximize depth (i.e., the path length)
         self.depth = depth
         # The ignore depth (i.e., exclude this depth of nodes)
         self.ignore_depth = ignore_depth
         # Game status
-        self.energizer_data = energizer_data
-        self.bean_data = bean_data
+        self.energizer_data = [tuple(each) for each in energizer_data] if (not isinstance(energizer_data, float) or energizer_data is None) else np.nan
+        self.bean_data = [tuple(each) for each in bean_data] if (not isinstance(bean_data, float) or bean_data is None) else np.nan
         self.ghost_data = [tuple(each) for each in ghost_data]
         self.ghost_status = ghost_status
         # Fruit data
@@ -116,6 +96,31 @@ class PathTree:
         self.laziness_coeff = laziness_coeff
         # Pacman is eaten? If so, the path will be ended
         self.is_eaten = False
+        # The root node is the path starting point.
+        # Other tree nodes should contain:
+        #   (1) location ("name")
+        #   (2) parent location ("parent")
+        #   (3) the direction from its to parent to itself ("dir_from_parent")
+        #   (4) utility of this node, reward and  risk are separated ("cur_reward", "cur_risk", "cur_utility")
+        #   (5) the cumulative utility so far, reward and risk are separated ("cumulative_reward", "cumulative_risk", "cumulative_utility")
+        self.root = anytree.Node(root,
+                                 cur_utility=0,
+                                 cumulative_utility=0,
+                                 cur_reward=0,
+                                 cumulative_reward=0,
+                                 cur_risk=0,
+                                 cumulative_risk=0,
+                                 existing_beans=copy.deepcopy(self.bean_data),
+                                 existing_energizers = copy.deepcopy(self.energizer_data),
+                                 existing_fruit = copy.deepcopy(self.fruit_pos),
+                                 ghost_status = copy.deepcopy(self.ghost_status)
+                                 )
+        # TODO: add game status for the node
+        # The current node
+        self.current_node = self.root
+        # A queue used for append nodes on the tree
+        self.node_queue = deque()
+        self.node_queue.append(self.root)
 
 
     def _construct(self):
@@ -161,7 +166,7 @@ class PathTree:
         tmp_data = self.adjacent_data[self.current_node.name]
         for each in ["left", "right", "up", "down"]:
             # do not walk on the wall or walk out of boundary
-            # do not turn back # TODO: turn back?
+            # do not turn back
             if None == self.current_node.parent and isinstance(tmp_data[each], float):
                 continue
             elif None != self.current_node.parent and \
@@ -174,8 +179,12 @@ class PathTree:
                 if ignore:
                     cur_reward = 0.0
                     cur_risk = 0.0
+                    existing_beans = copy.deepcopy(self.current_node.existing_beans)
+                    existing_energizers = copy.deepcopy(self.current_node.existing_energizers)
+                    existing_fruit = copy.deepcopy(self.current_node.existing_fruit)
+                    ghost_status = copy.deepcopy(self.current_node.ghost_status)
                 else:
-                    cur_reward = self._computeReward(cur_pos)
+                    cur_reward, existing_beans, existing_energizers, existing_fruit, ghost_status = self._computeReward(cur_pos)
                     # if the position is visited before, do not add up the risk to cumulative
                     if cur_pos in [each.name for each in self.current_node.path]:
                         cur_risk = 0.0
@@ -191,7 +200,11 @@ class PathTree:
                         cur_reward = cur_reward,
                         cumulative_reward = self.current_node.cumulative_reward + cur_reward,
                         cur_risk = cur_risk,
-                        cumulative_risk = self.current_node.cumulative_risk + cur_risk
+                        cumulative_risk = self.current_node.cumulative_risk + cur_risk,
+                        existing_beans = existing_beans,
+                        existing_energizers = existing_energizers,
+                        existing_fruit = existing_fruit,
+                        ghost_status = ghost_status
                         )
                 # If the Pacman is eaten, end this path
                 if self.is_eaten:
@@ -201,48 +214,33 @@ class PathTree:
 
 
     def _computeReward(self, cur_position):
+        existing_beans = copy.deepcopy(self.current_node.existing_beans)
+        existing_energizers = copy.deepcopy(self.current_node.existing_energizers)
+        existing_fruit = copy.deepcopy(self.current_node.existing_fruit)
+        ghost_status = copy.deepcopy(self.current_node.ghost_status)
         reward = 0
         # Bean reward
-        if isinstance(self.existing_bean, float):
+        if isinstance(existing_beans, float):
             reward += 0
-        elif cur_position in self.existing_bean:
+        elif cur_position in existing_beans:
             reward += self.reward_amount[1]
-            self.existing_bean.remove(cur_position)
+            existing_beans.remove(cur_position)
         else:
             reward += 0
         # Energizer reward
-        if isinstance(self.energizer_data, float) or cur_position not in self.energizer_data:
+        if isinstance(existing_energizers, float) or cur_position not in existing_energizers:
             reward += 0
-        else:
+        elif cur_position in existing_energizers:
             # Reward for eating the energizer
-            if cur_position in self.existing_energizer:
-                reward += self.reward_amount[2]
-                self.existing_energizer.remove(cur_position)
-                self.ghost_status = [4 if each != 3 else 3 for each in self.ghost_status]  # change ghost status
-                # Potential reward for ghosts
-                ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-                ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
-                if 4 == ifscared1 or 4 == ifscared2:  # ghosts are scared
-                    if 3 == ifscared1:
-                        ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
-                    elif 3 == ifscared2:
-                        ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
-                    else:
-                        if cur_position != self.ghost_data[0] and cur_position != self.ghost_data[1]:
-                            ghost_dist = min(
-                                self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
-                            )
-                        else:
-                            ghost_dist = 1 #TODO: change to 0 and revise the division
-                    if ghost_dist < self.ghost_attractive_thr:
-                        reward += self.reward_amount[8] * (1 / ghost_dist)
-            else:
-                reward += 0
-
-        # Ghost reward (check whether ghosts are scared)
-        ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-        ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
-        if 4 == ifscared1 or 4 == ifscared2:  # ghosts are scared
+            reward += self.reward_amount[2]
+            existing_energizers.remove(cur_position)
+            ghost_status = [4 if each != 3 else 3 for each in ghost_status]  # change ghost status
+        else:
+            pass
+        # Potential ghost reward (check whether ghosts are scared)
+        ifscared1 = ghost_status[0] if not isinstance(ghost_status[0], float) else 0
+        ifscared2 = ghost_status[1] if not isinstance(ghost_status[1], float) else 0
+        if 4 <= ifscared1 or 4 <= ifscared2:  # ghosts are scared
             if cur_position not in self.ghost_data:
                 # compute ghost dist
                 if 3 == ifscared1:
@@ -254,31 +252,32 @@ class PathTree:
                         self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
                     )
                 if ghost_dist < self.ghost_attractive_thr:
-                    reward += self.reward_amount[8] * (1 / ghost_dist)
+                    reward += self.reward_amount[8] * (1 / ghost_dist) #TODO: revise this function
             elif cur_position in self.ghost_data:
                 reward += self.reward_amount[8]
                 if cur_position == self.ghost_data[0]:
-                    self.ghost_status[0] = 3
+                    ghost_status[0] = 3
                 else:
-                    self.ghost_status[1] = 3
+                    ghost_status[1] = 3
             else:
                 reward += 0
         # Fruit reward 
-        if not isinstance(self.existing_fruit, float):
+        if not isinstance(existing_fruit, float):
             if cur_position == self.fruit_pos:
                 reward += self.reward_amount[int(self.reward_type)]
-                self.existing_fruit = np.nan
+                existing_fruit = np.nan
             else:
                 fruit_dist = self.locs_df[cur_position][self.fruit_pos]
                 if fruit_dist < self.fruit_attractive_thr:
                     reward += self.reward_amount[int(self.reward_type)] * (1 / fruit_dist)
-        return reward
+        return reward, existing_beans, existing_energizers, existing_fruit, ghost_status
 
 
     def _computeRisk(self, cur_position):
+        ghost_status = self.current_node.ghost_status
         # Compute ghost risk when ghosts are normal
-        ifscared1 = self.ghost_status[0] if not isinstance(self.ghost_status[0], float) else 0
-        ifscared2 = self.ghost_status[1] if not isinstance(self.ghost_status[1], float) else 0
+        ifscared1 = ghost_status[0] if not isinstance(ghost_status[0], float) else 0
+        ifscared2 = ghost_status[1] if not isinstance(ghost_status[1], float) else 0
         if ifscared1 <= 2 or ifscared2 <= 2: # ghosts are normal; use "or" for dealing with dead ghosts
             if 3 == ifscared1:
                 # Pacman is eaten
@@ -355,15 +354,24 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
 
-    cur_pos = (27, 33) # 24
-    ghost_data = [(14, 33), (17, 27)]
+    # cur_pos = (27, 33) # 24
+    # ghost_data = [(14, 33), (17, 27)]
+    # ghost_status = [1, 1]
+    # energizer_data = [(13, 9), (22, 26)]
+    # bean_data = [(7, 5), (11, 5), (17, 5), (23, 5), (2, 8), (18, 9), (27, 11), (13, 12), (24, 12), (7, 14),
+    #              (7, 15), (10, 15), (13, 15), (16, 15), (19, 15), (22, 15), (7, 16), (2, 18), (25, 18), (22, 19),
+    #              (7, 21), (17, 21), (27, 24), (15, 27), (13, 31)]
+    # reward_type = 6
+    # fruit_pos = (2, 7)
+    # last_dir = "right"
+
+    cur_pos = (13, 27)  # 24
+    ghost_data = [(22, 9), (23, 9)]
     ghost_status = [1, 1]
-    energizer_data = [(13, 9), (22, 26)]
-    bean_data = [(7, 5), (11, 5), (17, 5), (23, 5), (2, 8), (18, 9), (27, 11), (13, 12), (24, 12), (7, 14),
-                 (7, 15), (10, 15), (13, 15), (16, 15), (19, 15), (22, 15), (7, 16), (2, 18), (25, 18), (22, 19),
-                 (7, 21), (17, 21), (27, 24), (15, 27), (13, 31)]
+    energizer_data = [(12, 27), (14, 27)]
+    bean_data = [(15, 27), (16, 27)]
     reward_type = 6
-    fruit_pos = (2, 7)
+    fruit_pos = (11, 27)
     last_dir = "right"
 
     # Global agent
@@ -380,7 +388,7 @@ if __name__ == '__main__':
         ghost_status,
         last_dir,
         15,
-        5,
+        0, #TODO: revise to 5 after the test
         34,
         34,
         34,
