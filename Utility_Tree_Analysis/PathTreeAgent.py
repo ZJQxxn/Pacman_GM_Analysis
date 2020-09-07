@@ -309,6 +309,7 @@ class PathTree:
                     )
             if ghost_dist < self.ghost_repulsive_thr:
                 risk = -self.reward_amount[9] * 1 / ghost_dist
+                # risk = -self.reward_amount[9] * (self.ghost_repulsive_thr / ghost_dist - 1)
             else:
                 risk = 0
         # Ghosts are not scared
@@ -318,10 +319,13 @@ class PathTree:
 
 
     def _descendantUtility(self, node):
-        utility = 0.0
+        # utility = 0.0
+        leaves_utility = []
         for each in node.leaves:
-            utility += each.cumulative_utility
-        return utility
+            leaves_utility.append(each.cumulative_utility)
+            # utility += each.cumulative_utility
+        # return max(leaves_utility)
+        return sum(leaves_utility) / len(leaves_utility)
 
 
     def nextDir(self, return_Q = False):
@@ -334,9 +338,11 @@ class PathTree:
         available_directions_index = [self.dir_list.index(each) for each in available_directions]
         self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
         # Add randomness and laziness
-        self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
+        Q_scale = scaleOfNumber(np.max(np.abs(self.Q_value)))
+        randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
+        self.Q_value[available_directions_index] += (self.randomness_coeff * randomness)
         if self.last_dir is not None and self.dir_list.index(self.last_dir) in available_directions_index:
-            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * scaleOfNumber(np.max(np.abs(self.Q_value))))
+            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * Q_scale)
         if return_Q:
             return best_path[0][1], self.Q_value
         else:
@@ -367,16 +373,16 @@ if __name__ == '__main__':
     # fruit_pos = (2, 7)
     # last_dir = "right"
 
-    cur_pos = (2, 9)  # 93
-    ghost_data = [(13, 5), (13, 6)]
+    cur_pos = (13, 12)  # 35
+    ghost_data = [(17, 12), (12, 12)]
     ghost_status = [4, 4]
-    energizer_data = None
-    bean_data = [(2, 6), (2, 8), (16, 8), (16, 12), (7, 13), (13, 14), (5, 18), (7, 19), (11, 21),
-                 (7, 23), (24, 24), (27, 24), (7, 25), (8, 27), (2, 28), (2, 29), (4, 30), (7, 30),
-                 (16, 31), (8, 33)]
+    energizer_data = [(13, 9), (9, 24)]
+    bean_data = [(4, 5), (6, 5), (23, 5), (27, 6), (27, 7), (2, 8), (16, 8), (3, 9), (27, 10), (11, 12), (7, 14),
+                 (22, 14), (7, 15), (23, 18), (25, 18), (26, 18), (10, 23), (8, 24), (20, 24), (13, 25), (16, 25),
+                 (8, 27), (9, 27), (7, 28), (5, 30), (12, 30), (27, 31), (11, 33)]
     reward_type = 6
-    fruit_pos = (2, 7)
-    last_dir = "left"
+    fruit_pos = (2,7)
+    last_dir = "up"
 
     # Global agent
     agent = PathTree(

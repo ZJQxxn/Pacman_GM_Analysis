@@ -160,7 +160,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     ignore_depth = 5
     global_ghost_attractive_thr = 34
     global_fruit_attractive_thr = 34
-    global_ghost_repulsive_thr = 12
+    global_ghost_repulsive_thr = 34
     # Configuration (for local agent)
     local_depth = 5
     local_ghost_attractive_thr = 5
@@ -735,128 +735,12 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
     plt.show()
 
 
-# ================================================================================================
-# =============                     DO NOT USE !!!!!!              ===============================
-def estimationError(param, loss_func, all_data, true_prob, agents_list, return_trajectory = False):
-    if 0 == len(agents_list) or None == agents_list:
-        raise ValueError("Undefined agents list!")
-    else:
-        agent_weight = [param[i] for i in range(len(param))]
-    true_prob = np.array([[i for i in each]
-                          for each in (true_prob.values
-                                       if isinstance(true_prob, pd.DataFrame) or isinstance(true_prob, pd.Series)
-                                       else true_prob)
-                          ])
-    # Compute estimation error
-    ee = 0  # estimation error
-    num_samples = all_data.shape[0]
-    agents_list = ["{}_estimation".format(each) for each in agents_list]
-    pre_estimation = all_data[agents_list].values
-    one_hot_estimation = np.zeros((num_samples, 4, len(agents_list)))
-    for index in range(num_samples):
-        for i in range(len(agents_list)):
-            one_hot_estimation[index, :, i] = oneHot(pre_estimation[index, i])
-    estimation_prob_trajectory = one_hot_estimation @ agent_weight
-    if "l2-norm" == loss_func:
-        error = np.linalg.norm(estimation_prob_trajectory - true_prob)
-    elif "cross-entropy" == loss_func:
-        error = log_loss(true_prob, estimation_prob_trajectory)
-    else:
-        raise ValueError("Undefined loss function {}!".format(loss_func))
-    ee += error
-    if not return_trajectory:
-        return ee
-    else:
-        return (ee, estimation_prob_trajectory)
-
-def MEE(config):
-    print("=" * 20, " MEE ", "=" * 20)
-    print("Agent List :", config["agents"])
-    # Load experiment data
-    all_data, true_prob = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])
-    feasible_data_index = np.where(
-        all_data["{}_estimation".format(config["agents"][0])].apply(lambda x: not isinstance(x, float))
-    )[0]
-    all_data = all_data.iloc[feasible_data_index]
-    true_prob = true_prob.iloc[feasible_data_index]
-    print("Number of samples : ", all_data.shape[0])
-    if "clip_samples" not in config or config["clip_samples"] is None:
-        num_samples = all_data.shape[0]
-    else:
-        num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
-    all_data = all_data.iloc[:num_samples]
-    true_prob = true_prob.iloc[:num_samples]
-    print("Number of used samples : ", all_data.shape[0])
-    # Optimization
-    # bounds = [[0.0, 1.0]] * len(config["agents"])
-    # params = np.array([0.25] * len(config["agents"]))
-    bounds = config["bounds"]
-    params = config["params"]
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
-    cons.append({'type': 'eq', 'fun': lambda x: sum(x) - 1})
-    # Notes [Jiaqi Aug. 13]: -- about the lambda function --
-    # params = [0, 0, 0, 0]
-    # func = lambda parameter: func() [WRONG]
-    # func = lambda params: func() [CORRECT]
-    func = lambda params: estimationError(
-        params,
-        config["loss-func"],
-        all_data,
-        true_prob,
-        config["agents"],
-        return_trajectory = False
-    )
-    is_success = False
-    retry_num = 0
-    while not is_success and retry_num < config["maximum_try"]:
-        res = scipy.optimize.minimize(
-            func,
-            x0 = params,
-            method = "SLSQP",
-            bounds = bounds,
-            tol = 1e-5,
-            constraints = cons
-        )
-        is_success = res.success
-        if not is_success:
-            retry_num += 1
-            print("Failed, retrying...")
-    print("Initial guess : ", params)
-    print("Estimated Parameter : ", res.x)
-    print("Message : ", res.message)
-    # Estimation
-    testing_data, testing_true_prob = readTestingDatasetFromPkl(
-        config["testing_data_filename"],
-        only_necessary = config["only_necessary"])
-    # not_nan_index = [each for each in not_nan_index if ]
-    print("Testing data num : ", testing_data.shape[0])
-    _, estimated_prob = estimationError(
-        res.x,
-        config["loss-func"],
-        testing_data,
-        testing_true_prob,
-        config["agents"],
-        return_trajectory = True
-    )
-    true_dir = np.array([np.argmax(each) for each in testing_true_prob])
-    # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
-    correct_rate = np.sum(estimated_dir == true_dir)
-    print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
-
-# ================================================================================================
-
 
 
 
 if __name__ == '__main__':
     # # Pre-estimation
-    # preEstimation()
+    preEstimation()
 
 
     # Configurations
@@ -887,7 +771,7 @@ if __name__ == '__main__':
     }
 
     # ============ ESTIMATION =============
-    MLE(config)
+    # MLE(config)
 
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config, save_res = True)

@@ -175,9 +175,11 @@ class PlannedHuntingAgent:
         available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
         self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
         # Add randomness and laziness
-        self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
+        Q_scale = scaleOfNumber(np.max(np.abs(self.Q_value)))
+        randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
+        self.Q_value[available_directions_index] += (self.randomness_coeff * randomness)
         if self.last_dir is not None and self.dir_list.index(self.last_dir) in available_directions_index:
-            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * scaleOfNumber(np.max(np.abs(self.Q_value))))
+            self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * Q_scale)
         choice = np.argmax(self.Q_value[available_directions_index])
         choice = self.available_dir[choice]
         if return_Q:
