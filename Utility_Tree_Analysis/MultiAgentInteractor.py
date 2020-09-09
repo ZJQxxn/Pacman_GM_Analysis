@@ -75,11 +75,11 @@ class MultiAgentInteractor:
         self.local_ghost_attractive_thr = 5
         self.local_fruit_attractive_thr = 5
         self.local_ghost_repulsive_thr = 5
-        # Configuration (for optimistic agent)
-        self.optimistic_depth = 5
-        self.optimistic_ghost_attractive_thr = 5
-        self.optimistic_fruit_attractive_thr = 5
-        self.optimistic_ghost_repulsive_thr = 5
+        # # Configuration (for optimistic agent)
+        # self.optimistic_depth = 5
+        # self.optimistic_ghost_attractive_thr = 5
+        # self.optimistic_fruit_attractive_thr = 5
+        # self.optimistic_ghost_repulsive_thr = 5
         # Configuration (for pessimistic agent)
         self.pessimistic_depth = 5
         self.pessimistic_ghost_attractive_thr = 5
@@ -150,7 +150,9 @@ class MultiAgentInteractor:
             fruit_attractive_thr = self.global_fruit_attractive_thr,
             ghost_repulsive_thr = self.global_ghost_repulsive_thr,
             randomness_coeff = self.randomness_coeff,
-            laziness_coeff = self.laziness_coeff
+            laziness_coeff = self.laziness_coeff,
+            reward_coeff = 1.0,
+            risk_coeff = 0.0
         )
         # Estimate the moving direction
         global_result = self.global_agent.nextDir(return_Q = True)
@@ -181,7 +183,9 @@ class MultiAgentInteractor:
             fruit_attractive_thr = self.local_fruit_attractive_thr,
             ghost_repulsive_thr = self.local_ghost_repulsive_thr,
             randomness_coeff = self.randomness_coeff,
-            laziness_coeff = self.laziness_coeff
+            laziness_coeff = self.laziness_coeff,
+            reward_coeff = 1.0,
+            risk_coeff = 0.0
         )
         # Estimate the moving direction
         local_result = self.local_agent.nextDir(return_Q = True)
@@ -189,7 +193,7 @@ class MultiAgentInteractor:
         return local_Q
 
 
-    def _optimisticAgent(self):
+    def DEPRECATE_optimisticAgent(self):
         '''
         Use the global agent to predict the moving direction given game status of the current time step. 
         :return: The one-hot vector denoting the direction estimation of global agent.
@@ -323,13 +327,13 @@ class MultiAgentInteractor:
             warnings.warn("The game status is not reset since the last direction estimation! "
                           "Are you sure you want to predict the moving direction in this case?")
         # Obtain estimations of all the agents
-        agent_estimation = np.zeros((4, 6))
+        agent_estimation = np.zeros((4, 5))
         agent_estimation[:, 0] = self._globalAgent()
         agent_estimation[:, 1] = self._localAgent()
-        agent_estimation[:, 2] = self._optimisticAgent()
-        agent_estimation[:, 3] = self._pessimisticAgent()
-        agent_estimation[:, 4] = self._suicideAgent()
-        agent_estimation[:, 5] = self._plannedHuntingAgent()
+        # agent_estimation[:, 2] = self._optimisticAgent()
+        agent_estimation[:, 2] = self._pessimisticAgent()
+        agent_estimation[:, 3] = self._suicideAgent()
+        agent_estimation[:, 4] = self._plannedHuntingAgent()
         integrate_estimation = agent_estimation @ self.agent_weight
         self.reset_flag = False
         # If multiple directions have the highest score, choose the first occurrence
@@ -379,7 +383,6 @@ class MultiAgentInteractor:
         self.pessimistic_agent = None
         self.suicide_agent = None
         self.planned_hunting_agent = None
-
 
 
     def resetLastDir(self):

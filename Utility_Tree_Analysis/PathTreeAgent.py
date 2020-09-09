@@ -398,10 +398,11 @@ if __name__ == '__main__':
         ghost_status,
         last_dir,
         15,
-        5, #TODO: revise to 5 after the test
+        5,
         34,
         34,
         34,
+        reward_coeff=1.0, risk_coeff=0.0,
         randomness_coeff=1.0, laziness_coeff=1.0
     )
     choice = agent.nextDir(return_Q = True)
@@ -424,34 +425,11 @@ if __name__ == '__main__':
         0,
         5,
         5,
-        5
+        5,
+        reward_coeff=1.0, risk_coeff=0.0
     )
     choice = agent.nextDir(return_Q=True)
     print("Local Agent Q : ", choice)
-
-    # Optimistice
-    agent = PathTree(
-        adjacent_data,
-        locs_df,
-        reward_amount,
-        cur_pos,
-        energizer_data,
-        bean_data,
-        ghost_data,
-        reward_type,
-        fruit_pos,
-        ghost_status,
-        last_dir,
-        10,
-        0,
-        34,
-        34,
-        12,
-        reward_coeff = 1.0,
-        risk_coeff = 0.0
-    )
-    choice = agent.nextDir(return_Q=True)
-    print("Optimistic Q : ", choice)
 
     # Pessimistic
     agent = PathTree(

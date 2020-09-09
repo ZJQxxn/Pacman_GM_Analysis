@@ -446,15 +446,17 @@ def _preProcessingQ(Q_value, last_dir, randomness_coeff = 1.0):
         cur_Q = Q_value.iloc[index]
         unavailable_index.append(np.where(cur_Q == 0))
         available_index.append(np.where(cur_Q != 0))
-        # Add randomness and lazines
+        # Add randomness and laziness
+        Q_scale = scaleOfNumber(np.max(np.abs(cur_Q)))
+        randomness = np.random.normal(loc=0, scale=0.1, size=len(available_index[index][0])) * Q_scale
         Q_value.iloc[index][available_index[index]] = (
             Q_value.iloc[index][available_index[index]]
-            + randomness_coeff * np.random.normal(size = len(available_index[index][0])) # randomness
-        )
+            + randomness_coeff * randomness
+        )# randomness
         if last_dir[index] is not None and dir_list.index(last_dir[index]) in available_index[index][0]:
             Q_value.iloc[index][dir_list.index(last_dir[index])] = (
                 Q_value.iloc[index][dir_list.index(last_dir[index])]
-                + scaleOfNumber(np.max(np.abs(cur_Q)))
+                + Q_scale
             )  # laziness
         temp_Q.extend(Q_value.iloc[index])
     # Convert  negative to non-negative

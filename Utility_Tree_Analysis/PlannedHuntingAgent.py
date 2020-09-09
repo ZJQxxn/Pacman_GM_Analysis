@@ -50,68 +50,6 @@ class PlannedHuntingAgent:
         self.laziness_coeff = laziness_coeff
 
 
-    # def nextDir(self, return_Q = False):
-    #     # If ghosts are scared or no energizer exists, degenerate to random agent
-    #     if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float):
-    #         self.Q_value = np.array([0.0, 0.0, 0.0, 0.0])
-    #     # Else, has chance to plan hunting
-    #     else:
-    #         P_G_distance = []  # distance between adjacent positions of Pacman and ghosts
-    #         P_E_distance = []  # distance between adjacent positions of Pacman and energizers
-    #         for each_adjacent_pos in self.adjacent_pos:
-    #             temp_P_G_distance = []
-    #             temp_P_E_distance = []
-    #             # ghost distance
-    #             for index, each_ghost_pos in enumerate(self.ghost_data):
-    #                 each_ghost_pos = tuple(each_ghost_pos)
-    #                 if 3 == self.ghost_status[index]:  # in case one ghost is dead
-    #                     continue
-    #                 if each_ghost_pos in self.locs_df[each_adjacent_pos]:
-    #                     temp_P_G_distance.append(self.locs_df[each_adjacent_pos][each_ghost_pos])
-    #                 elif each_ghost_pos == each_adjacent_pos:
-    #                     temp_P_G_distance.append(1.0)
-    #                 else:
-    #                     print("Lost path : {} to {}".format(each_adjacent_pos, each_ghost_pos))
-    #             P_G_distance.append(temp_P_G_distance)
-    #             # energizer distance
-    #             for each_energizer_pos in self.energizer_data:
-    #                 if each_energizer_pos in self.locs_df[each_adjacent_pos]:
-    #                     temp_P_E_distance.append(self.locs_df[each_adjacent_pos][each_energizer_pos])
-    #                 elif each_energizer_pos == each_adjacent_pos:
-    #                     temp_P_E_distance.append(1.0)
-    #                 else:
-    #                     print("Lost path : {} to {}".format(each_adjacent_pos, each_energizer_pos))
-    #             P_E_distance.append(temp_P_E_distance)
-    #         P_G_distance = np.array(P_G_distance)
-    #         P_E_distance = np.array(P_E_distance)
-    #         # Compute utility of each adjacent positions (i.e., each moving direction)
-    #         available_dir_utility = []
-    #         for adjacent_index in range(len(self.available_dir)):
-    #             temp_utility = 0.0
-    #             temp_P_G_distance = P_G_distance[adjacent_index]
-    #             temp_P_E_distance = P_E_distance[adjacent_index]
-    #             for P_G in temp_P_G_distance:
-    #                 for P_E in temp_P_E_distance:
-    #                     temp_utility += (P_G - P_E)
-    #             # temp_utility = temp_utility / (len(temp_P_E_distance) * len(temp_P_G_distance))
-    #             available_dir_utility.append(temp_utility)
-    #         available_dir_utility = np.array(available_dir_utility)
-    #         for index, each in enumerate(self.available_dir):
-    #             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
-    #         self.Q_value = np.array(self.Q_value)
-    #     # Add randomness and laziness
-    #     self.Q_value = np.array(self.Q_value)
-    #     available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
-    #     self.Q_value[available_directions_index] += (self.randomness_coeff * np.random.normal(size=len(available_directions_index)))
-    #     if self.last_dir in self.available_dir:
-    #         self.Q_value[self.dir_list.index(self.last_dir)] += self.laziness_offset
-    #     choice = np.argmax(self.Q_value[available_directions_index])
-    #     choice = self.available_dir[choice]
-    #     if return_Q:
-    #         return choice, self.Q_value
-    #     else:
-    #         return choice
-
     def nextDir(self, return_Q = False):
         # If ghosts are scared or no energizer exists, degenerate to random agent
         if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float) or self.energizer_data == []:
