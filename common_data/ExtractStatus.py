@@ -58,14 +58,22 @@ def _findGlobal(trial_data):
 
 
 def _findPessimistic(trial_data):
-    is_scared1 = trial_data.ifscared1
-    is_scared2 = trial_data.ifscared2
-    is_pessimistic = np.logical_or(is_scared1 <= 2, is_scared2 <= 2)
-    pessimistic_start = np.where(is_pessimistic == 1)
-    if len(pessimistic_start[0]) == 0:
+    # is_scared1 = trial_data.ifscared1
+    # is_scared2 = trial_data.ifscared2
+    # is_pessimistic = np.logical_or(is_scared1 <= 2, is_scared2 <= 2)
+    # pessimistic_start = np.where(is_pessimistic == 1)
+    # if len(pessimistic_start[0]) == 0:
+    #     return None
+    # else:
+    #     return trial_data.iloc[pessimistic_start[0][0]].values
+    label_evade = trial_data.label_evade
+    nan_index = np.where(np.isnan(label_evade))
+    label_evade.iloc[nan_index] = 0
+    evade_start = np.where(label_evade == 1)
+    if len(evade_start[0]) == 0:
         return None
     else:
-        return trial_data.iloc[pessimistic_start[0][0]].values
+        return trial_data.iloc[evade_start[0][0]].values
 
 
 def _findSuicide(trial_data):
@@ -151,7 +159,7 @@ def extractStatus():
 
     if len(pessimistic_satus) > 0:
         pessimistic_satus = pd.DataFrame(data=pessimistic_satus, columns=trial_data.columns.values)
-        with open("status/pessimistic_sattus.pkl", "wb") as file:
+        with open("status/pessimistic_status.pkl", "wb") as file:
             pickle.dump(pessimistic_satus, file)
         print("Finished writing pessimistic status {}.".format(pessimistic_satus.shape[0]))
     else:
