@@ -14,7 +14,7 @@ ifscared1/2： 1 chasing pacman, 2 going corner, 3 dead ghosts (include ghosts a
 ifscared1/2是内置鬼的状态，标注他是在追pacman还是在跑回自己的领地：going corner（这只有黄鬼会这样，红鬼永远在追pacman）
 
 pacman_dir: 从上一个位置到这一个位置，Pacman移动的方向
-
+next_pacman_dir: 该位置到下一个位置的方向
 ==================================================
 
 Suicide: And
