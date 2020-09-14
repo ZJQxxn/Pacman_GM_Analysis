@@ -437,15 +437,8 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
 
 def MLE(config):
     print("=" * 20, " MLE ", "=" * 20)
-    print("Agent List :", config["agents"])
-    agent_type = "_".join(config["agents"])
     # Load experiment data
     all_data, true_prob = readDatasetFromPkl(config["data_filename"], only_necessary=config["only_necessary"])
-    feasible_data_index = np.where(
-        all_data["{}_Q".format(config["agents"][0])].apply(lambda x: not isinstance(x, float))
-    )[0]
-    all_data = all_data.iloc[feasible_data_index]
-    true_prob = true_prob.iloc[feasible_data_index]
     print("Number of samples : ", all_data.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = all_data.shape[0]
@@ -456,7 +449,7 @@ def MLE(config):
     # pre-processing of Q-value
     agent_normalizing_factors = []
     agent_offset = []
-    for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
+    for agent_name in ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]:
         preprocessing_res = _preProcessingQ(all_data[agent_name])
         agent_offset.append(preprocessing_res[0])
         agent_normalizing_factors.append(preprocessing_res[1])
@@ -465,18 +458,6 @@ def MLE(config):
     print("Number of used samples : ", all_data.shape[0])
     print("Agent Normalizing Factors : ", agent_normalizing_factors)
     print("Agent Offset : ", agent_offset)
-    # Optimization
-    bounds = config["bounds"]
-    params = config["params"]
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
-    # 5-fold cross-validation
-    fold_weight = []
-    fold_accuracy = []
     # Split into training set and testing set (1:1)
     if "level_0" in all_data.columns.values:
         all_data = all_data.drop(columns = ["level_0"])
@@ -498,147 +479,187 @@ def MLE(config):
     training_true_prob = training_true_prob.reset_index().next_pacman_dir_fill
     testing_data = testing_data.reset_index()
     testing_true_prob = testing_true_prob.reset_index().next_pacman_dir_fill
-
-    # 5-fold cross-validation
-    for training_index, validation_index in KFold(n_splits=5).split(training_data):
-        print("-" * 30)
-        # Notes [Jiaqi Aug. 13]: -- about the lambda function --
-        # params = [0, 0, 0, 0]
-        # func = lambda parameter: func() [WRONG]
-        # func = lambda params: func() [CORRECT]
-        func = lambda params: negativeLikelihood(
-            params,
-            training_data.iloc[training_index],
-            training_true_prob.iloc[training_index],
-            config["agents"],
-            return_trajectory=False
-        )
-        is_success = False
-        retry_num = 0
-        while not is_success and retry_num < config["maximum_try"]:
-            res = scipy.optimize.minimize(
-                func,
-                x0=params,
-                method="SLSQP",
-                bounds=bounds,  # exclude bounds and cons because the Q-value has different scales for different agents
-                tol=1e-5,
-                constraints=cons
+    for agent_list in [
+        ["global", "local", "pessimistic", "suicide", "planned_hunting"],
+        ["global", "local", "pessimistic"]
+    ]:
+        print("Agent List :", agent_list)
+        agent_type = "_".join(agent_list)
+        # Optimization
+        params = [1 for _ in range(len(agent_list))]
+        bounds = [[0, 1000] for _ in range(len(agent_list))]
+        cons = []  # construct the bounds in the form of constraints
+        for par in range(len(bounds)):
+            l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+            u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+            cons.append(l)
+            cons.append(u)
+        # 5-fold cross-validation
+        fold_weight = []
+        fold_accuracy = []
+        for training_index, validation_index in KFold(n_splits=5).split(training_data):
+            print("-" * 30)
+            # Notes [Jiaqi Aug. 13]: -- about the lambda function --
+            # params = [0, 0, 0, 0]
+            # func = lambda parameter: func() [WRONG]
+            # func = lambda params: func() [CORRECT]
+            func = lambda params: negativeLikelihood(
+                params,
+                training_data.iloc[training_index],
+                training_true_prob.iloc[training_index],
+                agent_list,
+                return_trajectory=False
             )
-            is_success = res.success
-            if not is_success:
-                retry_num += 1
-                print("Failed, retrying...")
-        print("Initial guess : ", params)
-        print("Estimated Parameter : ", res.x)
-        print("Normalized Parameter (res / sum(res)): ", res.x / np.sum(res.x))
-        print("Message : ", res.message)
-        # Estimation on validation
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    # exclude bounds and cons because the Q-value has different scales for different agents
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    retry_num += 1
+                    print("Failed, retrying...")
+            print("Initial guess : ", params)
+            print("Estimated Parameter : ", res.x)
+            print("Normalized Parameter (res / sum(res)): ", res.x / np.sum(res.x))
+            print("Message : ", res.message)
+            # Estimation on validation
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                training_data.iloc[validation_index],
+                training_true_prob.iloc[validation_index],
+                agent_list,
+                return_trajectory=True
+            )
+            true_dir = np.array([makeChoice(each) for each in training_true_prob.iloc[validation_index]])
+            # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+            estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
+            correct_rate = np.sum(estimated_dir == true_dir)
+            correct_rate = correct_rate / len(true_dir)
+            print("Correct rate on validation data: ", correct_rate)
+            fold_weight.append(res.x)
+            fold_accuracy.append(correct_rate)
+        # The weight with the highest correct rate
+        best = np.argmax(fold_accuracy).item()
+        print("=" * 25)
+        print("Best Weight : ", fold_weight[best])
+        print("Best accuracy : ", fold_accuracy[best])
+        # =========================================================
+        # Estimation on the whole training data
         _, estimated_prob = negativeLikelihood(
-            res.x,
-            training_data.iloc[validation_index],
-            training_true_prob.iloc[validation_index],
-            config["agents"],
+            fold_weight[best],
+            training_data,
+            training_true_prob,
+            agent_list,
             return_trajectory=True
         )
-        true_dir = np.array([makeChoice(each) for each in training_true_prob.iloc[validation_index]])
+        true_dir = np.array([makeChoice(each) for each in training_true_prob])
+        estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
+        correct_rate = np.sum(estimated_dir == true_dir)
+        correct_rate = correct_rate / len(true_dir)
+        print("Correct rate on the whole training data: ", correct_rate)
+        with open("training_result-{}.pkl".format(agent_type), "wb") as file:
+            pickle.dump(_beanNumVSCorrectRate(training_data, true_dir, estimated_dir), file)
+        # Estimation on testing data
+        _, estimated_prob = negativeLikelihood(
+            fold_weight[best],
+            testing_data,
+            testing_true_prob,
+            agent_list,
+            return_trajectory=True
+        )
+        true_dir = np.array([makeChoice(each) for each in testing_true_prob])
         # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
         estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
         correct_rate = np.sum(estimated_dir == true_dir)
         correct_rate = correct_rate / len(true_dir)
-        print("Correct rate on validation data: ", correct_rate)
-        fold_weight.append(res.x)
-        fold_accuracy.append(correct_rate)
-    # The weight with the highest correct rate
-    best = np.argmax(fold_accuracy).item()
-    print("="*25)
-    print("Best Weight : ", fold_weight[best])
-    print("Best accuracy : ", fold_accuracy[best])
-    # =========================================================
-    # Estimation on the whole training data
-    _, estimated_prob = negativeLikelihood(
-        fold_weight[best],
-        training_data,
-        training_true_prob,
-        config["agents"],
-        return_trajectory=True
-    )
-    true_dir = np.array([makeChoice(each) for each in training_true_prob])
-    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
-    correct_rate = np.sum(estimated_dir == true_dir)
-    correct_rate = correct_rate / len(true_dir)
-    print("Correct rate on the whole training data: ", correct_rate)
-    with open("training_result-{}.pkl".format(agent_type), "wb") as file:
-        pickle.dump(_beanNumVSCorrectRate(training_data, true_dir, estimated_dir), file)
-    # Estimation on testing data
-    _, estimated_prob = negativeLikelihood(
-        fold_weight[best],
-        testing_data,
-        testing_true_prob,
-        config["agents"],
-        return_trajectory=True
-    )
-    true_dir = np.array([makeChoice(each) for each in testing_true_prob])
-    # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
-    correct_rate = np.sum(estimated_dir == true_dir)
-    correct_rate = correct_rate / len(true_dir)
-    print("Correct rate on the whole testing data: ", correct_rate)
-    with open("testing_result-{}.pkl".format(agent_type), "wb") as file:
-        pickle.dump(_beanNumVSCorrectRate(testing_data, true_dir, estimated_dir), file)
-    np.save("weight-{}.npy".format(agent_type), fold_weight[best])
+        print("Correct rate on the whole testing data: ", correct_rate)
+        with open("testing_result-{}.pkl".format(agent_type), "wb") as file:
+            pickle.dump(_beanNumVSCorrectRate(testing_data, true_dir, estimated_dir), file)
+        np.save("weight-{}.npy".format(agent_type), fold_weight[best])
+
 
 
 
 # ===================================
 #         VISUALIZATION
 # ===================================
-def plotBeanVSAccuracy(training_result_file, testing_result_file):
+def plotBeanVSAccuracy():
+    path_tree_training_file = "./altogether_analysis/training_result-global_local_pessimistic.pkl"
+    path_tree_testing_file = "./altogether_analysis/testing_result-global_local_pessimistic.pkl"
+    all_training_file = "./altogether_analysis/training_result-global_local_pessimistic_suicide_planned_hunting.pkl"
+    all_testing_file = "./altogether_analysis/testing_result-global_local_pessimistic_suicide_planned_hunting.pkl"
     # Read data
-    with open(training_result_file, "rb") as file:
-        training_result = pickle.load(file)
-    with open(testing_result_file, "rb") as file:
-        testing_result = pickle.load(file)
-    # Plot correct rate vs. number of beans
-    # for training result
-    plt.subplot(1, 2, 1)
+    with open(path_tree_training_file, "rb") as file:
+        path_tree_training_result = pickle.load(file)
+    with open(path_tree_testing_file, "rb") as file:
+        path_tree_testing_result = pickle.load(file)
+    with open(all_training_file, "rb") as file:
+        all_training_result = pickle.load(file)
+    with open(all_testing_file, "rb") as file:
+        all_testing_result = pickle.load(file)
+    # Processing for training result
+    plt.subplot(2, 1, 1)
     plt.title("Training Set")
-    max_bean_num = np.max(training_result.beans_num)
-    min_bean_num = np.min(training_result.beans_num)
-    print("Min Bean Num : ", min_bean_num)
-    print("Max Bean Num : ", max_bean_num)
+    max_bean_num = 88
+    min_bean_num = 0
     bean_nums = np.arange(min_bean_num, max_bean_num + 1, 1)
-    # bean_nums = np.arange(0, 91, 10)
-    step_nums = np.zeros_like(bean_nums)
-    correct_nums = np.zeros_like(bean_nums)
-    for index in range(training_result.shape[0]):
-        cur_data = training_result.iloc[index]
+    path_tree_step_nums = np.zeros_like(bean_nums)
+    path_tree_correct_nums = np.zeros_like(bean_nums)
+    all_tree_step_nums = np.zeros_like(bean_nums)
+    all_tree_correct_nums = np.zeros_like(bean_nums)
+    for index in range(path_tree_training_result.shape[0]):
+        cur_data = path_tree_training_result.iloc[index]
         bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-        # bean_index = cur_data.beans_num // 10
-        step_nums[bean_index] += 1
+        path_tree_step_nums[bean_index] += 1
         if cur_data.is_correct:
-            correct_nums[bean_index] += 1
-    plt.bar(bean_nums, np.divide(correct_nums, step_nums))
-    plt.xlim((min_bean_num-1, max_bean_num+1))
-    # for testing result
-    plt.subplot(1, 2, 2)
+            path_tree_correct_nums[bean_index] += 1
+    for index in range(all_training_result.shape[0]):
+        cur_data = all_training_result.iloc[index]
+        bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        all_tree_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            all_tree_correct_nums[bean_index] += 1
+    plt.bar(np.array(bean_nums[::-1])-0.45, np.divide(path_tree_correct_nums, path_tree_step_nums)[::-1], label = "Path Tree Agents", width = 0.45, align = "edge")
+    plt.bar(np.array(bean_nums[::-1]), np.divide(all_tree_correct_nums, all_tree_step_nums)[::-1], label = "All Agents", width = 0.45, align = "edge")
+    plt.legend(loc = "upper right")
+    plt.xlabel("# of beans")
+    plt.ylabel("correct rate")
+
+    # Processing for testing result
+    plt.subplot(2, 1, 2)
     plt.title("Testing Set")
-    max_bean_num = np.max(testing_result.beans_num)
-    min_bean_num = np.min(testing_result.beans_num)
-    print("Min Bean Num : ", min_bean_num)
-    print("Max Bean Num : ", max_bean_num)
+    max_bean_num = 88
+    min_bean_num = 0
     bean_nums = np.arange(min_bean_num, max_bean_num + 1, 1)
-    # bean_nums = np.arange(0, 91, 10)
-    step_nums = np.zeros_like(bean_nums)
-    correct_nums = np.zeros_like(bean_nums)
-    for index in range(testing_result.shape[0]):
-        cur_data = testing_result.iloc[index]
+    path_tree_step_nums = np.zeros_like(bean_nums)
+    path_tree_correct_nums = np.zeros_like(bean_nums)
+    all_tree_step_nums = np.zeros_like(bean_nums)
+    all_tree_correct_nums = np.zeros_like(bean_nums)
+    for index in range(path_tree_testing_result.shape[0]):
+        cur_data = path_tree_testing_result.iloc[index]
         bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-        # bean_index = cur_data.beans_num // 10
-        step_nums[bean_index] += 1
+        path_tree_step_nums[bean_index] += 1
         if cur_data.is_correct:
-            correct_nums[bean_index] += 1
-    plt.bar(bean_nums, np.divide(correct_nums, step_nums))
-    plt.xlim((min_bean_num - 1, max_bean_num + 1))
+            path_tree_correct_nums[bean_index] += 1
+    for index in range(all_testing_result.shape[0]):
+        cur_data = all_testing_result.iloc[index]
+        bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        all_tree_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            all_tree_correct_nums[bean_index] += 1
+    plt.bar(np.array(bean_nums[::-1]) - 0.45, np.divide(path_tree_correct_nums, path_tree_step_nums)[::-1], label="Path Tree Agents", width=0.45, align="edge")
+    plt.bar(np.array(bean_nums[::-1]), np.divide(all_tree_correct_nums, all_tree_step_nums)[::-1], label="All Agents", width=0.45, align="edge")
+    plt.legend(loc="upper right")
+    plt.xlabel("# of beans")
+    plt.ylabel("correct rate")
 
     plt.show()
 
@@ -652,7 +673,7 @@ def plotBeanVSAccuracy(training_result_file, testing_result_file):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    # preEstimation()
+    preEstimation()
 
 
     # Configurations
@@ -676,26 +697,19 @@ if __name__ == '__main__':
         "loss-func": "l2-norm",
         # Initial guess of parameters
         # "params": [1, 1, 1, 1, 1],
-        "params": [1, 1, 1],
-        # Bounds for optimization
-        # "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]],
-        "bounds": [[0, 1000], [0, 1000], [0, 1000]],
-        # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        # "agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
-        "agents": ["global", "local", "pessimistic"],
+        # "params": [1, 1, 1],
+        # # Bounds for optimization
+        # # "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]],
+        # "bounds": [[0, 1000], [0, 1000], [0, 1000]],
+        # # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
+        # # "agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
+        # "agents": ["global", "local", "pessimistic"],
     }
 
     # ============ ESTIMATION =============
     # MLE(config)
 
-    print("Only Path Tree Agents : ")
-    plotBeanVSAccuracy(
-        "./altogether_analysis/training_result-global_local_pessimistic.pkl",
-        "./altogether_analysis/testing_result-global_local_pessimistic.pkl"
-    )
+    # plotBeanVSAccuracy()
 
-    print("All the Agents : ")
-    plotBeanVSAccuracy(
-        "./altogether_analysis/training_result-global_local_pessimistic_suicide_planned_hunting.pkl",
-        "./altogether_analysis/testing_result-global_local_pessimistic_suicide_planned_hunting.pkl"
-    )
+    # weight = np.load("./altogether_analysis/weight-global_local_pessimistic_suicide_planned_hunting.npy")
+    # print(weight)

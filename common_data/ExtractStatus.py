@@ -35,8 +35,34 @@ def _extractAllData():
     return all_data_with_label
 
 
+def _readLocDistance(filename):
+    '''
+    Read in the location distance.
+    :param filename: File name.
+    :return: A pandas.DataFrame denoting the dijkstra distance between every two locations of the map.
+    '''
+    locs_df = pd.read_csv(filename)[["pos1", "pos2", "dis"]]
+    locs_df.pos1, locs_df.pos2= (
+        locs_df.pos1.apply(eval),
+        locs_df.pos2.apply(eval)
+    )
+    dict_locs_df = {}
+    for each in locs_df.values:
+        if each[0] not in dict_locs_df:
+            dict_locs_df[each[0]] = {}
+        dict_locs_df[each[0]][each[1]] = each[2]
+    # correct the distance between two ends of the tunnel
+    dict_locs_df[(1, 18)][(27, 18)] = 1
+    return dict_locs_df
+
+
 def _findLocal(trial_data):
-    return trial_data.iloc[0].values
+    beans = trial_data.iloc[0].beans
+    beans = len(beans) if not isinstance(beans, float) else 0
+    if beans > 32:
+        return trial_data.iloc[0].values
+    else:
+        return None
 
 
 def _findGlobal(trial_data):
@@ -87,23 +113,35 @@ def _findSuicide(trial_data):
         return trial_data.iloc[suicide_start[0][0]].values
 
 
-def _findPlanned(trial_data):
-    label_planning = trial_data.label_planning
-    nan_index = np.where(np.isnan(label_planning))
-    label_planning.iloc[nan_index] = 0
-    planning_start = np.where(label_planning == 1)
-    if len(planning_start[0]) == 0:
+def _findPlanned(trial_data, loc_dis):
+    # label_planning = trial_data.label_planning
+    # nan_index = np.where(np.isnan(label_planning))
+    # label_planning.iloc[nan_index] = 0
+    PE = trial_data.apply(
+        lambda x: [loc_dis[x.pacmanPos][each] if x.pacmanPos != each else 0 for each in x.energizers ]
+        if not isinstance(x.energizers, float) else [0],
+        axis = 1
+    )
+    PG = trial_data.apply(lambda x: [
+        loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0,
+        loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0
+    ], axis = 1)
+    planning_index = []
+    for index in range(trial_data.shape[0]):
+        if np.any(np.array(PE.iloc[index]) < 10):
+            planning_index.append(index)
+    if len(planning_index) == 0:
         return None
     else:
-        return trial_data.iloc[planning_start[0][0]].values
+        return trial_data.iloc[planning_index[0]].values
 
 
-def _extractTrialData(trial_data):
+def _extractTrialData(trial_data, loc_dis):
     temp_global = _findGlobal(trial_data)
     temp_local = _findLocal(trial_data)
     temp_pessimistic = _findPessimistic(trial_data)
     temp_suicide = _findSuicide(trial_data)
-    temp_planned = _findPlanned(trial_data)
+    temp_planned = _findPlanned(trial_data, loc_dis)
     return temp_global, temp_local, temp_pessimistic, temp_suicide, temp_planned
 
 
@@ -118,6 +156,7 @@ def extractStatus():
     # with open("1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl", "rb") as file:
     #     all_data = pickle.load(file)
     all_data = _extractAllData()
+    loc_dis = _readLocDistance("dij_distance_map.csv")
     trial_name_list  = np.unique(all_data.file.values)
     print("Trial Num : ", len(trial_name_list))
     if len(trial_name_list) > 2000:
@@ -127,7 +166,7 @@ def extractStatus():
         print("-"*25)
         print("{}-th : ".format(index + 1), trial)
         trial_data = all_data[all_data.file == trial]
-        temp_global, temp_local, temp_pessimistic, temp_suicide, temp_planned = _extractTrialData(trial_data)
+        temp_global, temp_local, temp_pessimistic, temp_suicide, temp_planned = _extractTrialData(trial_data, loc_dis)
         if temp_global is not None:
             global_status.append(copy.deepcopy(temp_global))
         if temp_local is not None:
@@ -186,3 +225,6 @@ def extractStatus():
 
 if __name__ == '__main__':
     extractStatus()
+    # with open("df_total_with_reward.pkl", "rb") as file:
+    #     data = pickle.load(file)
+    #     print()

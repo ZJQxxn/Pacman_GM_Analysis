@@ -742,7 +742,7 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    preEstimation()
+    # preEstimation()
 
 
     # Configurations
