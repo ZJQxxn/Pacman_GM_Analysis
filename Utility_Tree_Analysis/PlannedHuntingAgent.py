@@ -15,6 +15,7 @@ import numpy as np
 import sys
 sys.path.append("./")
 from TreeAnalysisUtils import scaleOfNumber
+from PathTreeAgent import PathTree
 
 
 class PlannedHuntingAgent:
@@ -50,28 +51,39 @@ class PlannedHuntingAgent:
         self.laziness_coeff = laziness_coeff
 
 
+    def _descendantUtility(self, node):
+        utility = 0.0
+        for each in node.leaves:
+            utility += each.cumulative_utility
+        return utility / len(node.leaves)
+
+
     def nextDir(self, return_Q = False):
         # If ghosts are scared or no energizer exists, degenerate to random agent
         if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float) or self.energizer_data == []:
             if np.any(self.ghost_status >= 3):
-                # Compute the distance between Pacman and ghosts
-                P_G_distance = []  # (# of adjacent positions, # of ghosts)
-                for each_adjacent_pos in self.adjacent_pos:
-                    temp_P_G_distance = []
-                    # energizer distance
-                    for index, each_ghost_pos in enumerate(self.ghost_data):
-                        if self.ghost_status[index] == 3:
-                            continue
-                        if tuple(each_ghost_pos) in self.locs_df[each_adjacent_pos]:
-                            temp_P_G_distance.append(self.locs_df[each_adjacent_pos][tuple(each_ghost_pos)])
-                        elif tuple(each_ghost_pos) == each_adjacent_pos:
-                            temp_P_G_distance.append(1.0)
-                        else:
-                            print("Lost path : {} to {}".format(each_adjacent_pos, tuple(each_ghost_pos)))
-                    P_G_distance.append(temp_P_G_distance)
-                P_G_distance = np.array(P_G_distance)
-                P_G_distance = self.reward_amount[8] / P_G_distance
-                self.Q = np.mean(P_G_distance, axis = 1)
+                # Build a local path tree based on the current position
+                cur_pos_tree, _, _ = PathTree(
+                    self.adjacent_data,
+                    self.locs_df,
+                    self.reward_amount,
+                    self.cur_pos,
+                    np.nan, # ignore energizers
+                    np.nan, # ignore beans
+                    self.ghost_data,
+                    np.nan, # ignore fruits
+                    np.nan, # inore fruits
+                    self.ghost_status,
+                    self.last_dir,
+                    depth=17,
+                    ghost_attractive_thr=17,
+                    ghost_repulsive_thr=17,
+                    fruit_attractive_thr=17
+                )._construct()
+                available_directions = [each.dir_from_parent for each in cur_pos_tree.children]
+                available_dir_utility = np.array([self._descendantUtility(each) for each in cur_pos_tree.children])
+                for index, each in enumerate(available_directions):
+                    self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
             else:
                 self.Q_value = np.array([0.0, 0.0, 0.0, 0.0])
         # Else, has chance to plan hunting
@@ -160,7 +172,7 @@ if __name__ == '__main__':
     print("Finished reading auxiliary data!")
     # Planned hunting agent
     cur_pos = (7, 16)
-    ghost_data = [(21, 5), (22, 5)]
+    ghost_data = [(7, 15), (22, 5)]
     ghost_status = [4, 4]
     energizer_data = [(19, 27), (19, 28)]
     last_dir = "up"

@@ -126,9 +126,15 @@ def _findPlanned(trial_data, loc_dis):
         loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0,
         loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0
     ], axis = 1)
+    is_normal =trial_data.apply(lambda x: [x.ifscared1, x.ifscared2], axis = 1)
+
     planning_index = []
     for index in range(trial_data.shape[0]):
-        if np.any(np.array(PE.iloc[index]) < 10):
+        if np.any(np.array(PE.iloc[index]) < 10) and \
+                np.any(np.array(PE.iloc[index]) > 0) and \
+                np.any(np.array(is_normal.iloc[index]) < 3) and \
+                np.all(5 < np.array(PG.iloc[index])) and \
+                np.all(np.array(PG.iloc[index]) < 20):
             planning_index.append(index)
     if len(planning_index) == 0:
         return None

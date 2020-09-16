@@ -629,8 +629,9 @@ def plotBeanVSAccuracy():
             all_tree_correct_nums[bean_index] += 1
     plt.bar(np.array(bean_nums[::-1])-0.45, np.divide(path_tree_correct_nums, path_tree_step_nums)[::-1], label = "Path Tree Agents", width = 0.45, align = "edge")
     plt.bar(np.array(bean_nums[::-1]), np.divide(all_tree_correct_nums, all_tree_step_nums)[::-1], label = "All Agents", width = 0.45, align = "edge")
-    plt.legend(loc = "upper right")
+    plt.legend(loc = "upper left")
     plt.xlabel("# of beans")
+    plt.xticks(np.arange(min_bean_num, max_bean_num+1, 10), np.arange(max_bean_num, min_bean_num, -10))
     plt.ylabel("correct rate")
 
     # Processing for testing result
@@ -657,8 +658,9 @@ def plotBeanVSAccuracy():
             all_tree_correct_nums[bean_index] += 1
     plt.bar(np.array(bean_nums[::-1]) - 0.45, np.divide(path_tree_correct_nums, path_tree_step_nums)[::-1], label="Path Tree Agents", width=0.45, align="edge")
     plt.bar(np.array(bean_nums[::-1]), np.divide(all_tree_correct_nums, all_tree_step_nums)[::-1], label="All Agents", width=0.45, align="edge")
-    plt.legend(loc="upper right")
+    plt.legend(loc="upper left")
     plt.xlabel("# of beans")
+    plt.xticks(np.arange(min_bean_num, max_bean_num+1, 10), np.arange(max_bean_num, min_bean_num, -10))
     plt.ylabel("correct rate")
 
     plt.show()
@@ -673,7 +675,7 @@ def plotBeanVSAccuracy():
 
 if __name__ == '__main__':
     # # Pre-estimation
-    preEstimation()
+    # preEstimation()
 
 
     # Configurations
@@ -709,7 +711,7 @@ if __name__ == '__main__':
     # ============ ESTIMATION =============
     # MLE(config)
 
-    # plotBeanVSAccuracy()
+    plotBeanVSAccuracy()
 
     # weight = np.load("./altogether_analysis/weight-global_local_pessimistic_suicide_planned_hunting.npy")
     # print(weight)

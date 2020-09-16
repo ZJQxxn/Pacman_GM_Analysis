@@ -141,7 +141,7 @@ class SuicideAgent:
         utility = 0.0
         for each in node.leaves:
             utility += each.cumulative_utility
-        return utility
+        return utility / len(node.leaves)
 
 
     def nextDir(self, return_Q = False):
@@ -150,7 +150,7 @@ class SuicideAgent:
         self.reborn_pos_tree, _, _ = self.reborn_pos_tree._construct()
         cur_pos_utility = {each.dir_from_parent : self._descendantUtility(each) for each in self.cur_pos_tree.children}
         reborn_pos_utility = np.max(
-            [self._descendantUtility(each) for each in self.reborn_pos_tree.children]
+            [each.cumulative_utility for each in self.reborn_pos_tree.leaves]
         )
         self.is_suicide_better = np.all(reborn_pos_utility > np.array(list(cur_pos_utility.values())))
         # Compute distance between Pacman and ghosts for normalizing
