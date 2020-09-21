@@ -56,12 +56,12 @@ class PlannedHuntingAgent:
         for each in node.leaves:
             utility += each.cumulative_utility
         return utility / len(node.leaves)
-
+        # return utility
 
     def nextDir(self, return_Q = False):
         # If ghosts are scared or no energizer exists, degenerate to random agent
         if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float) or self.energizer_data == []:
-            if np.any(self.ghost_status >= 3):
+            if np.any(self.ghost_status > 3):
                 # Build a local path tree based on the current position
                 cur_pos_tree, _, _ = PathTree(
                     self.adjacent_data,
@@ -75,10 +75,13 @@ class PlannedHuntingAgent:
                     np.nan, # inore fruits
                     self.ghost_status,
                     self.last_dir,
-                    depth=17,
-                    ghost_attractive_thr=17,
-                    ghost_repulsive_thr=17,
-                    fruit_attractive_thr=17
+                    depth=5,
+                    ignore_depth = 0,
+                    ghost_attractive_thr=5,
+                    ghost_repulsive_thr=5,
+                    fruit_attractive_thr=5,
+                    reward_coeff = 1.0,
+                    risk_coeff = 0.0
                 )._construct()
                 available_directions = [each.dir_from_parent for each in cur_pos_tree.children]
                 available_dir_utility = np.array([self._descendantUtility(each) for each in cur_pos_tree.children])
@@ -171,11 +174,11 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Planned hunting agent
-    cur_pos = (7, 16)
-    ghost_data = [(7, 15), (22, 5)]
-    ghost_status = [4, 4]
-    energizer_data = [(19, 27), (19, 28)]
-    last_dir = "up"
+    cur_pos = (7, 26) # 108
+    ghost_data = [(7, 27), (22, 18)]
+    ghost_status = [4, 3]
+    energizer_data = [(23, 9)]
+    last_dir = "down"
     agent = PlannedHuntingAgent(
         adjacent_data,
         adjacent_path,

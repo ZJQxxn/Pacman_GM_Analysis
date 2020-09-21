@@ -18,21 +18,29 @@ import copy
 
 def _extractAllData():
     # Configurations
-    # data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
-    # reward_data_filename = "/home/qlyang/jiaqi/Pacman-Analysis/common_data/df_total_with_reward.pkl"
-    data_filename = "all_data_with_label.pkl"
-    reward_data_filename = "df_total_with_reward.pkl"
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
     # Read data
     with open(data_filename, "rb") as file:
-        all_data_with_label = pickle.load(file)
-    # all_data_with_label = all_data["df_total"]
+        data = pickle.load(file)
+    all_data_with_label = data["df_total"]
+    all_data_with_label = all_data_with_label.sort_index()
+    accident_index = np.concatenate(data["cons_list_accident"])
+    accident_data = all_data_with_label.iloc[accident_index].reset_index()
+    # accident_data.label_planning = accident_data.label_planning.apply(lambda x: 2.0)
+
+    plan_index = np.concatenate(data["cons_list_plan"])
+    plan_data = all_data_with_label.iloc[plan_index].reset_index()
+    # accident_data.label_planning = accident_data.label_planning.apply(lambda x: 2.0)
+
+    # accident_data = all_data_with_label.iloc[accident_index]
     print(all_data_with_label.shape)
-    with open(reward_data_filename, "rb") as file:
-        reward_data = pickle.load(file)
-    all_data_with_label["Reward"] = reward_data.Reward
-    all_data_with_label["fruitPos"] = reward_data.fruitPos
+    trial_name_list = np.unique(all_data_with_label.file.values)
+    print("Trial Num : ", len(trial_name_list))
+    if len(trial_name_list) > 2000:
+        trial_name_list = trial_name_list[np.random.choice(len(trial_name_list), 2000, replace=False)]
+        print("Too much trial! Use only part of them. Trial Num : ", len(trial_name_list))
     print("Finished reading all data!")
-    return all_data_with_label
+    return all_data_with_label, accident_data, plan_data, trial_name_list
 
 
 def _readLocDistance(filename):
@@ -114,32 +122,38 @@ def _findSuicide(trial_data):
 
 
 def _findPlanned(trial_data, loc_dis):
-    # label_planning = trial_data.label_planning
-    # nan_index = np.where(np.isnan(label_planning))
-    # label_planning.iloc[nan_index] = 0
-    PE = trial_data.apply(
-        lambda x: [loc_dis[x.pacmanPos][each] if x.pacmanPos != each else 0 for each in x.energizers ]
-        if not isinstance(x.energizers, float) else [0],
-        axis = 1
-    )
-    PG = trial_data.apply(lambda x: [
-        loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0,
-        loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0
-    ], axis = 1)
-    is_normal =trial_data.apply(lambda x: [x.ifscared1, x.ifscared2], axis = 1)
-
-    planning_index = []
-    for index in range(trial_data.shape[0]):
-        if np.any(np.array(PE.iloc[index]) < 10) and \
-                np.any(np.array(PE.iloc[index]) > 0) and \
-                np.any(np.array(is_normal.iloc[index]) < 3) and \
-                np.all(5 < np.array(PG.iloc[index])) and \
-                np.all(np.array(PG.iloc[index]) < 20):
-            planning_index.append(index)
-    if len(planning_index) == 0:
+    label_planning = trial_data.label_planning
+    nan_index = np.where(np.isnan(label_planning))
+    label_planning.iloc[nan_index] = 0
+    planning_index = np.where(label_planning == 1)
+    # PE = trial_data.apply(
+    #     lambda x: [loc_dis[x.pacmanPos][each] if x.pacmanPos != each else 0 for each in x.energizers ]
+    #     if not isinstance(x.energizers, float) else [0],
+    #     axis = 1
+    # )
+    # PG = trial_data.apply(lambda x: [
+    #     loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0,
+    #     loc_dis[x.pacmanPos][x.ghost1Pos] if x.pacmanPos != x.ghost1Pos else 0
+    # ], axis = 1)
+    # is_normal =trial_data.apply(lambda x: [x.ifscared1, x.ifscared2], axis = 1)
+    #
+    # planning_index = []
+    # for index in range(trial_data.shape[0]):
+    #     if np.any(np.array(PE.iloc[index]) < 10) and \
+    #             np.any(np.array(PE.iloc[index]) > 0) and \
+    #             np.any(np.array(is_normal.iloc[index]) < 3) and \
+    #             np.all(5 < np.array(PG.iloc[index])) and \
+    #             np.all(np.array(PG.iloc[index]) < 20):
+    #         planning_index.append(index)
+    # if len(planning_index) == 0:
+    #     return None
+    # else:
+    #     return trial_data.iloc[planning_index[0]].values
+    if len(planning_index[0]) == 0:
         return None
     else:
-        return trial_data.iloc[planning_index[0]].values
+        print(planning_index[0][0])
+        return trial_data.reset_index().iloc[planning_index[0][0]].values[1:]
 
 
 def _extractTrialData(trial_data, loc_dis):
@@ -147,8 +161,8 @@ def _extractTrialData(trial_data, loc_dis):
     temp_local = _findLocal(trial_data)
     temp_pessimistic = _findPessimistic(trial_data)
     temp_suicide = _findSuicide(trial_data)
-    temp_planned = _findPlanned(trial_data, loc_dis)
-    return temp_global, temp_local, temp_pessimistic, temp_suicide, temp_planned
+    # temp_planned = _findPlanned(trial_data, loc_dis)
+    return temp_global, temp_local, temp_pessimistic, temp_suicide
 
 
 def extractStatus():
@@ -157,22 +171,20 @@ def extractStatus():
     local_status = []
     pessimistic_satus = []
     suicide_status = []
-    planned_hunting_status= []
+    # planned_hunting_status= []
     # Read data
-    # with open("1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl", "rb") as file:
-    #     all_data = pickle.load(file)
-    all_data = _extractAllData()
+    all_data, accident_data, plan_data, trial_name_list = _extractAllData()
     loc_dis = _readLocDistance("dij_distance_map.csv")
-    trial_name_list  = np.unique(all_data.file.values)
-    print("Trial Num : ", len(trial_name_list))
-    if len(trial_name_list) > 2000:
-        trial_name_list = trial_name_list[np.random.choice(len(trial_name_list), 2000, replace=False)]
-        print("Too much trial! Use only part of them. Trial Num : ", len(trial_name_list))
+    # trial_name_list  = np.unique(all_data.file.values)
+    print("Used Trial Num : ", len(trial_name_list))
+    # if len(trial_name_list) > 2000:
+    #     trial_name_list = trial_name_list[np.random.choice(len(trial_name_list), 2000, replace=False)]
+    #     print("Too much trial! Use only part of them. Trial Num : ", len(trial_name_list))
     for index, trial in enumerate(trial_name_list):
         print("-"*25)
         print("{}-th : ".format(index + 1), trial)
         trial_data = all_data[all_data.file == trial]
-        temp_global, temp_local, temp_pessimistic, temp_suicide, temp_planned = _extractTrialData(trial_data, loc_dis)
+        temp_global, temp_local, temp_pessimistic, temp_suicide = _extractTrialData(trial_data, loc_dis)
         if temp_global is not None:
             global_status.append(copy.deepcopy(temp_global))
         if temp_local is not None:
@@ -181,9 +193,25 @@ def extractStatus():
             pessimistic_satus.append(copy.deepcopy(temp_pessimistic))
         if temp_suicide is not None:
             suicide_status.append(copy.deepcopy(temp_suicide))
-        if temp_planned is not None:
-            planned_hunting_status.append(copy.deepcopy(temp_planned))
+        # if temp_planned is not None:
+        #     planned_hunting_status.append(copy.deepcopy(temp_planned))
         print("-"*25)
+    # Append accidentally hunting status
+    print("Accidentally hunting shape : ", accident_data.shape)
+    accident_index = np.random.choice(
+        accident_data.shape[0],
+        accident_data.shape[0] if accident_data.shape[0] < 2000 else 2000,
+        replace = False
+    )
+    plan_index = np.random.choice(
+        plan_data.shape[0],
+        plan_data.shape[0] if plan_data.shape[0] < 2000 else 2000,
+        replace=False
+    )
+    accident_data = accident_data.iloc[accident_index]
+    plan_data = plan_data.iloc[plan_index]
+    # for index in accident_index:
+    #     planned_hunting_status.append(copy.deepcopy(accident_data.iloc[index].values[1:]))
     print("Finished extracting!")
     # Write data
     if len(global_status) > 0:
@@ -203,10 +231,10 @@ def extractStatus():
         print("No local status!")
 
     if len(pessimistic_satus) > 0:
-        pessimistic_satus = pd.DataFrame(data=pessimistic_satus, columns=trial_data.columns.values)
+        pessimistic_status = pd.DataFrame(data=pessimistic_satus, columns=trial_data.columns.values)
         with open("status/pessimistic_status.pkl", "wb") as file:
             pickle.dump(pessimistic_satus, file)
-        print("Finished writing pessimistic status {}.".format(pessimistic_satus.shape[0]))
+        print("Finished writing pessimistic status {}.".format(pessimistic_status.shape[0]))
     else:
         print("No pessimistic status!")
 
@@ -218,19 +246,42 @@ def extractStatus():
     else:
         print("No suicide status!")
 
-    if len(planned_hunting_status) > 0:
-        planned_hunting_status = pd.DataFrame(data=planned_hunting_status, columns=trial_data.columns.values)
-        with open("status/planned_hunting_status.pkl", "wb") as file:
-            pickle.dump(planned_hunting_status, file)
-        print("Finished writing planned hunting status {}.".format(planned_hunting_status.shape[0]))
-    else:
-        print("No planned hunting status!")
+    # if len(planned_hunting_status) > 0:
+    #     planned_hunting_status = pd.DataFrame(data=planned_hunting_status, columns=trial_data.columns.values)
+    #     with open("status/planned_hunting_status.pkl", "wb") as file:
+    #         pickle.dump(planned_hunting_status, file)
+    #     print("Finished writing planned hunting status {}.".format(planned_hunting_status.shape[0]))
+    planned_hunting_status = pd.concat([plan_data, accident_data], ignore_index=True)
+    if "level_0" in planned_hunting_status:
+        planned_hunting_status = planned_hunting_status.drop(columns = ["level_0"])
+    with open("status/planned_hunting_status.pkl", "wb") as file:
+        pickle.dump(planned_hunting_status, file)
+    print("Finished writing planned hunting status {}.".format(planned_hunting_status.shape[0]))
 
 
 
 
 if __name__ == '__main__':
-    extractStatus()
-    # with open("df_total_with_reward.pkl", "rb") as file:
+    # extractStatus()
+    # with open("/home/qlyang/Documents/pacman/constants/all_data.pkl", "rb") as file:
     #     data = pickle.load(file)
-    #     print()
+    #     print(list(data.keys()))
+    # all_data = data["df_total"]
+    # print("Columns : ", all_data.columns.values)
+    # print("Data Shape : ", all_data.shape)
+    # trial_list = np.unique(all_data.file.values)
+    # print("Trial Num : ", len(trial_list))
+    # print("Trial Sample : ", trial_list[:3])
+    #
+    # accident = data["cons_list_accident"]
+    # print("Accident length : ", len(accident))
+    # print(accident.shape)
+    # print(accident[:10])
+
+    with open("status/planned_hunting_status.pkl", "rb") as file:
+        data = pickle.load(file)
+        wo = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == True)[0]][["file", "origin_index","energizers", "label_planning"]]
+        w = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == False)[0]][["file", "origin_index","energizers", "label_planning"]]
+        print()
+        print()
+
