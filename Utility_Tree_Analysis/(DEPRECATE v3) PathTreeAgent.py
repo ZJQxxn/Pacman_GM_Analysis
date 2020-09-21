@@ -7,11 +7,10 @@ Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
-    Sep. 21 2020
+    Aug. 25 2020
     
 Update History:
     25 Aug. 2020: Set (14, 16) and (15, 16) to be a wall in common_data/map_info_brian.csv; reconstruct map adjacent_map.csv
-    21 Sep. 2020: Change te way to compute potential reward/risk.
 '''
 
 
@@ -25,7 +24,7 @@ import time
 import copy
 
 sys.path.append('./')
-from Utility_Tree_Analysis.TreeAnalysisUtils import unitStepFunc, scaleOfNumber
+from TreeAnalysisUtils import unitStepFunc, scaleOfNumber
 
 
 class PathTree:
@@ -105,21 +104,16 @@ class PathTree:
         #   (4) utility of this node, reward and  risk are separated ("cur_reward", "cur_risk", "cur_utility")
         #   (5) the cumulative utility so far, reward and risk are separated ("cumulative_reward", "cumulative_risk", "cumulative_utility")
         self.root = anytree.Node(root,
-                                 cur_utility=0.0,
-                                 cumulative_utility=0.0,
-                                 cur_reward=0.0,
-                                 cumulative_reward=0.0,
-                                 cur_risk=00.,
-                                 cumulative_risk=0.0,
+                                 cur_utility=0,
+                                 cumulative_utility=0,
+                                 cur_reward=0,
+                                 cumulative_reward=0,
+                                 cur_risk=0,
+                                 cumulative_risk=0,
                                  existing_beans=copy.deepcopy(self.bean_data),
                                  existing_energizers = copy.deepcopy(self.energizer_data),
                                  existing_fruit = copy.deepcopy(self.fruit_pos),
-                                 ghost_status = copy.deepcopy(self.ghost_status),
-                                 exact_reward_list = [],
-                                 ghost_potential_reward_list = [],
-                                 fruit_potential_reward_list = [],
-                                 exact_risk_list = [],
-                                 potential_risk_list = []
+                                 ghost_status = copy.deepcopy(self.ghost_status)
                                  )
         # TODO: add game status for the node
         # The current node
@@ -135,7 +129,7 @@ class PathTree:
         :return: The tree root node (anytree.Node).
         '''
         # construct the first layer firstly (depth = 1)
-        self._attachNode(cur_depth = 1, ignore = True if self.ignore_depth > 0 else False) # attach all children of the root (depth = 1)
+        self._attachNode(ignore = True if self.ignore_depth > 0 else False) # attach all children of the root (depth = 1)
         self.node_queue.append(None) # the end of layer with depth = 1
         self.node_queue.popleft()
         self.current_node = self.node_queue.popleft()
@@ -147,26 +141,19 @@ class PathTree:
             else:
                 ignore = False
             while None != self.current_node :
-                self._attachNode(cur_depth = cur_depth, ignore = ignore)
+                self._attachNode(ignore = ignore)
                 self.current_node = self.node_queue.popleft()
             self.node_queue.append(None)
             if 0 == len(self.node_queue):
                 break
             self.current_node = self.node_queue.popleft()
             cur_depth += 1
-
-        # Add potential reward/risk for every path
-        for each in self.root.leaves:
-            each.path_utility = (
-                    each.cumulative_utility
-                    + self.reward_coeff * (np.mean(each.ghost_potential_reward_list) + np.mean(each.fruit_potential_reward_list))
-                    + self.risk_coeff * np.mean(each.potential_risk_list))
         # Find the best path with the highest utility
         best_leaf = self.root.leaves[0]
         for leaf in self.root.leaves:
-            if leaf.path_utility > best_leaf.path_utility:
+            if leaf.cumulative_utility > best_leaf.cumulative_utility:
                 best_leaf = leaf
-        highest_utility = best_leaf.path_utility
+        highest_utility = best_leaf.cumulative_utility
         best_path = best_leaf.ancestors
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
         if best_path == []: # only one step is taken
@@ -174,9 +161,7 @@ class PathTree:
         return self.root, highest_utility, best_path
 
 
-    def _attachNode(self, cur_depth = 0, ignore = False):
-        if 0 == cur_depth: # TODO: cur_depth is useless for now
-            raise ValueError("The depth should not be 0!")
+    def _attachNode(self, ignore = False):
         # Find adjacent positions and the corresponding moving directions for the current node
         tmp_data = self.adjacent_data[self.current_node.name]
         for each in ["left", "right", "up", "down"]:
@@ -192,71 +177,34 @@ class PathTree:
                 # Compute utility
                 cur_pos = tmp_data[each]
                 if ignore:
-                    exact_reward = 0.0
-                    ghost_potential_reward = 0.0
-                    fruit_potential_reward = 0.0
-                    exact_risk = 0.0
-                    potential_risk = 0.0
+                    cur_reward = 0.0
+                    cur_risk = 0.0
                     existing_beans = copy.deepcopy(self.current_node.existing_beans)
                     existing_energizers = copy.deepcopy(self.current_node.existing_energizers)
                     existing_fruit = copy.deepcopy(self.current_node.existing_fruit)
                     ghost_status = copy.deepcopy(self.current_node.ghost_status)
                 else:
-                    # Compute reward
-                    exact_reward, ghost_potential_reward, fruit_potential_reward,\
-                    existing_beans, existing_energizers, existing_fruit, ghost_status = self._computeReward(cur_pos)
-                    # Compute risk
+                    cur_reward, existing_beans, existing_energizers, existing_fruit, ghost_status = self._computeReward(cur_pos)
                     # if the position is visited before, do not add up the risk to cumulative
                     if cur_pos in [each.name for each in self.current_node.path]:
-                        exact_risk = 0.0
-                        potential_risk = 0.0
+                        cur_risk = 0.0
                     else:
-                        exact_risk, potential_risk = self._computeRisk(cur_pos)
+                        cur_risk = self._computeRisk(cur_pos)
                 # Construct the new node
-                exact_reward_list = copy.deepcopy(self.current_node.exact_reward_list)
-                ghost_potential_reward_list = copy.deepcopy(self.current_node.ghost_potential_reward_list)
-                fruit_potential_reward_list = copy.deepcopy(self.current_node.fruit_potential_reward_list)
-                exact_risk_list = copy.deepcopy(self.current_node.exact_risk_list)
-                potential_risk_list = copy.deepcopy(self.current_node.potential_risk_list)
-
-                exact_reward_list.append(exact_reward)
-                ghost_potential_reward_list.append(ghost_potential_reward)
-                fruit_potential_reward_list.append(fruit_potential_reward)
-                exact_risk_list.append(exact_risk)
-                potential_risk_list.append(potential_risk)
-
                 new_node = anytree.Node(
                         cur_pos,
                         parent = self.current_node,
                         dir_from_parent = each,
-                        cur_utility = {
-                            "exact_reward":exact_reward,
-                            "ghost_potential_reward":ghost_potential_reward,
-                            "fruit_potential_reward":fruit_potential_reward,
-                            "exact_risk":exact_risk,
-                            "potential_risk":potential_risk
-                        },
-                        cur_reward = {
-                            "exact_reward":exact_reward,
-                            "ghost_potential_reward":ghost_potential_reward,
-                            "fruit_potential_reward":fruit_potential_reward,
-                        },
-                        cur_risk = {
-                            "exact_risk":exact_risk,
-                            "potential_risk":potential_risk
-                        },
-                        cumulative_reward = self.current_node.cumulative_reward + exact_reward,
-                        cumulative_risk = self.current_node.cumulative_risk + exact_risk,
-                        cumulative_utility = self.current_node.cumulative_utility + self.reward_coeff * exact_reward + self.risk_coeff * exact_risk,
+                        cur_utility = self.reward_coeff * cur_reward + self.risk_coeff * cur_risk,
+                        cumulative_utility = self.current_node.cumulative_utility + self.reward_coeff * cur_reward + self.risk_coeff * cur_risk,
+                        cur_reward = cur_reward,
+                        cumulative_reward = self.current_node.cumulative_reward + cur_reward,
+                        cur_risk = cur_risk,
+                        cumulative_risk = self.current_node.cumulative_risk + cur_risk,
                         existing_beans = existing_beans,
                         existing_energizers = existing_energizers,
                         existing_fruit = existing_fruit,
-                        ghost_status = ghost_status,
-                        exact_reward_list = exact_reward_list,
-                        ghost_potential_reward_list = ghost_potential_reward_list,
-                        fruit_potential_reward_list = fruit_potential_reward_list,
-                        exact_risk_list = exact_risk_list,
-                        potential_risk_list = potential_risk_list,
+                        ghost_status = ghost_status
                         )
                 # If the Pacman is eaten, end this path
                 if self.is_eaten:
@@ -270,23 +218,21 @@ class PathTree:
         existing_energizers = copy.deepcopy(self.current_node.existing_energizers)
         existing_fruit = copy.deepcopy(self.current_node.existing_fruit)
         ghost_status = copy.deepcopy(self.current_node.ghost_status)
-        exact_reward = 0.0
-        ghost_potential_reward = 0.0
-        fruit_potential_reward = 0.0
+        reward = 0
         # Bean reward
         if isinstance(existing_beans, float):
-            exact_reward += 0.0
+            reward += 0
         elif cur_position in existing_beans:
-            exact_reward += self.reward_amount[1]
+            reward += self.reward_amount[1]
             existing_beans.remove(cur_position)
         else:
-            exact_reward += 0.0
+            reward += 0
         # Energizer reward
         if isinstance(existing_energizers, float) or cur_position not in existing_energizers:
-            exact_reward += 0.0
+            reward += 0
         elif cur_position in existing_energizers:
             # Reward for eating the energizer
-            exact_reward += self.reward_amount[2]
+            reward += self.reward_amount[2]
             existing_energizers.remove(cur_position)
             ghost_status = [4 if each != 3 else 3 for each in ghost_status]  # change ghost status
         else:
@@ -303,73 +249,58 @@ class PathTree:
                     ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
                 else:
                     ghost_dist = min(
-                        self.locs_df[cur_position][self.ghost_data[0]],
-                        self.locs_df[cur_position][self.ghost_data[1]]
+                        self.locs_df[cur_position][self.ghost_data[0]], self.locs_df[cur_position][self.ghost_data[1]]
                     )
                 if ghost_dist < self.ghost_attractive_thr:
-                    R = self.reward_amount[8]
-                    T = self.ghost_attractive_thr
-                    if ghost_dist <= (self.ghost_attractive_thr / 2):
-                        ghost_potential_reward += (-R / T) * ghost_dist + R
-                    else:
-                        ghost_potential_reward += (R * T) / (2 * ghost_dist) - R / 2
                     # reward += self.reward_amount[8] * (self.ghost_attractive_thr / ghost_dist - 1)
-                    # reward += self.reward_amount[8] * (1 / ghost_dist)
+                    reward += self.reward_amount[8] * (1 / ghost_dist)
             elif cur_position in self.ghost_data:
-                exact_reward += self.reward_amount[8]
+                reward += self.reward_amount[8]
                 if cur_position == self.ghost_data[0]:
                     ghost_status[0] = 3
                 else:
                     ghost_status[1] = 3
             else:
-                exact_reward += 0.0
-        # Fruit reward
+                reward += 0
+        # Fruit reward 
         if not isinstance(existing_fruit, float):
             if cur_position == self.fruit_pos:
-                exact_reward += self.reward_amount[int(self.reward_type)]
+                reward += self.reward_amount[int(self.reward_type)]
                 existing_fruit = np.nan
             else:
                 fruit_dist = self.locs_df[cur_position][self.fruit_pos]
                 if fruit_dist < self.fruit_attractive_thr:
-                    R = self.reward_amount[int(self.reward_type)]
-                    T = self.fruit_attractive_thr
                     # reward += self.reward_amount[int(self.reward_type)] * ( self.fruit_attractive_thr/ fruit_dist - 1)
-                    # reward += self.reward_amount[int(self.reward_type)] * ( 1 / fruit_dist)
-                    if fruit_dist <= (self.fruit_attractive_thr / 2):
-                        fruit_potential_reward += (-R / T) * fruit_dist + R
-                    else:
-                        fruit_potential_reward += (R * T) / (2 * fruit_dist) - R / 2
-        return exact_reward, ghost_potential_reward, fruit_potential_reward, existing_beans, existing_energizers, existing_fruit, ghost_status
+                    reward += self.reward_amount[int(self.reward_type)] * ( 1 / fruit_dist)
+        return reward, existing_beans, existing_energizers, existing_fruit, ghost_status
 
 
     def _computeRisk(self, cur_position):
-        ghost_status =  copy.deepcopy(self.current_node.ghost_status)
+        ghost_status = self.current_node.ghost_status
         # Compute ghost risk when ghosts are normal
         ifscared1 = ghost_status[0] if not isinstance(ghost_status[0], float) else 0
         ifscared2 = ghost_status[1] if not isinstance(ghost_status[1], float) else 0
-        exact_risk = 0.0
-        potential_risk = 0.0
-        if ifscared1 <= 2 or ifscared2 <= 2:  # ghosts are normal; use "or" for dealing with dead ghosts
+        if ifscared1 <= 2 or ifscared2 <= 2: # ghosts are normal; use "or" for dealing with dead ghosts
             if 3 == ifscared1:
                 # Pacman is eaten
                 if cur_position == self.ghost_data[1]:
-                    exact_risk = -self.reward_amount[9]
+                    risk = -self.reward_amount[9]
                     self.is_eaten = True
-                    return exact_risk, potential_risk
+                    return risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
             elif 3 == ifscared2:
                 # Pacman is eaten
                 if cur_position == self.ghost_data[0]:
-                    exact_risk = -self.reward_amount[9]
+                    risk = -self.reward_amount[9]
                     self.is_eaten = True
-                    return exact_risk, potential_risk
+                    return risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
             else:
                 # Pacman is eaten
                 if cur_position == self.ghost_data[0] or cur_position == self.ghost_data[1]:
-                    exact_risk = -self.reward_amount[9]
+                    risk = -self.reward_amount[9]
                     self.is_eaten = True
-                    return exact_risk, potential_risk
+                    return risk
                 # Potential risk
                 else:
                     ghost_dist = min(
@@ -377,27 +308,23 @@ class PathTree:
                         self.locs_df[cur_position][self.ghost_data[1]]
                     )
             if ghost_dist < self.ghost_repulsive_thr:
-                # risk = -self.reward_amount[9] * 1 / ghost_dist
+                risk = -self.reward_amount[9] * 1 / ghost_dist
                 # risk = -self.reward_amount[9] * (self.ghost_repulsive_thr / ghost_dist - 1)
-                # reward += self.reward_amount[int(self.reward_type)] * ( self.fruit_attractive_thr/ fruit_dist - 1)
-                R = self.reward_amount[8]
-                T = self.ghost_repulsive_thr
-                if ghost_dist <= (self.ghost_repulsive_thr / 2):
-                    potential_risk = -((-R / T) * ghost_dist + R)
-                else:
-                    potential_risk = -((R * T) / (2 * ghost_dist) - R / 2)
             else:
-                pass
+                risk = 0
         # Ghosts are not scared
         else:
-            pass
-        return exact_risk, potential_risk
+            risk = 0
+        return risk
 
 
     def _descendantUtility(self, node):
+        # utility = 0.0
         leaves_utility = []
         for each in node.leaves:
-            leaves_utility.append(each.path_utility)
+            leaves_utility.append(each.cumulative_utility)
+            # utility += each.cumulative_utility
+        # return max(leaves_utility)
         return sum(leaves_utility) / len(leaves_utility)
 
 
@@ -426,7 +353,7 @@ class PathTree:
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
+    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
@@ -478,9 +405,8 @@ if __name__ == '__main__':
         reward_coeff=1.0, risk_coeff=0.0,
         randomness_coeff=1.0, laziness_coeff=1.0
     )
-    _, Q = agent.nextDir(return_Q=True)
-    choice = agent.dir_list[makeChoice(Q)]
-    print("Global Choice : ", choice, Q)
+    choice = agent.nextDir(return_Q = True)
+    print("Global Agent Q : ", choice)
 
     # Local agent
     agent = PathTree(
@@ -500,12 +426,10 @@ if __name__ == '__main__':
         5,
         5,
         5,
-        reward_coeff=1.0, risk_coeff=0.0,
-        randomness_coeff=1.0, laziness_coeff=1.0
+        reward_coeff=1.0, risk_coeff=0.0
     )
-    _, Q = agent.nextDir(return_Q=True)
-    choice = agent.dir_list[makeChoice(Q)]
-    print("Local Choice : ", choice, Q)
+    choice = agent.nextDir(return_Q=True)
+    print("Local Agent Q : ", choice)
 
     # Pessimistic
     agent = PathTree(
@@ -520,15 +444,13 @@ if __name__ == '__main__':
         fruit_pos,
         ghost_status,
         last_dir,
-        5,
+        10,
         0,
-        5,
-        5,
-        5,
+        34,
+        34,
+        12,
         reward_coeff = 0.0,
-        risk_coeff = 1.0,
-        randomness_coeff=1.0, laziness_coeff=1.0
+        risk_coeff = 1.0
     )
-    _, Q = agent.nextDir(return_Q=True)
-    choice = agent.dir_list[makeChoice(Q)]
-    print("Pessimistic Choice : ", choice, Q)
+    choice = agent.nextDir(return_Q=True)
+    print("Pessimistic Q : ", choice)

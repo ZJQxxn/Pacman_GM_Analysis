@@ -14,8 +14,8 @@ import copy
 
 import sys
 sys.path.append("./")
-from PathTreeAgent import PathTree
-from TreeAnalysisUtils import scaleOfNumber
+from Utility_Tree_Analysis.PathTreeAgent import PathTree
+from Utility_Tree_Analysis.TreeAnalysisUtils import scaleOfNumber
 
 
 class SuicideAgent:
@@ -71,7 +71,11 @@ class SuicideAgent:
             depth = depth,
             ghost_attractive_thr = ghost_attractive_thr,
             ghost_repulsive_thr = ghost_repulsive_thr,
-            fruit_attractive_thr = fruit_attractive_thr
+            fruit_attractive_thr = fruit_attractive_thr,
+            reward_coeff=1.0,
+            risk_coeff=1.0,
+            randomness_coeff = 0.0,
+            laziness_coeff = 0.0
         )
         self.reborn_pos_tree = PathTree(
             adjacent_data,
@@ -88,7 +92,11 @@ class SuicideAgent:
             depth=depth,
             ghost_attractive_thr=ghost_attractive_thr,
             ghost_repulsive_thr=ghost_repulsive_thr,
-            fruit_attractive_thr = fruit_attractive_thr
+            fruit_attractive_thr = fruit_attractive_thr,
+            reward_coeff=1.0,
+            risk_coeff=1.0,
+            randomness_coeff=0.0,
+            laziness_coeff=0.0
         )
         # Obtain available directions from the current location
         self.adjacent_pos = adjacent_data[self.cur_pos]
@@ -213,7 +221,7 @@ class SuicideAgent:
                 self.Q_value[self.dir_list.index(each)] = reborn_pos_utility * PG_normalizing_factor[index]
         self.Q_value = np.array(self.Q_value)
         available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
-        self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
+        # self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
         # Add randomness and laziness
         Q_scale = scaleOfNumber(np.max(np.abs(self.Q_value)))
         randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
@@ -231,7 +239,7 @@ class SuicideAgent:
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
+    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
@@ -262,8 +270,9 @@ if __name__ == '__main__':
         ghost_status,
         last_dir,
         depth = 5, ghost_attractive_thr = 10, ghost_repulsive_thr = 10, fruit_attractive_thr = 10,
-        randomness_coeff = 0.0, laziness_coeff = 0.0
+        randomness_coeff = 1.0, laziness_coeff = 1.0
     )
-    choice= agent.nextDir(return_Q = True)
-    print("Choice : ", choice)
+    _, Q = agent.nextDir(return_Q=True)
+    choice = agent.dir_list[makeChoice(Q)]
+    print("Choice : ", choice, Q)
     print("Is suicide : ", agent.is_suicide)

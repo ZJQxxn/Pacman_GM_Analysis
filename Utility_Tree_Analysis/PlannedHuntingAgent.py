@@ -14,8 +14,8 @@ Date:
 import numpy as np
 import sys
 sys.path.append("./")
-from TreeAnalysisUtils import scaleOfNumber
-from PathTreeAgent import PathTree
+from Utility_Tree_Analysis.TreeAnalysisUtils import scaleOfNumber
+from Utility_Tree_Analysis.PathTreeAgent import PathTree
 
 
 class PlannedHuntingAgent:
@@ -81,7 +81,9 @@ class PlannedHuntingAgent:
                     ghost_repulsive_thr=5,
                     fruit_attractive_thr=5,
                     reward_coeff = 1.0,
-                    risk_coeff = 0.0
+                    risk_coeff = 0.0,
+                    randomness_coeff=0.0,
+                    laziness_coeff=0.0
                 )._construct()
                 available_directions = [each.dir_from_parent for each in cur_pos_tree.children]
                 available_dir_utility = np.array([self._descendantUtility(each) for each in cur_pos_tree.children])
@@ -146,7 +148,7 @@ class PlannedHuntingAgent:
             self.Q_value = np.array(self.Q_value)
         self.Q_value = np.array(self.Q_value, dtype = np.float32)
         available_directions_index = [self.dir_list.index(each) for each in self.available_dir]
-        self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
+        # self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
         # Add randomness and laziness
         Q_scale = scaleOfNumber(np.max(np.abs(self.Q_value)))
         randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
@@ -165,7 +167,7 @@ if __name__ == '__main__':
     import sys
 
     sys.path.append('./')
-    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
+    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
@@ -192,8 +194,9 @@ if __name__ == '__main__':
         randomness_coeff = 0.0,
         laziness_coeff = 0.0
     )
-    choice = agent.nextDir(return_Q = True)
+    _, Q = agent.nextDir(return_Q=True)
+    choice = agent.dir_list[makeChoice(Q)]
+    print("Choice : ", choice, Q)
     print("Position : ", agent.cur_pos)
     print("Available directions : ", agent.available_dir)
-    print("Choice : ", choice)
 

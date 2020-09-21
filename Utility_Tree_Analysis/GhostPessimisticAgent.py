@@ -23,7 +23,7 @@ import time
 import copy
 
 sys.path.append('./')
-from TreeAnalysisUtils import unitStepFunc, scaleOfNumber
+from Utility_Tree_Analysis.TreeAnalysisUtils import unitStepFunc, scaleOfNumber
 
 
 class GhostPessimistic:
@@ -103,18 +103,22 @@ class GhostPessimistic:
         #   (4) utility of this node, reward and  risk are separated ("cur_reward", "cur_risk", "cur_utility")
         #   (5) the cumulative utility so far, reward and risk are separated ("cumulative_reward", "cumulative_risk", "cumulative_utility")
         self.root = anytree.Node(root,
-                                 cur_utility=0,
-                                 cumulative_utility=0,
-                                 cur_reward=0,
-                                 cumulative_reward=0,
-                                 cur_risk=0,
-                                 cumulative_risk=0,
+                                 cur_utility=0.0,
+                                 cumulative_utility=0.0,
+                                 cur_reward=0.0,
+                                 cumulative_reward=0.0,
+                                 cur_risk=00.,
+                                 cumulative_risk=0.0,
                                  existing_beans=copy.deepcopy(self.bean_data),
-                                 existing_energizers = copy.deepcopy(self.energizer_data),
-                                 existing_fruit = copy.deepcopy(self.fruit_pos),
-                                 ghost_status = copy.deepcopy(self.ghost_status)
+                                 existing_energizers=copy.deepcopy(self.energizer_data),
+                                 existing_fruit=copy.deepcopy(self.fruit_pos),
+                                 ghost_status=copy.deepcopy(self.ghost_status),
+                                 exact_reward_list=[],
+                                 ghost_potential_reward_list=[],
+                                 fruit_potential_reward_list=[],
+                                 exact_risk_list=[],
+                                 potential_risk_list=[]
                                  )
-        # TODO: add game status for the node
         # The current node
         self.current_node = self.root
         # A queue used for append nodes on the tree
@@ -128,7 +132,7 @@ class GhostPessimistic:
         :return: The tree root node (anytree.Node).
         '''
         # construct the first layer firstly (depth = 1)
-        self._attachNode(ignore = True if self.ignore_depth > 0 else False) # attach all children of the root (depth = 1)
+        self._attachNode(cur_depth = 1, ignore = True if self.ignore_depth > 0 else False) # attach all children of the root (depth = 1)
         self.node_queue.append(None) # the end of layer with depth = 1
         self.node_queue.popleft()
         self.current_node = self.node_queue.popleft()
@@ -140,27 +144,36 @@ class GhostPessimistic:
             else:
                 ignore = False
             while None != self.current_node :
-                self._attachNode(ignore = ignore)
+                self._attachNode(cur_depth = cur_depth, ignore = ignore)
                 self.current_node = self.node_queue.popleft()
             self.node_queue.append(None)
             if 0 == len(self.node_queue):
                 break
             self.current_node = self.node_queue.popleft()
             cur_depth += 1
+        # Add potential reward/risk for every path
+        for each in self.root.leaves:
+            each.path_utility = (
+                    each.cumulative_utility
+                    + self.reward_coeff * (
+                                np.mean(each.ghost_potential_reward_list) + np.mean(each.fruit_potential_reward_list))
+                    + self.risk_coeff * np.mean(each.potential_risk_list))
         # Find the best path with the highest utility
         best_leaf = self.root.leaves[0]
         for leaf in self.root.leaves:
-            if leaf.cumulative_utility > best_leaf.cumulative_utility:
+            if leaf.path_utility > best_leaf.path_utility:
                 best_leaf = leaf
-        highest_utility = best_leaf.cumulative_utility
+        highest_utility = best_leaf.path_utility
         best_path = best_leaf.ancestors
         best_path = [(each.name, each.dir_from_parent) for each in best_path[1:]]
-        if best_path == []: # only one step is taken
+        if best_path == []:  # only one step is taken
             best_path = [(best_leaf.name, best_leaf.dir_from_parent)]
         return self.root, highest_utility, best_path
 
 
-    def _attachNode(self, ignore = False):
+    def _attachNode(self, cur_depth = 0, ignore = False):
+        if 0 == cur_depth: # TODO: cur_depth is useless for now
+            raise ValueError("The depth should not be 0!")
         # Find adjacent positions and the corresponding moving directions for the current node
         tmp_data = self.adjacent_data[self.current_node.name]
         for each in ["left", "right", "up", "down"]:
@@ -176,39 +189,76 @@ class GhostPessimistic:
                 # Compute utility
                 cur_pos = tmp_data[each]
                 if ignore:
-                    cur_reward = 0.0
-                    cur_risk = 0.0
+                    exact_reward = 0.0
+                    ghost_potential_reward = 0.0
+                    fruit_potential_reward = 0.0
+                    exact_risk = 0.0
+                    potential_risk = 0.0
                     existing_beans = copy.deepcopy(self.current_node.existing_beans)
                     existing_energizers = copy.deepcopy(self.current_node.existing_energizers)
                     existing_fruit = copy.deepcopy(self.current_node.existing_fruit)
                     ghost_status = copy.deepcopy(self.current_node.ghost_status)
                 else:
+                    # Compute reward
+                    exact_reward = 0.0
+                    ghost_potential_reward = 0.0
+                    fruit_potential_reward = 0.0
                     existing_beans = copy.deepcopy(self.current_node.existing_beans)
                     existing_energizers = copy.deepcopy(self.current_node.existing_energizers)
                     existing_fruit = copy.deepcopy(self.current_node.existing_fruit)
                     ghost_status = copy.deepcopy(self.current_node.ghost_status)
-                    cur_reward = 0.0 # No reward for pessimistic ghost
-                    # cur_reward, existing_beans, existing_energizers, existing_fruit, ghost_status = self._computeReward(cur_pos)
+                    # Compute risk
                     # if the position is visited before, do not add up the risk to cumulative
                     if cur_pos in [each.name for each in self.current_node.path]:
-                        cur_risk = 0.0
+                        exact_risk = 0.0
+                        potential_risk = 0.0
                     else:
-                        cur_risk = self._computeRisk(cur_pos)
+                        exact_risk, potential_risk = self._computeRisk(cur_pos)
                 # Construct the new node
+                exact_reward_list = copy.deepcopy(self.current_node.exact_reward_list)
+                ghost_potential_reward_list = copy.deepcopy(self.current_node.ghost_potential_reward_list)
+                fruit_potential_reward_list = copy.deepcopy(self.current_node.fruit_potential_reward_list)
+                exact_risk_list = copy.deepcopy(self.current_node.exact_risk_list)
+                potential_risk_list = copy.deepcopy(self.current_node.potential_risk_list)
+
+                exact_reward_list.append(exact_reward)
+                ghost_potential_reward_list.append(ghost_potential_reward)
+                fruit_potential_reward_list.append(fruit_potential_reward)
+                exact_risk_list.append(exact_risk)
+                potential_risk_list.append(potential_risk)
+
                 new_node = anytree.Node(
                         cur_pos,
                         parent = self.current_node,
                         dir_from_parent = each,
-                        cur_utility = self.reward_coeff * cur_reward + self.risk_coeff * cur_risk,
-                        cumulative_utility = self.current_node.cumulative_utility + self.reward_coeff * cur_reward + self.risk_coeff * cur_risk,
-                        cur_reward = cur_reward,
-                        cumulative_reward = self.current_node.cumulative_reward + cur_reward,
-                        cur_risk = cur_risk,
-                        cumulative_risk = self.current_node.cumulative_risk + cur_risk,
+                        cur_utility = {
+                            "exact_reward":exact_reward,
+                            "ghost_potential_reward":ghost_potential_reward,
+                            "fruit_potential_reward":fruit_potential_reward,
+                            "exact_risk":exact_risk,
+                            "potential_risk":potential_risk
+                        },
+                        cur_reward = {
+                            "exact_reward":exact_reward,
+                            "ghost_potential_reward":ghost_potential_reward,
+                            "fruit_potential_reward":fruit_potential_reward,
+                        },
+                        cur_risk = {
+                            "exact_risk":exact_risk,
+                            "potential_risk":potential_risk
+                        },
+                        cumulative_reward = self.current_node.cumulative_reward + exact_reward,
+                        cumulative_risk = self.current_node.cumulative_risk + exact_risk,
+                        cumulative_utility = self.current_node.cumulative_utility + self.reward_coeff * exact_reward + self.risk_coeff * exact_risk,
                         existing_beans = existing_beans,
                         existing_energizers = existing_energizers,
                         existing_fruit = existing_fruit,
-                        ghost_status = ghost_status
+                        ghost_status = ghost_status,
+                        exact_reward_list = exact_reward_list,
+                        ghost_potential_reward_list = ghost_potential_reward_list,
+                        fruit_potential_reward_list = fruit_potential_reward_list,
+                        exact_risk_list = exact_risk_list,
+                        potential_risk_list = potential_risk_list,
                         )
                 # If the Pacman is eaten, end this path
                 if self.is_eaten:
@@ -217,37 +267,39 @@ class GhostPessimistic:
                     self.node_queue.append(new_node)
 
 
-
     def _computeRisk(self, cur_position):
         ghost_status = self.current_node.ghost_status
         # Compute ghost risk when ghosts are normal
         ifscared = ghost_status if not isinstance(ghost_status, float) else 0
+        exact_risk = 0.0
+        potential_risk = 0.0
         if ifscared <= 2 : # ghosts are normal
             # Pacman is eaten
             if cur_position == self.ghost_data:
-                risk = -self.reward_amount[9]
+                exact_risk = -self.reward_amount[9]
                 self.is_eaten = True
-                return risk
+                return exact_risk, potential_risk
             else:
                 ghost_dist = self.locs_df[cur_position][self.ghost_data]
                 if ghost_dist < self.ghost_repulsive_thr:
-                    risk = -self.reward_amount[9] * 1 / ghost_dist
-                # risk = -self.reward_amount[9] * (self.ghost_repulsive_thr / ghost_dist - 1)
+                    R = self.reward_amount[8]
+                    T = self.ghost_repulsive_thr
+                    if ghost_dist <= (self.ghost_repulsive_thr / 2):
+                        potential_risk = -((-R / T) * ghost_dist + R)
+                    else:
+                        potential_risk = -((R * T) / (2 * ghost_dist) - R / 2)
                 else:
-                    risk = 0
+                    pass
         # Ghosts are not scared
         else:
-            risk = 0
-        return risk
+            pass
+        return exact_risk, potential_risk
 
 
     def _descendantUtility(self, node):
-        # utility = 0.0
         leaves_utility = []
         for each in node.leaves:
             leaves_utility.append(each.cumulative_utility)
-            # utility += each.cumulative_utility
-        # return max(leaves_utility)
         return sum(leaves_utility) / len(leaves_utility)
 
 
@@ -259,7 +311,7 @@ class GhostPessimistic:
             self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
         self.Q_value = np.array(self.Q_value)
         available_directions_index = [self.dir_list.index(each) for each in available_directions]
-        self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
+        # self.Q_value[available_directions_index] += 1.0 # avoid 0 utility
         # Add randomness and laziness
         Q_scale = scaleOfNumber(np.max(np.abs(self.Q_value)))
         randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
@@ -273,10 +325,11 @@ class GhostPessimistic:
 
 
 
+
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath
+    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
@@ -298,7 +351,7 @@ if __name__ == '__main__':
 
     cur_pos = (13, 12)  # 35
     ghost_data = [(17, 12), (12, 12)]
-    ghost_status = [4, 4]
+    ghost_status = [1, 1]
     energizer_data = [(13, 9), (9, 24)]
     bean_data = [(4, 5), (6, 5), (23, 5), (27, 6), (27, 7), (2, 8), (16, 8), (3, 9), (27, 10), (11, 12), (7, 14),
                  (22, 14), (7, 15), (23, 18), (25, 18), (26, 18), (10, 23), (8, 24), (20, 24), (13, 25), (16, 25),
@@ -325,11 +378,12 @@ if __name__ == '__main__':
         5,
         5,
         5,
-        reward_coeff=0.0, risk_coeff=0.0,
+        reward_coeff = 0.0, risk_coeff = 1.0,
         randomness_coeff=1.0, laziness_coeff=1.0
     )
-    choice = agent.nextDir(return_Q = True)
-    print("Ghost 1 Agent Q : ", choice)
+    _, Q  = agent.nextDir(return_Q = True)
+    choice = agent.dir_list[makeChoice(Q)]
+    print("Ghost 1 Agent Q : ", choice, Q)
 
     # Ghost 2 agent
     agent = GhostPessimistic(
@@ -349,9 +403,10 @@ if __name__ == '__main__':
         5,
         5,
         5,
-        reward_coeff=0.0, risk_coeff=0.0,
+        reward_coeff = 0.0, risk_coeff = 1.0,
         randomness_coeff=1.0, laziness_coeff=1.0
     )
-    choice = agent.nextDir(return_Q=True)
-    print("Ghost 2 Agent Q : ", choice)
+    _, Q = agent.nextDir(return_Q=True)
+    choice = agent.dir_list[makeChoice(Q)]
+    print("Ghost 1 Agent Q : ", choice, Q)
 
