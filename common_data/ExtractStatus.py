@@ -169,7 +169,7 @@ def extractStatus():
     # Initialization
     global_status = []
     local_status = []
-    pessimistic_satus = []
+    pessimistic_status = []
     suicide_status = []
     # planned_hunting_status= []
     # Read data
@@ -190,7 +190,7 @@ def extractStatus():
         if temp_local is not None:
             local_status.append(copy.deepcopy(temp_local))
         if temp_pessimistic is not None:
-            pessimistic_satus.append(copy.deepcopy(temp_pessimistic))
+            pessimistic_status.append(copy.deepcopy(temp_pessimistic))
         if temp_suicide is not None:
             suicide_status.append(copy.deepcopy(temp_suicide))
         # if temp_planned is not None:
@@ -230,10 +230,10 @@ def extractStatus():
     else:
         print("No local status!")
 
-    if len(pessimistic_satus) > 0:
-        pessimistic_status = pd.DataFrame(data=pessimistic_satus, columns=trial_data.columns.values)
+    if len(pessimistic_status) > 0:
+        pessimistic_status = pd.DataFrame(data=pessimistic_status, columns=trial_data.columns.values)
         with open("status/pessimistic_status.pkl", "wb") as file:
-            pickle.dump(pessimistic_satus, file)
+            pickle.dump(pessimistic_status, file)
         print("Finished writing pessimistic status {}.".format(pessimistic_status.shape[0]))
     else:
         print("No pessimistic status!")
@@ -278,10 +278,14 @@ if __name__ == '__main__':
     # print(accident.shape)
     # print(accident[:10])
 
-    with open("status/planned_hunting_status.pkl", "rb") as file:
+    # with open("status/planned_hunting_status.pkl", "rb") as file:
+    #     data = pickle.load(file)
+    #     wo = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == True)[0]][["file", "origin_index","energizers", "label_planning"]]
+    #     w = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == False)[0]][["file", "origin_index","energizers", "label_planning"]]
+    #     print()
+    #     print()
+
+    with open("status/pessimistic_status.pkl", "rb") as file:
         data = pickle.load(file)
-        wo = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == True)[0]][["file", "origin_index","energizers", "label_planning"]]
-        w = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == False)[0]][["file", "origin_index","energizers", "label_planning"]]
-        print()
         print()
 
