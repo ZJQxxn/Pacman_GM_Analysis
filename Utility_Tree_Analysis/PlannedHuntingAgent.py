@@ -14,8 +14,8 @@ Date:
 import numpy as np
 import sys
 sys.path.append("./")
-from Utility_Tree_Analysis.TreeAnalysisUtils import scaleOfNumber
-from Utility_Tree_Analysis.PathTreeAgent import PathTree
+from TreeAnalysisUtils import scaleOfNumber
+from PathTreeAgent import PathTree
 
 
 class PlannedHuntingAgent:
@@ -50,13 +50,12 @@ class PlannedHuntingAgent:
         self.randomness_coeff = randomness_coeff
         self.laziness_coeff = laziness_coeff
 
-
     def _descendantUtility(self, node):
-        utility = 0.0
+        leaves_utility = []
         for each in node.leaves:
-            utility += each.cumulative_utility
-        return utility / len(node.leaves)
-        # return utility
+            leaves_utility.append(each.path_utility)
+        return sum(leaves_utility) / len(leaves_utility)
+
 
     def nextDir(self, return_Q = False):
         # If ghosts are scared or no energizer exists, degenerate to random agent
@@ -75,11 +74,11 @@ class PlannedHuntingAgent:
                     np.nan, # inore fruits
                     self.ghost_status,
                     self.last_dir,
-                    depth=5,
+                    depth=10,
                     ignore_depth = 0,
-                    ghost_attractive_thr=5,
-                    ghost_repulsive_thr=5,
-                    fruit_attractive_thr=5,
+                    ghost_attractive_thr=10,
+                    ghost_repulsive_thr=10,
+                    fruit_attractive_thr=10,
                     reward_coeff = 1.0,
                     risk_coeff = 0.0,
                     randomness_coeff=0.0,
@@ -167,7 +166,7 @@ if __name__ == '__main__':
     import sys
 
     sys.path.append('./')
-    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
+    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")
@@ -176,11 +175,11 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Planned hunting agent
-    cur_pos = (7, 26) # 108
-    ghost_data = [(7, 27), (22, 18)]
-    ghost_status = [4, 3]
-    energizer_data = [(23, 9)]
-    last_dir = "down"
+    cur_pos = (7, 5) # 108
+    ghost_data = [(7, 20), (10, 17)]
+    ghost_status = [4, 4]
+    energizer_data = [(23, 24)]
+    last_dir = "right"
     agent = PlannedHuntingAgent(
         adjacent_data,
         adjacent_path,
@@ -191,8 +190,8 @@ if __name__ == '__main__':
         ghost_data,
         ghost_status,
         last_dir,
-        randomness_coeff = 0.0,
-        laziness_coeff = 0.0
+        randomness_coeff = 1.0,
+        laziness_coeff = 1.0
     )
     _, Q = agent.nextDir(return_Q=True)
     choice = agent.dir_list[makeChoice(Q)]

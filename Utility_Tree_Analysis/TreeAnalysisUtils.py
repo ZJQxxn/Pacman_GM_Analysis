@@ -115,12 +115,28 @@ def scaleOfNumber(num):
     :param num: The number
     :return: 
     '''
-    order = len(str(num).split(".")[0])
-    return 10**(order - 1)
+    if num >= 1:
+        order = len(str(num).split(".")[0])
+        return 10**(order - 1)
+    elif num == 0:
+        return 1
+    else:
+        order = str(num).split(".")[1]
+        temp = 0
+        for each in order:
+            if each == "0":
+                temp += 1
+            else:
+                break
+        return 10**(-temp -1)
 
 
 def makeChoice(prob):
     return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
+
+
+if __name__ == '__main__':
+    print(scaleOfNumber(0.1204))
 
 
 
