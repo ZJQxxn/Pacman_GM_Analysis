@@ -14,8 +14,8 @@ import copy
 
 import sys
 sys.path.append("./")
-from Utility_Tree_Analysis.PathTreeAgent import PathTree
-from Utility_Tree_Analysis.TreeAnalysisUtils import scaleOfNumber
+from PathTreeAgent import PathTree
+from TreeAnalysisUtils import scaleOfNumber
 
 
 class SuicideAgent:
@@ -239,7 +239,7 @@ class SuicideAgent:
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
+    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")

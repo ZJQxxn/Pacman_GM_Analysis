@@ -25,7 +25,7 @@ import time
 import copy
 
 sys.path.append('./')
-from Utility_Tree_Analysis.TreeAnalysisUtils import unitStepFunc, scaleOfNumber
+from TreeAnalysisUtils import unitStepFunc, scaleOfNumber
 
 
 class PathTree:
@@ -426,7 +426,7 @@ class PathTree:
 if __name__ == '__main__':
     import sys
     sys.path.append('./')
-    from Utility_Tree_Analysis.TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
+    from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, makeChoice
 
     # Read data
     locs_df = readLocDistance("./extracted_data/dij_distance_map.csv")

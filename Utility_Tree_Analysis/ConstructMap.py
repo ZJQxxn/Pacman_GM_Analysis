@@ -54,9 +54,13 @@ for y in range(positions.shape[0]):
             adjacent_dict[cur_pos]["down"] = tuple(positions[y + 1, x]) if y + 1 < low_bound and not is_wall[y + 1, x]  else None
 
 # Add the tunnel (connect the leftmost and the rightmost)
-adjacent_dict[(1,18)] = {"left":(27,18), "right":(2,18),"up":None, "down":None}
-adjacent_dict[(2,18)]["left"]  = (1,18)
-adjacent_dict[(27,18)]["right"]  = (1,18)
+adjacent_dict[(2,18)] = {"left":(1,18), "right":(3,18),"up":None, "down":None}
+adjacent_dict[(1,18)] = {"left":(0,18), "right":(2,18),"up":None, "down":None}
+adjacent_dict[(0,18)] = {"left":(29,18), "right":(1,18),"up":None, "down":None}
+adjacent_dict[(27,18)] = {"left":(26,18), "right":(28,18),"up":None, "down":None}
+adjacent_dict[(28,18)] = {"left":(27,18), "right":(29,18),"up":None, "down":None}
+adjacent_dict[(29,18)] = {"left":(28,18), "right":(0,18),"up":None, "down":None}
+
 
 
 # str_adjacent_dict = {}

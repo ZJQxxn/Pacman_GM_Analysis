@@ -34,6 +34,7 @@ def readAdjacentMap(filename):
         dict_adjacent_data[each[1]]["down"] = each[5] if not isinstance(each[5], float) else np.nan
     return dict_adjacent_data
 
+
 def readAdjacentPath(filename):
     adjacent_data = pd.read_csv(filename)
     adjacent_data.pos1 = adjacent_data.pos1.apply(lambda x: eval(x))
@@ -59,7 +60,10 @@ def readLocDistance(filename):
             dict_locs_df[each[0]] = {}
         dict_locs_df[each[0]][each[1]] = each[2]
     # correct the distance between two ends of the tunnel
-    dict_locs_df[(1, 18)][(27, 18)] = 1
+    dict_locs_df[(0, 18)][(29, 18)] = 1
+    dict_locs_df[(0, 18)][(1, 18)] = 1
+    dict_locs_df[(29, 18)][(0, 18)] = 1
+    dict_locs_df[(29, 18)][(28, 18)] = 1
     return dict_locs_df
 
 
