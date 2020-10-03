@@ -460,11 +460,11 @@ def _preProcessingQ(Q_value, pacmanPos, adjacent_data):
     return (offset, normalizing_factor, Q_value)
 
 
-def _NumOfBeansIn10(pacman_pos, beans, dist_data):
+def _NumOfLocalBeans(pacman_pos, beans, dist_data):
     nearby_beans_list = []
     if beans is not None and not isinstance(beans, float):
         for each in beans:
-            if tuple(each) == tuple(pacman_pos) or dist_data[tuple(pacman_pos)][tuple(each)] <= 10:
+            if tuple(each) == tuple(pacman_pos) or dist_data[tuple(pacman_pos)][tuple(each)] <= 5:
                 nearby_beans_list.append(each)
     return len(nearby_beans_list)
 
@@ -474,7 +474,7 @@ def _rebornBeans(pacman_pos, beans, dist_data):
     nearby_beans_list = []
     if beans is not None and not isinstance(beans, float):
         for each in beans:
-            if tuple(each) == tuple(pacman_pos) or dist_data[tuple(pacman_pos)][tuple(each)] <= 10:
+            if tuple(each) == tuple(pacman_pos) or dist_data[tuple(pacman_pos)][tuple(each)] <= 5:
                 nearby_beans_list.append(each)
     nearby_beans_num = len(nearby_beans_list)
     # The number of beans nearby the reborn position
@@ -482,28 +482,33 @@ def _rebornBeans(pacman_pos, beans, dist_data):
     reborn_pos = (14, 27)
     if beans is not None and not isinstance(beans, float):
         for each in beans:
-            if tuple(each) == reborn_pos or dist_data[reborn_pos][tuple(each)] <= 10:
+            if tuple(each) == reborn_pos or dist_data[reborn_pos][tuple(each)] <= 5:
                 reborn_beans_list.append(each)
     reborn_beans_num = len(reborn_beans_list)
     return reborn_beans_num - nearby_beans_num
 
 
 def _planningReward(pacman_pos, ghosts_pos, ghost_status, energizers, dist_data):
-    if energizers is None or isinstance(energizers, float) or np.all(np.array(ghost_status) >= 3):
-        return -1
-    EG_distance = [dist_data]
+    if energizers is None or isinstance(energizers, float) or np.all(np.array(ghost_status) >= 3) or np.all(np.array(ghost_status) == np.nan):
+        return -np.inf
+    P_E_distance = [dist_data[pacman_pos][each_energizer] if pacman_pos != each_energizer else 0 for each_energizer in energizers]
+    PE = np.min(P_E_distance)
+    closest_energizer = energizers[np.argmin(P_E_distance).item()]
+    E_G_distance = [dist_data[closest_energizer][each_ghost] if closest_energizer != each_ghost else 0 for each_ghost in ghosts_pos]
+    EG = np.min(E_G_distance)
+    return EG-PE
 
 
 def _addGameStatus(data, true_dir, estimation_dir, dist_data):
-    data = data[["file", "origin_index", "beans", "pacmanPos", "ghost1Pos", "ghost2Pos", "energizers"]]
+    # data = data[["file", "origin_index", "beans", "energizers", "pacmanPos", "ghost1Pos", "ghost2Pos", "energizers", "ifscared1", "ifscared2"]]
     data["beans_num"] = data.beans.apply(lambda  x: len(x) if not isinstance(x, float) else 0)
     data["beans_num_within_10"] = data[["beans", "pacmanPos"]].apply(
-        lambda x: _NumOfBeansIn10(x.pacmanPos, x.beans, dist_data), axis = 1
+        lambda x: _NumOfLocalBeans(x.pacmanPos, x.beans, dist_data), axis = 1
     )
     data["reborn_beans_num"] = data[["beans", "pacmanPos"]].apply(
         lambda x: _rebornBeans(x.pacmanPos, x.beans, dist_data), axis = 1
     )
-    data["planning_reward"] = data[["pacmanPos", "ghost1Pos", "ghost2Pos", "energizers"]].apply(
+    data["planning_reward"] = data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2", "energizers"]].apply(
         lambda x: _planningReward(x.pacmanPos, [x.ghost1Pos, x.ghost2Pos], [x.ifscared1, x.ifscared2], x.energizers, dist_data), axis=1
     )
     # data["true_dir"] = true_prob.apply(lambda x: makeChoice(x))
@@ -718,7 +723,7 @@ def MLE(config):
     print("Accuracy:\n")
     for index in range(len(diff_agent_list)):
         print(diff_agent_list[index], accuracy_list[index])
-    np.save("altogether_analysis/accuracy.npy", accuracy_list)
+    np.save("altogether_analysis/500-trials/accuracy.npy", accuracy_list)
     return diff_agent_list
 
 
@@ -728,106 +733,8 @@ def MLE(config):
 # ===================================
 #         VISUALIZATION
 # ===================================
-def plotBeanVSAccuracy(diff_agent_list = None, filename = None):
-    if filename is None and diff_agent_list is not None:
-        path_tree_agents = "_".join(diff_agent_list[1])
-        all_agents = "_".join(diff_agent_list[0])
-        path_tree_training_file = "./altogether_analysis/training_result-{}.pkl".format(path_tree_agents)
-        path_tree_testing_file = "./altogether_analysis/testing_result-{}.pkl".format(path_tree_agents)
-        all_training_file = "./altogether_analysis/training_result-{}.pkl".format(all_agents)
-        all_testing_file = "./altogether_analysis/testing_result-{}.pkl".format(all_agents)
-    elif filename is not None and diff_agent_list is None:
-        path_tree_training_file, path_tree_testing_file, all_training_file, all_testing_file = filename
-    else:
-        raise ValueError("The agent list or filenames should be specified!")
-    # Read data
-    with open(path_tree_training_file, "rb") as file:
-        path_tree_training_result = pickle.load(file)
-    with open(path_tree_testing_file, "rb") as file:
-        path_tree_testing_result = pickle.load(file)
-    with open(all_training_file, "rb") as file:
-        all_training_result = pickle.load(file)
-    with open(all_testing_file, "rb") as file:
-        all_testing_result = pickle.load(file)
-    # Processing for training result
-    plt.subplot(2, 1, 1)
-    plt.title("Training Set")
-    # max_bean_num = min(np.max(path_tree_training_result.beans_num), np.max(all_training_result.beans_num))
-    # min_bean_num = max(np.min(path_tree_training_result.beans_num), np.min(all_training_result.beans_num))
-    max_bean_num = 40
-    min_bean_num = 0
-    bean_nums = np.arange(min_bean_num, max_bean_num + 1, 1)
-    path_tree_step_nums = np.zeros_like(bean_nums)
-    path_tree_correct_nums = np.zeros_like(bean_nums)
-    all_tree_step_nums = np.zeros_like(bean_nums)
-    all_tree_correct_nums = np.zeros_like(bean_nums)
-    for index in range(path_tree_training_result.shape[0]):
-        cur_data = path_tree_training_result.iloc[index]
-        if min_bean_num <= cur_data.beans_num <= max_bean_num:
-            bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-            path_tree_step_nums[bean_index] += 1
-            if cur_data.is_correct:
-                path_tree_correct_nums[bean_index] += 1
-            else:
-                continue
-    for index in range(all_training_result.shape[0]):
-        cur_data = all_training_result.iloc[index]
-        if min_bean_num <= cur_data.beans_num <= max_bean_num:
-            bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-            all_tree_step_nums[bean_index] += 1
-            if cur_data.is_correct:
-                all_tree_correct_nums[bean_index] += 1
-            else:
-                continue
-    plt.bar(np.array(bean_nums[::-1])-0.45, np.divide(path_tree_correct_nums, path_tree_step_nums)[::-1], label = "w/o Suicide Agent", width = 0.45, align = "edge")
-    plt.bar(np.array(bean_nums[::-1]), np.divide(all_tree_correct_nums, all_tree_step_nums)[::-1], label = "All Agents", width = 0.45, align = "edge")
-    plt.legend(loc = "upper left")
-    plt.xlabel("# of beans")
-    plt.xticks(np.arange(min_bean_num, max_bean_num+1, 10), np.arange(max_bean_num, min_bean_num, -10))
-    plt.ylabel("correct rate")
-
-    # Processing for testing result
-    plt.subplot(2, 1, 2)
-    plt.title("Testing Set")
-    # max_bean_num = min(np.max(path_tree_testing_result.beans_num), np.max(all_testing_result.beans_num))
-    # min_bean_num = max(np.min(path_tree_testing_result.beans_num), np.min(all_testing_result.beans_num))
-    max_bean_num = 40
-    min_bean_num = 0
-    bean_nums = np.arange(min_bean_num, max_bean_num + 1, 1)
-    path_tree_step_nums = np.zeros_like(bean_nums)
-    path_tree_correct_nums = np.zeros_like(bean_nums)
-    all_tree_step_nums = np.zeros_like(bean_nums)
-    all_tree_correct_nums = np.zeros_like(bean_nums)
-    for index in range(path_tree_testing_result.shape[0]):
-        cur_data = path_tree_testing_result.iloc[index]
-        if min_bean_num <= cur_data.beans_num <= max_bean_num:
-            bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-            path_tree_step_nums[bean_index] += 1
-            if cur_data.is_correct:
-                path_tree_correct_nums[bean_index] += 1
-            else:
-                continue
-    for index in range(all_testing_result.shape[0]):
-        cur_data = all_testing_result.iloc[index]
-        if min_bean_num <= cur_data.beans_num <= max_bean_num:
-            bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-            all_tree_step_nums[bean_index] += 1
-            if cur_data.is_correct:
-                all_tree_correct_nums[bean_index] += 1
-            else:
-                continue
-    plt.bar(np.array(bean_nums[::-1]) - 0.45, np.divide(path_tree_correct_nums, path_tree_step_nums)[::-1], label="w/o Suicide Agent", width=0.45, align="edge")
-    plt.bar(np.array(bean_nums[::-1]), np.divide(all_tree_correct_nums, all_tree_step_nums)[::-1], label="All Agents", width=0.45, align="edge")
-    plt.legend(loc="upper left")
-    plt.xlabel("# of beans")
-    plt.xticks(np.arange(min_bean_num, max_bean_num+1, 10), np.arange(max_bean_num, min_bean_num, -10))
-    plt.ylabel("correct rate")
-
-    plt.show()
-
-
 def plotCorrectRate(data_name = None):
-    accuracy_list = np.load("altogether_analysis/accuracy.npy")
+    accuracy_list = np.load("altogether_analysis/500-trials/accuracy.npy")
     plt.title("Testing Set Correct Rate ({})".format(data_name), fontsize = 20)
     width = 0.8
     plt.bar(np.arange(len(accuracy_list)), accuracy_list, width = width, align = "center")
@@ -841,7 +748,7 @@ def plotCorrectRate(data_name = None):
     plt.show()
 
 
-def plotGlobalIncremental(data_name = None):
+def plotGlobalIncremental(data_name = None, bin_size = 5):
     # Read data
     wo_global = "_".join(diff_agent_list[0]) # without global agents
     w_global = "_".join(diff_agent_list[1]) # with global agents
@@ -849,22 +756,18 @@ def plotGlobalIncremental(data_name = None):
         wo_global_testing_result = pickle.load(file)
     with open("./altogether_analysis/testing_result-{}.pkl".format(w_global), "rb") as file:
         w_global_testing_result = pickle.load(file)
-    # max_bean_num = min(np.max(path_tree_testing_result.beans_num), np.max(all_testing_result.beans_num))
-    # min_bean_num = max(np.min(path_tree_testing_result.beans_num), np.min(all_testing_result.beans_num))
-    max_bean_num = max(max(wo_global_testing_result.beans_num), max(w_global_testing_result.beans_num))
+    max_bean_num = max(max(wo_global_testing_result.beans_num_within_10), max(w_global_testing_result.beans_num_within_10))
     min_bean_num = 0
-
-
-    # bean_nums = np.arange(min_bean_num, max_bean_num + 1, 1)
-    ind = np.arange(min_bean_num, max_bean_num, 5)
+    # bin_size = 3
+    ind = np.arange(min_bean_num, max_bean_num, bin_size)
     wo_step_nums = np.zeros_like(ind)
     wo_correct_nums = np.zeros_like(ind)
     w_step_nums = np.zeros_like(ind)
     w_correct_nums = np.zeros_like(ind)
-
+    # every bin
     for index in range(wo_global_testing_result.shape[0]):
         cur_data = wo_global_testing_result.iloc[index]
-        bean_index = cur_data.beans_num // 5
+        bean_index = cur_data.beans_num_within_10 // bin_size
         # if min_bean_num <= cur_data.beans_num <= max_bean_num:
         #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
         wo_step_nums[bean_index] += 1
@@ -874,7 +777,7 @@ def plotGlobalIncremental(data_name = None):
             continue
     for index in range(w_global_testing_result.shape[0]):
         cur_data = w_global_testing_result.iloc[index]
-        bean_index = cur_data.beans_num // 5
+        bean_index = cur_data.beans_num_within_10 // bin_size
         # if min_bean_num <= cur_data.beans_num <= max_bean_num:
         #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
         w_step_nums[bean_index] += 1
@@ -882,15 +785,231 @@ def plotGlobalIncremental(data_name = None):
             w_correct_nums[bean_index] += 1
         else:
             continue
-    plt.bar(np.arange(len(ind))[::-1] - 0.45, np.divide(wo_correct_nums, wo_step_nums)[::-1], label="local + pessimistic", width=0.45, align="edge")
-    plt.bar(np.arange(len(ind))[::-1], np.divide(w_correct_nums, w_step_nums)[::-1], label="local + pessimistic + global", width=0.45, align="edge")
+    wo_cr = np.divide(wo_correct_nums, wo_step_nums)[::-1]
+    w_cr = np.divide(w_correct_nums, w_step_nums)[::-1]
+    plt.bar(np.arange(len(ind)) - 0.45, wo_cr, label="local + pessimistic", width=0.45, align="edge")
+    plt.bar(np.arange(len(ind)), w_cr, label="local + pessimistic + global", width=0.45, align="edge")
+    difference = w_cr - wo_cr
+    for index, each in enumerate(difference):
+        if each < 0:
+            color = "green"
+        elif each > 0:
+            color = "red"
+        else:
+            continue
+        plt.text(x=np.arange(len(ind))[index], y=max(w_cr[index], wo_cr[index]) + 0.01,
+                 s="{s:+.4f}".format(s=each),
+                 fontsize=15, horizontalalignment='center', color=color)
     plt.legend(loc="upper left", fontsize = 20)
-    plt.xlabel("# of beans", fontsize = 20)
+    plt.xlabel("# of beans within 5 steps", fontsize = 20)
     x_ticks = ["[{}, {})".format(ind[i], ind[i+1]) for i in range(len(ind)-1)]
     x_ticks.append(f'[{ind[-1]}, $\infty$)')
     plt.xticks(np.arange(len(ind)), x_ticks[::-1], fontsize = 20)
     plt.ylabel("Correct Rate", fontsize = 20)
     plt.yticks(fontsize = 20)
+    plt.ylim(0, 1.1)
+    plt.show()
+
+
+def plotPlannedHuntingIncremental(data_name = None, bin_size = 5):
+    # Read data
+    wo_planned = "_".join(diff_agent_list[1]) # without planned hunting agents
+    w_planned = "_".join(diff_agent_list[2]) # with planned hunting agents
+    with open("./altogether_analysis/testing_result-{}.pkl".format(wo_planned), "rb") as file:
+        wo_planned_testing_result = pickle.load(file)
+        need_planned_index = np.where(wo_planned_testing_result.planning_reward.values != -np.inf)
+        wo_planned_testing_result = wo_planned_testing_result.iloc[need_planned_index].reset_index(drop = True)
+    with open("./altogether_analysis/testing_result-{}.pkl".format(w_planned), "rb") as file:
+        w_planned_testing_result = pickle.load(file)
+        need_planned_index = np.where(w_planned_testing_result.planning_reward.values != -np.inf)
+        w_planned_testing_result = w_planned_testing_result.iloc[need_planned_index].reset_index(drop=True)
+    max_bean_num = max(max(wo_planned_testing_result.planning_reward), max(w_planned_testing_result.planning_reward))
+    min_bean_num = min(min(wo_planned_testing_result.planning_reward), min(w_planned_testing_result.planning_reward))
+    # bin_size = 10
+    ind = np.arange(min_bean_num, max_bean_num, bin_size)
+    wo_step_nums = np.zeros_like(ind)
+    wo_correct_nums = np.zeros_like(ind)
+    w_step_nums = np.zeros_like(ind)
+    w_correct_nums = np.zeros_like(ind)
+    # every bin
+    for index in range(wo_planned_testing_result.shape[0]):
+        cur_data = wo_planned_testing_result.iloc[index]
+        bean_index = int((cur_data.planning_reward - min_bean_num)) // bin_size
+        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
+        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        wo_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            wo_correct_nums[bean_index] += 1
+        else:
+            continue
+    for index in range(w_planned_testing_result.shape[0]):
+        cur_data = w_planned_testing_result.iloc[index]
+        bean_index = int((cur_data.planning_reward - min_bean_num)) // bin_size
+        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
+        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        w_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            w_correct_nums[bean_index] += 1
+        else:
+            continue
+    wo_cr = np.divide(wo_correct_nums, wo_step_nums)[::-1]
+    w_cr = np.divide(w_correct_nums, w_step_nums)[::-1]
+    plt.bar(np.arange(len(ind)) - 0.45, wo_cr,
+            label="local + pessimistic + global", width=0.45, align="edge")
+    plt.bar(np.arange(len(ind)), w_cr,
+            label="local + pessimistic + global + planned hunting", width=0.45, align="edge")
+    difference = w_cr - wo_cr
+    for index, each in enumerate(difference):
+        if each < 0:
+            color = "green"
+        elif each > 0:
+            color = "red"
+        else:
+            continue
+        plt.text(x=np.arange(len(ind))[index], y=max(w_cr[index], wo_cr[index]) + 0.01,
+                 s="{s:+.4f}".format(s=each),
+                 fontsize=15, horizontalalignment='center', color=color)
+    plt.xlabel("EG - PE", fontsize = 20)
+    x_ticks = ["[{}, {})".format(ind[i], ind[i+1]) for i in range(len(ind)-1)]
+    x_ticks.append(f'[{ind[-1]}, $\infty$)')
+    plt.xticks(np.arange(len(ind)), x_ticks[::-1], fontsize = 10)
+    plt.ylabel("Correct Rate", fontsize = 20)
+    plt.yticks(fontsize = 20)
+    plt.legend(loc="upper center", fontsize = 20, ncol = 2)
+    plt.ylim(0, 1.1)
+    plt.show()
+
+
+def plotSuicideIncremental(data_name = None, bin_size = 5):
+    # Read data
+    wo_suicide = "_".join(diff_agent_list[2]) # without suicide agents
+    w_suicide = "_".join(diff_agent_list[3]) # with planned hunting agents
+    with open("./altogether_analysis/testing_result-{}.pkl".format(wo_suicide), "rb") as file:
+        wo_suicide_testing_result = pickle.load(file)
+    with open("./altogether_analysis/testing_result-{}.pkl".format(w_suicide), "rb") as file:
+        w_suicide_testing_result = pickle.load(file)
+    max_bean_num = max(max(wo_suicide_testing_result.reborn_beans_num), max(w_suicide_testing_result.reborn_beans_num))
+    min_bean_num = min(min(wo_suicide_testing_result.reborn_beans_num), min(w_suicide_testing_result.reborn_beans_num))
+    # bin_size = 2
+    ind = np.arange(min_bean_num, max_bean_num, bin_size)
+    wo_step_nums = np.zeros_like(ind)
+    wo_correct_nums = np.zeros_like(ind)
+    w_step_nums = np.zeros_like(ind)
+    w_correct_nums = np.zeros_like(ind)
+    # every bin
+    for index in range(wo_suicide_testing_result.shape[0]):
+        cur_data = wo_suicide_testing_result.iloc[index]
+        bean_index = int((cur_data.reborn_beans_num - min_bean_num)) // bin_size
+        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
+        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        wo_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            wo_correct_nums[bean_index] += 1
+        else:
+            continue
+    for index in range(w_suicide_testing_result.shape[0]):
+        cur_data = w_suicide_testing_result.iloc[index]
+        bean_index = int((cur_data.reborn_beans_num - min_bean_num)) // bin_size
+        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
+        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        w_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            w_correct_nums[bean_index] += 1
+        else:
+            continue
+    wo_cr = np.divide(wo_correct_nums, wo_step_nums)[::-1]
+    w_cr = np.divide(w_correct_nums, w_step_nums)[::-1]
+    plt.bar(np.arange(len(ind)) - 0.45, wo_cr,
+            label="local + pessimistic + global + planned hunting", width=0.45, align="edge")
+    plt.bar(np.arange(len(ind)), w_cr,
+            label="local + pessimistic + global + planned hunting + suicide", width=0.45, align="edge")
+    difference = w_cr - wo_cr
+    for index, each in enumerate(difference):
+        if each < 0:
+            color = "green"
+        elif each > 0:
+            color = "red"
+        else:
+            continue
+        plt.text(x=np.arange(len(ind))[index], y=max(w_cr[index], wo_cr[index]) + 0.01,
+                 s="{s:+.4f}".format(s=each),
+                 fontsize=15, horizontalalignment='center', color=color)
+    plt.xlabel("# of beans nearby reborn pos - # of beans nearby current pos", fontsize = 20)
+    x_ticks = ["[{}, {})".format(ind[i], ind[i+1]) for i in range(len(ind)-1)]
+    x_ticks.append(f'[{ind[-1]}, $\infty$)')
+    plt.xticks(np.arange(len(ind)), x_ticks[::-1], fontsize = 20)
+    plt.ylabel("Correct Rate", fontsize = 20)
+    plt.yticks(fontsize = 20)
+    plt.ylim(0, 1.1)
+    plt.legend(loc="upper center", fontsize = 17, ncol = 2)
+    plt.show()
+
+
+def correctRateVSBeanNum(agent_name = None, bin_size = 10):
+    agent_list = ["local", "pessimistic", "global", "planned hunting", "suicide"]
+    if agent_name not in agent_list:
+        raise ValueError("Undefined agent {}!".format(agent_name))
+    agent_index = agent_list.index(agent_name)
+    wo_label = " + ".join(agent_list[:agent_index])
+    w_label = " + ".join(agent_list[:agent_index+1])
+    agent_index = agent_index - 2 + 1
+    # Read data
+    wo_agent = "_".join(diff_agent_list[agent_index-1])  # without a certain agent
+    w_agent = "_".join(diff_agent_list[agent_index])  # with a certain agent
+    with open("./altogether_analysis/testing_result-{}.pkl".format(wo_agent), "rb") as file:
+        wo_agent_testing_result = pickle.load(file)
+    with open("./altogether_analysis/testing_result-{}.pkl".format(w_agent), "rb") as file:
+        w_agent_testing_result = pickle.load(file)
+    max_bean_num = max(max(wo_agent_testing_result.beans_num), max(w_agent_testing_result.beans_num))
+    min_bean_num = 0
+    ind = np.arange(min_bean_num, max_bean_num, bin_size)
+    wo_step_nums = np.zeros_like(ind)
+    wo_correct_nums = np.zeros_like(ind)
+    w_step_nums = np.zeros_like(ind)
+    w_correct_nums = np.zeros_like(ind)
+    # every bin
+    for index in range(wo_agent_testing_result.shape[0]):
+        cur_data = wo_agent_testing_result.iloc[index]
+        bean_index = cur_data.beans_num // bin_size
+        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
+        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        wo_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            wo_correct_nums[bean_index] += 1
+        else:
+            continue
+    for index in range(w_agent_testing_result.shape[0]):
+        cur_data = w_agent_testing_result.iloc[index]
+        bean_index = cur_data.beans_num // bin_size
+        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
+        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
+        w_step_nums[bean_index] += 1
+        if cur_data.is_correct:
+            w_correct_nums[bean_index] += 1
+        else:
+            continue
+    wo_cr = np.divide(wo_correct_nums, wo_step_nums)[::-1]
+    w_cr = np.divide(w_correct_nums, w_step_nums)[::-1]
+    plt.bar(np.arange(len(ind)) - 0.45, wo_cr, label = wo_label, width=0.45, align="edge")
+    plt.bar(np.arange(len(ind)), w_cr, label = w_label, width=0.45, align="edge")
+    difference = w_cr - wo_cr
+    for index, each in enumerate(difference):
+        if each < 0:
+            color = "green"
+        elif each > 0:
+            color = "red"
+        else:
+            continue
+        plt.text(x = np.arange(len(ind))[index], y = max(w_cr[index], wo_cr[index])+0.01, s = "{s:+.4f}".format(s=each),
+                 fontsize = 15,  horizontalalignment='center', color = color)
+    plt.xlabel("# of beans", fontsize=20)
+    x_ticks = ["[{}, {})".format(ind[i], ind[i + 1]) for i in range(len(ind) - 1)]
+    x_ticks.append(f'[{ind[-1]}, $\infty$)')
+    plt.xticks(np.arange(len(ind)), x_ticks[::-1], fontsize=20)
+    plt.ylabel("Correct Rate", fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(0, 1.1)
+    plt.legend(loc="upper center", fontsize = 17, ncol = 2)
     plt.show()
 
 
@@ -903,11 +1022,8 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/before_last_life_data.pkl-new_agent.pkl",
-        # Testing data filename
-        "testing_data_filename": "../common_data/before_last_life_data.pkl-new_agent.pkl",
-        # Method: "MLE" or "MEE"
-        "method": "MLE",
+        # "data_filename": "../common_data/before_last_life_data.pkl-new_agent.pkl",
+        "data_filename": "../common_data/first_life_data.pkl-new_agent.pkl",
         # Only making decisions when necessary
         "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
@@ -916,19 +1032,8 @@ if __name__ == '__main__':
         "window": 10,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
-        # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
-        "loss-func": "l2-norm",
         # The number of trials used for analysis; None for using all the trials
-        "trial_num": None,
-        # Initial guess of parameters
-        # "params": [1, 1, 1, 1, 1],
-        # "params": [1, 1, 1],
-        # # Bounds for optimization
-        # # "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]],
-        # "bounds": [[0, 1000], [0, 1000], [0, 1000]],
-        # # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        # # "agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
-        # "agents": ["global", "local", "pessimistic"],
+        "trial_num": None
     }
 
     # ============ ESTIMATION =============
@@ -941,9 +1046,15 @@ if __name__ == '__main__':
         ["local", "pessimistic", "global", "planned_hunting", "suicide"]
     ]
 
-    # ============ VISUALIZATION =============
-    # plotCorrectRate(data_name="before last")
-    plotGlobalIncremental(data_name="before last")
+    # # ============ VISUALIZATION =============
+    plotCorrectRate(data_name="first life")
+    plotGlobalIncremental(data_name="first life", bin_size = 5)
+    plotPlannedHuntingIncremental(data_name="first life", bin_size = 5)
+    plotSuicideIncremental(data_name="first life", bin_size = 2)
+
+    correctRateVSBeanNum(agent_name="global", bin_size = 10)
+    correctRateVSBeanNum(agent_name="planned hunting", bin_size = 10)
+    correctRateVSBeanNum(agent_name="suicide", bin_size = 10)
 
     # weight = np.load("./altogether_analysis/weight-global_local_pessimistic_suicide_planned_hunting.npy")
     # print(weight)
