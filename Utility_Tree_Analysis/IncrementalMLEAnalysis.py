@@ -111,44 +111,56 @@ def readDatasetFromPkl(filename, trial_num = None, only_necessary = False):
     return X, Y
 
 
-def readTestingDatasetFromPkl(filename, trial_name = None, only_necessary = False):
-    '''
-    Construct dataset from a .pkl file.
-    :param filename: Filename.
-    :param trial_name: Trial name.
-    :return: 
-    '''
+def readTrialDataFromPkl(filename, trial_num = None):
     # Read data and pre-processing
     with open(filename, "rb") as file:
         # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
-    if trial_name is not None: # explicitly indicate the trial
-        all_data = all_data[all_data.file == trial_name]
     if "level_0" not in all_data.columns.values:
-        all_data = all_data.reset_index()
-    # true_prob = all_data.next_pacman_dir_fill
-    true_prob = all_data.next_pacman_dir
-    # The indeices of data with a direction rather than nan
-    if only_necessary:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir, float) and x.at_cross
-    else:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir, float)
-    not_nan_index = np.where(all_data.apply(lambda x: not_nan_indication(x), axis = 1))[0]
-    all_data = all_data.iloc[not_nan_index]
-    true_prob = true_prob.iloc[not_nan_index]
-    true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
-    # Construct the dataset
-    if only_necessary and "at_cross" in all_data.columns.values:
-        print("--- Only Necessary ---")
-        at_cross_index = np.where(all_data.at_cross)
-        X = all_data.iloc[at_cross_index]
-        Y = true_prob.iloc[at_cross_index]
-        # print("--- Data Shape {} ---".format(len(at_cross_index[0])))
-    else:
-        X = all_data
+        all_data = all_data.reset_index(drop=True)
+    adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
+    # Exclude the (0, 18) position in data
+    normal_data_index = []
+    for index in range(all_data.shape[0]):
+        if not isinstance(all_data.global_Q[index], list): # what if no normal Q?
+            normal_data_index.append(index)
+    all_data = all_data.iloc[normal_data_index]
+    # Select the required number of trials
+    trial_name_list = np.unique(all_data.file.values)
+    print("The number of trials : ", len(trial_name_list))
+    if trial_num is None:
+        trial_num = len(trial_name_list)
+    if len(trial_name_list) > trial_num:
+        trial_name_list = np.random.choice(trial_name_list, trial_num, replace = False)
+    X_list = []
+    Y_list = []
+    for each in trial_name_list:
+        X = all_data[all_data.file == each]
+        if "at_cross" not in X.columns.values:
+            X.at_cross = X.pacmanPos.apply(
+                lambda x: (
+                    False if x not in adjacent_data else np.sum(
+                        [1 if not isinstance(each, float) else 0
+                         for each in list(adjacent_data[x].values())]
+                    ) > 2
+                )
+            )
+        # Fill nan direction for optimization use
+        true_prob = X.next_pacman_dir_fill.reset_index(drop=True)
+        start_index = 0
+        while pd.isna(true_prob[start_index]):
+            start_index += 1
+        true_prob = true_prob[start_index:].reset_index(drop=True)
+        all_data = all_data[start_index:].reset_index(drop=True)
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
         Y = true_prob
-    return X, Y
-
+        # Append
+        X_list.append(X)
+        Y_list.append(Y)
+    return X_list, Y_list, trial_name_list
 
 # ===================================
 #       INDIVIDUAL ESTIMATION
@@ -402,8 +414,12 @@ def preEstimation():
         # "../common_data/before_last_life_data.pkl",
         # "../common_data/last_life_data.pkl",
         # "../common_data/first_life_data.pkl",
-        "../common_data/partial_data_with_reward_label_cross.pkl",
-
+        # "../common_data/partial_data_with_reward_label_cross.pkl",
+        # "../common_data/agent_data/suicide_data.pkl",
+        # "../common_data/agent_data/global_data.pkl",
+        # "../common_data/agent_data/planned_hunting_data.pkl",
+        "../common_data/agent_data/most_planned_hunting_data.pkl",
+        "../common_data/agent_data/really_suicide_data.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -727,7 +743,112 @@ def MLE(config):
     return diff_agent_list
 
 
-# TODO: moving window analysis
+def singleTrialMovingWindowAnalysis(config):
+    print("=" * 20, " Moving Window ", "=" * 20)
+    window = config["window"]
+    agent_list = ["global", "local", "pessimistic", "planned_hunting", "suicide"]
+    adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
+    dist_data = readLocDistance("extracted_data/dij_distance_map.csv")
+    # Load experiment data
+    # X is data for a list of trials and Y is the corresponding responses
+    X_list, Y_list, trial_name_list = readTrialDataFromPkl(config["data_filename"], trial_num=config["moving_window_trial_num"])
+    print("Number of trials : ", len(trial_name_list))
+    # for every trial
+    trial_correct_rate = []
+    trial_cross_correct_rate = []
+    trial_sample_num = []
+    for trial_index in range(len(trial_name_list)):
+        print("-"*30)
+        print(trial_name_list[trial_index])
+        X = X_list[trial_index]
+        Y = Y_list[trial_index]
+        # pre-processing of Q-value
+        agent_normalizing_factors = []
+        agent_offset = []
+        for agent_name in ["{}_Q".format(each) for each in agent_list]:
+            preprocessing_res = _preProcessingQ(X[agent_name], X.pacmanPos, adjacent_data)
+            agent_offset.append(preprocessing_res[0])
+            agent_normalizing_factors.append(preprocessing_res[1])
+            X[agent_name] = preprocessing_res[2]
+        print("Number of samples : ", X.shape[0])
+        trial_sample_num.append((trial_name_list[trial_index], X.shape[0]))
+        print("Agent Normalizing Factors : ", agent_normalizing_factors)
+        print("Agent Offset : ", agent_offset)
+        # Construct optimizer
+        params = [1 for _ in range(len(agent_list))]
+        bounds = [[0, 1000] for _ in range(len(agent_list))]
+        cons = []  # construct the bounds in the form of constraints
+        for par in range(len(bounds)):
+            l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+            u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+            cons.append(l)
+            cons.append(u)
+        func = lambda params: negativeLikelihood(
+            params,
+            sub_X,
+            sub_Y,
+            agent_list,
+            return_trajectory=False
+        )
+        subset_index = np.arange(window, len(Y) - window)
+        all_coeff = []
+        all_correct_rate = []
+        all_success = []
+        at_cross_index = np.where(X.at_cross.values)[0]
+        at_cross_accuracy = []
+        # Moving the window
+        for index in subset_index:
+            print("Window at {}...".format(index))
+            sub_X = X[index - window:index + window]
+            sub_Y = Y[index - window:index + window]
+            # optimization in the window
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            all_success.append(is_success)
+            # Correct rate
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                sub_X,
+                sub_Y,
+                agent_list,
+                return_trajectory=True
+            )
+            # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+            estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
+            true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            all_correct_rate.append(correct_rate)
+            # The coefficient
+            all_coeff.append(res.x)
+            # Coefficient and accuracy for decision point
+            if index in at_cross_index:
+                at_cross_accuracy.append((index, res.x, correct_rate))
+        print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
+        print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
+        print("Average Correct Rate (Decision Position): {}".format(np.mean([each[2] for each in at_cross_accuracy])))
+        trial_correct_rate.append(np.mean(all_correct_rate))
+        trial_cross_correct_rate.append(np.mean([each[2] for each in at_cross_accuracy]))
+    # Overall results print
+    print("="*30)
+    print("Trial sample num : ", trial_sample_num)
+    print("Trial correct rate summary : ", trial_correct_rate)
+    print("Trial correct rate (decision point) summary : ", trial_cross_correct_rate)
+    print("Overall correct rate summary : ", np.mean(trial_correct_rate))
+    print("Overall correct rate (decision point) summary : ", np.mean(trial_cross_correct_rate))
+
 
 
 # ===================================
@@ -1015,21 +1136,23 @@ def correctRateVSBeanNum(agent_name = None, bin_size = 10):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    # preEstimation()
+    preEstimation()
 
 
     # Configurations
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        # "data_filename": "../common_data/before_last_life_data.pkl-new_agent.pkl",
-        "data_filename": "../common_data/first_life_data.pkl-new_agent.pkl",
+        "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
+        # "data_filename": "../common_data/agent_data/suicide_data.pkl-new_agent.pkl",
         # Only making decisions when necessary
         "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
         "clip_samples": None,
         # The window size
         "window": 10,
+        # Number of trials used for moving window analysis
+        "moving_window_trial_num": 10,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
         # The number of trials used for analysis; None for using all the trials
@@ -1039,6 +1162,10 @@ if __name__ == '__main__':
     # ============ ESTIMATION =============
     # diff_agent_list = MLE(config)
 
+    # singleTrialMovingWindowAnalysis(config)
+
+
+    # # ============ VISUALIZATION =============
     diff_agent_list = [
         ["local", "pessimistic"],
         ["local", "pessimistic", "global"],
@@ -1046,15 +1173,14 @@ if __name__ == '__main__':
         ["local", "pessimistic", "global", "planned_hunting", "suicide"]
     ]
 
-    # # ============ VISUALIZATION =============
-    plotCorrectRate(data_name="first life")
-    plotGlobalIncremental(data_name="first life", bin_size = 5)
-    plotPlannedHuntingIncremental(data_name="first life", bin_size = 5)
-    plotSuicideIncremental(data_name="first life", bin_size = 2)
+    # plotCorrectRate(data_name="suicide")
+    # plotGlobalIncremental(data_name="suicide", bin_size = 3)
+    # plotPlannedHuntingIncremental(data_name="suicide", bin_size = 5)
+    # plotSuicideIncremental(data_name="suicide", bin_size = 2)
 
-    correctRateVSBeanNum(agent_name="global", bin_size = 10)
-    correctRateVSBeanNum(agent_name="planned hunting", bin_size = 10)
-    correctRateVSBeanNum(agent_name="suicide", bin_size = 10)
+    # correctRateVSBeanNum(agent_name="global", bin_size = 15)
+    # correctRateVSBeanNum(agent_name="planned hunting", bin_size = 10)
+    # correctRateVSBeanNum(agent_name="suicide", bin_size = 10)
 
     # weight = np.load("./altogether_analysis/weight-global_local_pessimistic_suicide_planned_hunting.npy")
     # print(weight)

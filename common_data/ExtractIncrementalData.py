@@ -13,39 +13,13 @@ import pickle
 import pandas as pd
 import numpy as np
 import sys
+import copy
 
 sys.path.append("./")
 from LabelingData import _isGlobal, _isLocal
 
 sys.path.append("../Utility_Tree_Analysis/")
 from TreeAnalysisUtils import readAdjacentMap
-
-
-# 每一段index都是df_total的index，注意：在对df_total进行处理（尤其是merge）的时候，不要改变其index！！！！
-# accidentally hunting就是all_data.pickle中的['cons_list_accident']
-# planned hunting就是all_data.pickle中的['cons_list_plan']
-
-
-# 这个function输出的第一个variable就是suicide_list
-def _generate_suicide_normal(df_total):
-    select_last_num = 100
-    suicide_normal = (
-        df_total.reset_index()
-        .merge(
-            (df_total.groupby("file")["label_suicide"].sum() > 0)
-            .rename("suicide_trial")
-            .reset_index(),
-            on="file",
-            how="left",
-        )
-        .sort_values(by="level_0")
-        .groupby(["file", "suicide_trial"])
-        .apply(lambda x: x.level_0.tail(select_last_num).tolist())
-        .reset_index()
-    )
-    suicide_lists = suicide_normal[suicide_normal["suicide_trial"] == True][0]
-    normal_lists = suicide_normal[suicide_normal["suicide_trial"] == False][0]
-    return suicide_lists, normal_lists
 
 
 def _ifAtCross(adjacent_data, pacmanPos):
@@ -135,18 +109,144 @@ def extractLifeGame():
     print("Finished writing data!")
     print("="*40)
 
+# ==============================================
+#       EXTRACT DATA FOR EACH AGENT
+# ==============================================
+def _extractGlobalData(all_data_with_label, save_res = False):
+    nan_index = np.where(np.isnan(all_data_with_label.label_global))
+    all_data_with_label.label_global.iloc[nan_index] = 0
+    nan_index = np.where(np.isnan(all_data_with_label.label_global_optimal))
+    all_data_with_label.label_global_optimal.iloc[nan_index] = 0
+    nan_index = np.where(np.isnan(all_data_with_label.label_global_notoptimal))
+    all_data_with_label.label_global_notoptimal.iloc[nan_index] = 0
+    is_global = all_data_with_label.apply(
+        lambda x: np.logical_or(np.logical_or(x.label_global, x.label_global_optimal), x.label_global_notoptimal),
+        axis=1
+    )
+    global_index = np.where(is_global == 1)
+    global_data = all_data_with_label.iloc[global_index].reset_index(drop=True)
+    print("Global data shape : ", global_data.shape)
+    if not save_res:
+        return
+    with open("agent_data/global_data.pkl", "wb") as file:
+        global_data = global_data.iloc[np.random.choice(global_data.shape[0], 20000, replace=False)].reset_index(
+            drop=True)
+        print("Used global data shape : ", global_data.shape)
+        pickle.dump(global_data, file)
+    print("Finished writing global data.")
 
 
+def _extractPlannedData(all_data_with_label, plan_index, save_res = False):
+    # Obtain the number of time steps for every trial
+    trial_timesteps_num = all_data_with_label.groupby("file").index.count()
+    trial_timesteps_num = [(trial_timesteps_num.index[i], trial_timesteps_num.iloc[i]) for i in
+                           range(len(trial_timesteps_num))]
+    trial_timesteps_num = {each[0]: [each[1], 0] for each in trial_timesteps_num}
+    # Extract planned hunting trial
+    plan_data = all_data_with_label.iloc[plan_index].reset_index(drop=True)
+    print("Planned hunting data shape : ", plan_data.shape)
+    for index in range(plan_data.shape[0]):
+        trial_timesteps_num[plan_data.iloc[index].file][1] += 1
+    trial_planned_ratio = [(each, trial_timesteps_num[each][1] / trial_timesteps_num[each][0]) for each in trial_timesteps_num]
+    print(trial_planned_ratio[:5])
+    trial_planned_ratio.sort(key=lambda x: x[1], reverse=True)
+    print(trial_planned_ratio[:5])
+    trial_name_list = [each[0] for each in trial_planned_ratio[:200]] if len(trial_planned_ratio) > 200 \
+        else [each[0] for each in trial_planned_ratio]
+    is_plan = all_data_with_label.file.apply(lambda x: x in trial_name_list)
+    plan_game_index = np.where(is_plan == 1)
+    plan_game_data = all_data_with_label.iloc[plan_game_index]
+    print("Used plan data shape : ", plan_game_data.shape)
+    if not save_res:
+        return
+    with open("agent_data/most_planned_hunting_data.pkl", "wb") as file:
+        # plan_data = plan_data.iloc[np.random.choice(plan_data.shape[0], 20000, replace=False)].reset_index(drop=True)
+        pickle.dump(plan_game_data, file)
+    print("Finished writing planed hunting data.")
+
+
+def _extracSuicideDta(all_data_with_label, save_res = False):
+    # Obtain the number of time steps for every trial
+    trial_timesteps_num = all_data_with_label.groupby("file").index.count()
+    trial_timesteps_num = [(trial_timesteps_num.index[i], trial_timesteps_num.iloc[i]) for i in
+                           range(len(trial_timesteps_num))]
+    trial_timesteps_num = {each[0]: [each[1], 0] for each in trial_timesteps_num}
+    # Extract suicide trial
+    trial_name_list = np.unique(all_data_with_label.file.values)
+    useful_trial_name_list = []
+    for trial_name in trial_name_list:
+        is_useful = _usefulSuicide(all_data_with_label[all_data_with_label.file == trial_name].label_suicide.values)
+        if is_useful:
+            useful_trial_name_list.append(trial_name)
+    useful_trial_name_list = np.random.choice(useful_trial_name_list, 200, replace=False) if len(useful_trial_name_list) > 200 else useful_trial_name_list
+    is_suicide = all_data_with_label.file.apply(lambda x: x in useful_trial_name_list)
+    suicide_game_index = np.where(is_suicide == 1)
+    suicide_game_data = all_data_with_label.iloc[suicide_game_index]
+    print("Used suicide data shape : ", suicide_game_data.shape)
+    if not save_res:
+        return
+    with open("agent_data/really_suicide_data.pkl", "wb") as file:
+        pickle.dump(suicide_game_data, file)
+    print("Finished writing suicide data.")
+
+
+def _usefulSuicide(label_suicide):
+    suicide_count = 0
+    for index in list(range(len(label_suicide)-1, -1, -1)):
+        if label_suicide[index] == 1:
+            suicide_count += 1
+            if suicide_count == 5:
+                return True
+        else:
+            if suicide_count == 5:
+                return True
+            return False
+    return False
+
+
+def extractAgentData(data_list, save_res = False):
+    print("Start extracting data...")
+    print(data_list)
+    # Configurations
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    # data_filename = "first_life_data.pkl"
+    # Read data
+    with open(data_filename, "rb") as file:
+        data = pickle.load(file)
+    all_data_with_label = data["df_total"]
+
+    # all_data_with_label = data
+
+    all_data_with_label = all_data_with_label.sort_index()
+    print("Shape of all data : ", all_data_with_label.shape)
+    # Extract planned hunting data
+    if "planned hunting" in data_list:
+        plan_index = np.concatenate(data["cons_list_plan"])
+
+        # plan_index = np.arange(300)
+
+
+        _extractPlannedData(all_data_with_label, plan_index, save_res)
+    # Extract suicide data
+    if "suicide" in data_list:
+        _extracSuicideDta(all_data_with_label, save_res)
+    # Extract global data
+    if "global" in data_list:
+        _extractGlobalData(all_data_with_label, save_res)
+    print("Finished extracting all the data!")
+    print("-"*30)
 
 
 
 
 if __name__ == '__main__':
-    extractLifeGame()
+    # # Extract the first life and the last life data
+    # extractLifeGame()
 
-    # with open("partial_data_with_reward_label_cross.pkl", "rb") as file:
-    #     data = pickle.load(file)
-    #     print()
+    # Extract data for every agent
+    extractAgentData(data_list=["planned hunting", "suicide"], save_res = True)
+
+    # print(_usefulSuicide([0, 0, 1, 1, 0, 1, 1, 1]))
 
 
 
