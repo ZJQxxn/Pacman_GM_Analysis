@@ -166,19 +166,26 @@ def _extractPlannedData(all_data_with_label, plan_index, save_res = False):
 
 
 def _extracSuicideDta(all_data_with_label, save_res = False):
-    # Obtain the number of time steps for every trial
-    trial_timesteps_num = all_data_with_label.groupby("file").index.count()
-    trial_timesteps_num = [(trial_timesteps_num.index[i], trial_timesteps_num.iloc[i]) for i in
-                           range(len(trial_timesteps_num))]
-    trial_timesteps_num = {each[0]: [each[1], 0] for each in trial_timesteps_num}
     # Extract suicide trial
     trial_name_list = np.unique(all_data_with_label.file.values)
-    useful_trial_name_list = []
+    useful_trial_name_list = {}
     for trial_name in trial_name_list:
-        is_useful = _usefulSuicide(all_data_with_label[all_data_with_label.file == trial_name].label_suicide.values)
+        trial_data = all_data_with_label[all_data_with_label.file == trial_name]
+        is_useful = _usefulSuicide(trial_data.label_suicide.values)
         if is_useful:
-            useful_trial_name_list.append(trial_name)
-    useful_trial_name_list = np.random.choice(useful_trial_name_list, 200, replace=False) if len(useful_trial_name_list) > 200 else useful_trial_name_list
+            count = 0
+            for index in range(trial_data.shape[0]):
+                if trial_data.iloc[index].label_suicide == 1:
+                    count += 1
+            useful_trial_name_list[trial_name] = [trial_data.shape[0], count]
+    print("Finished processing each tria.")
+    trial_suicide_ratio = [(each, useful_trial_name_list[each][1] / useful_trial_name_list[each][0]) for each in useful_trial_name_list]
+    print(trial_suicide_ratio[:5])
+    trial_suicide_ratio.sort(key=lambda x: x[1], reverse=True)
+    print(trial_suicide_ratio[:5])
+    useful_trial_name_list = [each[0] for each in trial_suicide_ratio[:300]] if len(trial_suicide_ratio) > 300 \
+        else [each[0] for each in trial_suicide_ratio]
+    # useful_trial_name_list = np.random.choice(useful_trial_name_list, 200, replace=False) if len(useful_trial_name_list) > 200 else useful_trial_name_list
     is_suicide = all_data_with_label.file.apply(lambda x: x in useful_trial_name_list)
     suicide_game_index = np.where(is_suicide == 1)
     suicide_game_data = all_data_with_label.iloc[suicide_game_index]
@@ -244,7 +251,7 @@ if __name__ == '__main__':
     # extractLifeGame()
 
     # Extract data for every agent
-    extractAgentData(data_list=["planned hunting", "suicide"], save_res = True)
+    extractAgentData(data_list=["suicide"], save_res = True)
 
     # print(_usefulSuicide([0, 0, 1, 1, 0, 1, 1, 1]))
 

@@ -622,7 +622,7 @@ def MLE(config):
         ["local", "pessimistic"],
         ["local", "pessimistic", "global"],
         ["local", "pessimistic", "global", "planned_hunting"],
-        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+        ["local", "pessimistic", "global", "suicide"] #TODO: !
     ]
     accuracy_list = []
     for agent_list in diff_agent_list:
@@ -880,7 +880,7 @@ def plotGlobalIncremental(data_name = None, bin_size = 5):
     max_bean_num = max(max(wo_global_testing_result.beans_num_within_10), max(w_global_testing_result.beans_num_within_10))
     min_bean_num = 0
     # bin_size = 3
-    ind = np.arange(min_bean_num, max_bean_num, bin_size)
+    ind = np.arange(min_bean_num, max_bean_num+1, bin_size)
     wo_step_nums = np.zeros_like(ind)
     wo_correct_nums = np.zeros_like(ind)
     w_step_nums = np.zeros_like(ind)
@@ -947,7 +947,7 @@ def plotPlannedHuntingIncremental(data_name = None, bin_size = 5):
     max_bean_num = max(max(wo_planned_testing_result.planning_reward), max(w_planned_testing_result.planning_reward))
     min_bean_num = min(min(wo_planned_testing_result.planning_reward), min(w_planned_testing_result.planning_reward))
     # bin_size = 10
-    ind = np.arange(min_bean_num, max_bean_num, bin_size)
+    ind = np.arange(min_bean_num, max_bean_num+1, bin_size)
     wo_step_nums = np.zeros_like(ind)
     wo_correct_nums = np.zeros_like(ind)
     w_step_nums = np.zeros_like(ind)
@@ -1012,7 +1012,7 @@ def plotSuicideIncremental(data_name = None, bin_size = 5):
     max_bean_num = max(max(wo_suicide_testing_result.reborn_beans_num), max(w_suicide_testing_result.reborn_beans_num))
     min_bean_num = min(min(wo_suicide_testing_result.reborn_beans_num), min(w_suicide_testing_result.reborn_beans_num))
     # bin_size = 2
-    ind = np.arange(min_bean_num, max_bean_num, bin_size)
+    ind = np.arange(min_bean_num, max_bean_num + 1, bin_size)
     wo_step_nums = np.zeros_like(ind)
     wo_correct_nums = np.zeros_like(ind)
     w_step_nums = np.zeros_like(ind)
@@ -1041,9 +1041,9 @@ def plotSuicideIncremental(data_name = None, bin_size = 5):
     wo_cr = np.divide(wo_correct_nums, wo_step_nums)[::-1]
     w_cr = np.divide(w_correct_nums, w_step_nums)[::-1]
     plt.bar(np.arange(len(ind)) - 0.45, wo_cr,
-            label="local + pessimistic + global + planned hunting", width=0.45, align="edge")
+            label="local + pessimistic + global", width=0.45, align="edge")
     plt.bar(np.arange(len(ind)), w_cr,
-            label="local + pessimistic + global + planned hunting + suicide", width=0.45, align="edge")
+            label="local + pessimistic + global + suicide", width=0.45, align="edge")
     difference = w_cr - wo_cr
     for index, each in enumerate(difference):
         if each < 0:
@@ -1136,15 +1136,15 @@ def correctRateVSBeanNum(agent_name = None, bin_size = 10):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    preEstimation()
+    # preEstimation()
 
 
     # Configurations
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
-        # "data_filename": "../common_data/agent_data/suicide_data.pkl-new_agent.pkl",
+        # "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
+        "data_filename": "../common_data/agent_data/most_planned_hunting_data.pkl-new_agent.pkl",
         # Only making decisions when necessary
         "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
@@ -1170,15 +1170,15 @@ if __name__ == '__main__':
         ["local", "pessimistic"],
         ["local", "pessimistic", "global"],
         ["local", "pessimistic", "global", "planned_hunting"],
-        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+        ["local", "pessimistic", "global", "suicide"]
     ]
 
-    # plotCorrectRate(data_name="suicide")
-    # plotGlobalIncremental(data_name="suicide", bin_size = 3)
-    # plotPlannedHuntingIncremental(data_name="suicide", bin_size = 5)
-    # plotSuicideIncremental(data_name="suicide", bin_size = 2)
+    plotCorrectRate(data_name="planned hunting")
+    # plotGlobalIncremental(data_name="planned hunting", bin_size = 3)
+    plotPlannedHuntingIncremental(data_name="planned hunting", bin_size = 8)
+    # plotSuicideIncremental(data_name="planned hunting", bin_size = 2)
 
-    # correctRateVSBeanNum(agent_name="global", bin_size = 15)
+    # correctRateVSBeanNum(agent_name="global", bin_size = 10)
     # correctRateVSBeanNum(agent_name="planned hunting", bin_size = 10)
     # correctRateVSBeanNum(agent_name="suicide", bin_size = 10)
 
