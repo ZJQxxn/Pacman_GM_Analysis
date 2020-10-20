@@ -89,40 +89,40 @@ if __name__ == '__main__':
     # status_list = get_predefined_states("global")
     # print()
 
-    adjacent_data = readAdjacentMap("/home/qlyang/jiaqi/Pacman-Analysis/Utility_Tree_Analysis/extracted_data/adjacent_map.csv")
-
-    with open("/home/qlyang/Documents/pacman/constants/all_data.pkl", "rb") as file:
-        data = pickle.load(file)
-    data = data["df_total"]
-    print("Columns : ", data.columns.values)
-    print("Data Shape : ", data.shape)
-    trial_list = np.unique(data.file.values)
-    print("Trial Num : ", len(trial_list))
-    print("Trial Sample : ", trial_list[:3])
-
-
-    print("="*30)
-    trial_list = trial_list[np.random.choice(len(trial_list), 500, replace = False)]
-    is_need = np.where(data.file.apply(lambda x: x in trial_list).values)
-    data = data.iloc[is_need]
-    print("Data Shape : ", data.shape)
-    print("Trial Num : ", len(trial_list))
-    print("Trial Sample : ", trial_list[:3])
-    at_cross = data.pacmanPos.apply(
-        lambda x: (
-            False if x not in adjacent_data else
-            np.sum(
-                [1 if not isinstance(each, float) else 0
-                 for each in list(adjacent_data[x].values())]
-            ) > 2
-
-        )
-    )
-    data["at_cross"] = at_cross
-    print("Finished processing.")
-    with open("partial_data_with_reward_label_cross.pkl", "wb") as file:
-        pickle.dump(data, file)
-    print("Finished writing.")
+    # adjacent_data = readAdjacentMap("/home/qlyang/jiaqi/Pacman-Analysis/Utility_Tree_Analysis/extracted_data/adjacent_map.csv")
+    #
+    # with open("/home/qlyang/Documents/pacman/constants/all_data.pkl", "rb") as file:
+    #     data = pickle.load(file)
+    # data = data["df_total"]
+    # print("Columns : ", data.columns.values)
+    # print("Data Shape : ", data.shape)
+    # trial_list = np.unique(data.file.values)
+    # print("Trial Num : ", len(trial_list))
+    # print("Trial Sample : ", trial_list[:3])
+    #
+    #
+    # print("="*30)
+    # trial_list = trial_list[np.random.choice(len(trial_list), 500, replace = False)]
+    # is_need = np.where(data.file.apply(lambda x: x in trial_list).values)
+    # data = data.iloc[is_need]
+    # print("Data Shape : ", data.shape)
+    # print("Trial Num : ", len(trial_list))
+    # print("Trial Sample : ", trial_list[:3])
+    # at_cross = data.pacmanPos.apply(
+    #     lambda x: (
+    #         False if x not in adjacent_data else
+    #         np.sum(
+    #             [1 if not isinstance(each, float) else 0
+    #              for each in list(adjacent_data[x].values())]
+    #         ) > 2
+    #
+    #     )
+    # )
+    # data["at_cross"] = at_cross
+    # print("Finished processing.")
+    # with open("partial_data_with_reward_label_cross.pkl", "wb") as file:
+    #     pickle.dump(data, file)
+    # print("Finished writing.")
 
     # data = data.file.apply(lambda x: "Omega" in x)
     # print("With Label : ", print(np.sum(data.values)))
@@ -137,5 +137,9 @@ if __name__ == '__main__':
     # all_data = all_data["rt"]
     # print(all_data.columns.values)
     # print(all_data.shape)
+
+    with open("last_life_data.pkl", "rb") as file:
+        data = pickle.load(file)
+        print()
 
 

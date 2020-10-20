@@ -1144,9 +1144,9 @@ if __name__ == '__main__':
     config = {
         # Filename
         # "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
-        "data_filename": "../common_data/agent_data/most_planned_hunting_data.pkl-new_agent.pkl",
+        "data_filename": "../common_data/agent_data/planned_hunting_data.pkl-new_agent.pkl",
         # Only making decisions when necessary
-        "only_necessary": False,
+        "only_necessary": True,
         # The number of samples used for estimation: None for using all the data
         "clip_samples": None,
         # The window size
@@ -1160,7 +1160,7 @@ if __name__ == '__main__':
     }
 
     # ============ ESTIMATION =============
-    # diff_agent_list = MLE(config)
+    diff_agent_list = MLE(config)
 
     # singleTrialMovingWindowAnalysis(config)
 
@@ -1173,9 +1173,9 @@ if __name__ == '__main__':
         ["local", "pessimistic", "global", "suicide"]
     ]
 
-    plotCorrectRate(data_name="planned hunting")
+    # plotCorrectRate(data_name="planned hunting")
     # plotGlobalIncremental(data_name="planned hunting", bin_size = 3)
-    plotPlannedHuntingIncremental(data_name="planned hunting", bin_size = 8)
+    # plotPlannedHuntingIncremental(data_name="planned hunting", bin_size = 8)
     # plotSuicideIncremental(data_name="planned hunting", bin_size = 2)
 
     # correctRateVSBeanNum(agent_name="global", bin_size = 10)
@@ -1184,3 +1184,29 @@ if __name__ == '__main__':
 
     # weight = np.load("./altogether_analysis/weight-global_local_pessimistic_suicide_planned_hunting.npy")
     # print(weight)
+
+    # with open("./altogether_analysis/planned-hunting-data/testing_result-local_pessimistic_global.pkl", "rb") as file:
+    #     wo_plan = pickle.load(file)[["true_dir", "estimated_dir", "is_correct"]]
+    # with open("./altogether_analysis/planned-hunting-data/testing_result-local_pessimistic_global_planned_hunting.pkl", "rb") as file:
+    #     w_plan = pickle.load(file)[["true_dir", "estimated_dir", "is_correct"]]
+    # is_same = 0
+    # is_correct = 0
+    # wo_is_correct = 0
+    # rest_is_same = 0
+    # for index in range(wo_plan.shape[0]):
+    #     if wo_plan.iloc[index].estimated_dir == w_plan.iloc[index].estimated_dir:
+    #         is_same += 1
+    #     else:
+    #         if w_plan.iloc[index].is_correct :
+    #             is_correct += 1
+    #         if wo_plan.iloc[index].is_correct :
+    #             wo_is_correct += 1
+    #         if wo_plan.iloc[index].is_correct == w_plan.iloc[index].is_correct:
+    #             rest_is_same += 1
+    # print(is_same)
+    # print(is_same/wo_plan.shape[0])
+    # print(is_correct / (wo_plan.shape[0] - is_same))
+    # print(wo_is_correct / (wo_plan.shape[0] - is_same))
+    # print(rest_is_same / (wo_plan.shape[0] - is_same))
+
+    # print(np.sum(wo_plan.at_cross))

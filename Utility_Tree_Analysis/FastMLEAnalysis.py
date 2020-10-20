@@ -650,7 +650,7 @@ def movingWindowAnalysis(config, save_res = True):
     all_coeff = []
     all_correct_rate = []
     all_success = []
-    at_cross_index = np.where(X.at_cross.values)[0]
+    at_cross_index = np.where(X.at_cross.values)[0] if "at_cross" in X.columns.values else []
     at_cross_accuracy = []
     # Moving the window
     for index in subset_index:
@@ -708,7 +708,7 @@ def movingWindowAnalysis(config, save_res = True):
 # ===================================
 def plotWeightVariation(all_agent_weight, window, is_success = None):
     # Determine agent names
-    agent_name = ["Global", "Local", "Optimistic", "Pessimistic", "Suicide", "Planned Hunting"]
+    agent_name = ["local", "global", "pessimistic", "planned_hunting", "suicide"]
     agent_color = ["red", "blue", "green", "cyan", "magenta", "black"]
     # Plot weight variation
     all_coeff = np.array(all_agent_weight)
@@ -721,7 +721,7 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
     for index in range(all_coeff.shape[0]):
         all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
         # all_coeff[index] = all_coeff[index] / np.linalg.norm(all_coeff[index])
-    for index in range(6):
+    for index in range(5):
         plt.plot(all_coeff[:, index], color = agent_color[index], ms = 3, lw = 5,label = agent_name[index])
     plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
     plt.yticks(fontsize = 15)
@@ -749,15 +749,16 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Filename
-        "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
+        # "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
+        "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
+        "testing_data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
         # Method: "MLE" or "MEE"
         "method": "MLE",
         # Only making decisions when necessary
         "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
-        "clip_samples": None,
+        "clip_samples": 200,
         # The window size
         "window": 10,
         # Maximum try of estimation, in case the optimization will fail
@@ -765,21 +766,21 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [1, 1, 1, 1, 1, 1],
+        "params": [1, 1, 1, 1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
+        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting"],
+        "agents": ["local", "global", "pessimistic", "planned_hunting", "suicide"]
     }
 
     # ============ ESTIMATION =============
     # MLE(config)
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config, save_res = True)
+    movingWindowAnalysis(config, save_res = True)
 
     # ============ PLOTTING =============
     # Load the log of moving window analysis; log files are created in the analysis
-    # agent_weight = np.load("MLE-agent_weight-window10-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
-    # is_success = np.load("MLE-is_success-window10-global_local_optimistic_pessimistic_suicide_planned_hunting-new_agent.npy")
-    # plotWeightVariation(agent_weight, config["window"], is_success)
+    agent_weight = np.load("MLE-agent_weight-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
+    is_success = np.load("MLE-is_success-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
+    plotWeightVariation(agent_weight, config["window"], is_success)

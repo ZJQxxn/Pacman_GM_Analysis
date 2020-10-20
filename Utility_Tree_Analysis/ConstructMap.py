@@ -21,10 +21,10 @@ map_pos = map_pos.assign(
 map_pos = map_pos.iloc[:-4, :]
 
 # Construct a map using matrix
-up_bound = 5
-low_bound = 33
-left_bound = 2
-right_bound = 27
+up_bound = 6
+low_bound = 34
+left_bound = 3
+right_bound = 28
 is_wall = map_pos.iswall.values.reshape((low_bound - up_bound + 1, right_bound - left_bound + 1)) # indicate whether a position is wall
 positions = map_pos.pos.values.reshape((low_bound - up_bound + 1, right_bound - left_bound + 1)) # the coordinates
 
@@ -33,6 +33,12 @@ positions = map_pos.pos.values.reshape((low_bound - up_bound + 1, right_bound - 
 # left_bound = 0
 # low_bound = low_bound - up_bound + 1
 # up_bound = 0
+
+# right_bound = right_bound - left_bound + 1
+# left_bound = 0
+# low_bound = low_bound - up_bound + 1
+# up_bound = 0
+
 right_bound = right_bound - left_bound + 1
 left_bound = 0
 low_bound = low_bound - up_bound + 1
@@ -55,13 +61,21 @@ for y in range(positions.shape[0]):
 
 # Add the tunnel (connect the leftmost and the rightmost)
 adjacent_dict[(2,18)] = {"left":(1,18), "right":(3,18),"up":None, "down":None}
-adjacent_dict[(1,18)] = {"left":(0,18), "right":(2,18),"up":None, "down":None}
-adjacent_dict[(0,18)] = {"left":(29,18), "right":(1,18),"up":None, "down":None}
+adjacent_dict[(1,18)] = {"left":(28,18), "right":(2,18),"up":None, "down":None}
+# adjacent_dict[(1,19)] = {"left":(30,19), "right":(2,19),"up":None, "down":None}
 adjacent_dict[(27,18)] = {"left":(26,18), "right":(28,18),"up":None, "down":None}
-adjacent_dict[(28,18)] = {"left":(27,18), "right":(29,18),"up":None, "down":None}
-adjacent_dict[(29,18)] = {"left":(28,18), "right":(0,18),"up":None, "down":None}
+adjacent_dict[(28,18)] = {"left":(27,18), "right":(1,18),"up":None, "down":None}
+# adjacent_dict[(30,19)] = {"left":(29,19), "right":(1,19),"up":None, "down":None}
 
+# entrance of home
+# adjacent_dict[(15,17)] = {"left":None, "right":None,"up":(15, 16), "down":(15, 18)}
+# adjacent_dict[(16,17)] = {"left":None, "right":None,"up":(16, 16), "down":(16, 18)}
+# adjacent_dict[(15,16)] = {"left":(14, 16), "right":(16, 16),"up":None, "down":(15, 17)}
+# adjacent_dict[(16,16)] = {"left":(15, 16), "right":(17, 16),"up":None, "down":(16, 17)}
+# adjacent_dict[(15,18)] = {"left":(14, 18), "right":(16, 18),"up":(15, 17), "down":(15, 19)}
+# adjacent_dict[(16,18)] = {"left":(15, 18), "right":(17, 18),"up":(16, 17), "down":(16, 19)}
 
+print()
 
 # str_adjacent_dict = {}
 # for key in adjacent_dict.keys():
