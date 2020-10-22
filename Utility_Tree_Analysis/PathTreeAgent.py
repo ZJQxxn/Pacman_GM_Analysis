@@ -339,6 +339,10 @@ class PathTree:
                         fruit_potential_reward += (-R / T) * fruit_dist + R
                     else:
                         fruit_potential_reward += (R * T) / (2 * fruit_dist) - R / 2
+
+        # TODO: For excluding potential reward
+        ghost_potential_reward = 0.0
+        fruit_potential_reward = 0.0
         return exact_reward, ghost_potential_reward, fruit_potential_reward, existing_beans, existing_energizers, existing_fruit, ghost_status
 
 
@@ -391,6 +395,9 @@ class PathTree:
         # Ghosts are not scared
         else:
             pass
+
+        # TODO: For excluding potential risk
+        potential_risk = 0.0
         return exact_risk, potential_risk
 
 
@@ -446,16 +453,21 @@ if __name__ == '__main__':
     # fruit_pos = (2, 7)
     # last_dir = "right"
 
-    cur_pos = (13, 12)  # 35
-    ghost_data = [(17, 12), (12, 12)]
-    ghost_status = [4, 4]
-    energizer_data = [(13, 9), (9, 24)]
-    bean_data = [(4, 5), (6, 5), (23, 5), (27, 6), (27, 7), (2, 8), (16, 8), (3, 9), (27, 10), (11, 12), (7, 14),
-                 (22, 14), (7, 15), (23, 18), (25, 18), (26, 18), (10, 23), (8, 24), (20, 24), (13, 25), (16, 25),
-                 (8, 27), (9, 27), (7, 28), (5, 30), (12, 30), (27, 31), (11, 33)]
-    reward_type = 6
-    fruit_pos = (2,7)
-    last_dir = "up"
+    cur_pos = (14, 27)
+    ghost_data = [(14, 17), (14, 19)]
+    ghost_status = [1, 1]
+    energizer_data = [(7, 5), (17, 5), (7, 26), (24, 30)]
+    bean_data = [(2, 5), (4, 5), (5, 5), (16, 5), (18, 5), (20, 5), (24, 5), (25, 5), (16, 6), (7, 7), (13, 7), (27, 7),
+                 (2, 8), (16, 8), (22, 8), (2, 9), (6, 9), (8, 9), (9, 9), (13, 9), (14, 9), (16, 9), (17, 9), (19, 9),
+                 (24, 9), (26, 9), (27, 9), (10, 10), (22, 10), (2, 11), (10, 11), (22, 11), (5, 12), (7, 12), (22, 12),
+                 (22, 13), (7, 14), (13, 14), (16, 14), (7, 15), (7, 17), (22, 17), (7, 19), (10, 23), (2, 24), (3, 24),
+                 (6, 24), (8, 24), (9, 24), (13, 24), (17, 24), (20, 24), (22, 24), (25, 24), (7, 25), (22, 25), (2, 26),
+                 (27, 27), (2, 28), (27, 28), (10, 29), (22, 29), (2, 30), (7, 30), (11, 30), (16, 30), (18, 30), (19, 30),
+                 (22, 30), (27, 30), (2, 32), (5, 33), (9, 33), (12, 33), (14, 33), (15, 33), (16, 33), (17, 33), (18, 33),
+                 (20, 33), (24, 33), (25, 33), (26, 33)]
+    reward_type = 5
+    fruit_pos = (3,30)
+    last_dir = "left"
 
     # Global agent
     agent = PathTree(

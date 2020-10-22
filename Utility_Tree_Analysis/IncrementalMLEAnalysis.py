@@ -170,7 +170,6 @@ def _readData(filename):
         # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
     all_data = all_data.reset_index()
-    print()
     return all_data
 
 
@@ -414,17 +413,17 @@ def preEstimation():
         # "../common_data/before_last_life_data.pkl",
         # "../common_data/last_life_data.pkl",
         # "../common_data/first_life_data.pkl",
-        # "../common_data/partial_data_with_reward_label_cross.pkl",
+        "../common_data/partial_data_with_reward_label_cross.pkl",
         # "../common_data/agent_data/suicide_data.pkl",
         # "../common_data/agent_data/global_data.pkl",
         # "../common_data/agent_data/planned_hunting_data.pkl",
-        "../common_data/agent_data/most_planned_hunting_data.pkl",
-        "../common_data/agent_data/really_suicide_data.pkl",
+        # "../common_data/agent_data/most_planned_hunting_data.pkl",
+        # "../common_data/agent_data/really_suicide_data.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
         print(filename)
-        all_data = _readData(filename)
+        all_data = _readData(filename).iloc[:10000] #TODO:!!!!!!!!!!!!!!!!!!!!!!!!!!!1
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
@@ -453,6 +452,12 @@ def _preProcessingQ(Q_value, pacmanPos, adjacent_data):
         temp_available = []
         temp_unavailable = []
         for dir_index, each in enumerate(dir_list):
+            #TODO:------------------------------
+            if pacmanPos.iloc[index] == (29, 18):
+                pacmanPos.iloc[index] = (28,18)
+            if pacmanPos.iloc[index] == (0, 18):
+                pacmanPos.iloc[index] = (1, 18)
+            # TODO:------------------------------
             if not isinstance(adjacent_data[pacmanPos.iloc[index]][each], float):
                 temp_available.append(dir_index)
             else:
@@ -619,10 +624,10 @@ def MLE(config):
     testing_data = testing_data.reset_index()
     testing_true_prob = testing_true_prob.reset_index().next_pacman_dir_fill
     diff_agent_list = [
-        ["local", "pessimistic"],
+        # ["local", "pessimistic"],
         ["local", "pessimistic", "global"],
-        ["local", "pessimistic", "global", "planned_hunting"],
-        ["local", "pessimistic", "global", "suicide"] #TODO: !
+        # ["local", "pessimistic", "global", "planned_hunting"],
+        # ["local", "pessimistic", "global", "suicide"] #TODO: !
     ]
     accuracy_list = []
     for agent_list in diff_agent_list:
@@ -1144,9 +1149,9 @@ if __name__ == '__main__':
     config = {
         # Filename
         # "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
-        "data_filename": "../common_data/agent_data/planned_hunting_data.pkl-new_agent.pkl",
+        "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
         # Only making decisions when necessary
-        "only_necessary": True,
+        "only_necessary": False,
         # The number of samples used for estimation: None for using all the data
         "clip_samples": None,
         # The window size

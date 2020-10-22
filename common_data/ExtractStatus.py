@@ -25,10 +25,30 @@ def _extractAllData():
     all_data_with_label = data["df_total"]
     all_data_with_label = all_data_with_label.sort_index()
     accident_index = np.concatenate(data["cons_list_accident"])
+    group_list = _consecutiveLengh(accident_index)
+    print("Accident group num : ", len(group_list))
+    accident_group_list = []
+    accident_group_length = []
+    for each in group_list:
+        if len(each) > 20:
+            accident_group_list.append(each)
+            accident_group_length.append(len(each))
+    accident_index = [each[0] for each in accident_group_list]
+    print("Accident group num : ", len(accident_group_list))
     accident_data = all_data_with_label.iloc[accident_index].reset_index()
     # accident_data.label_planning = accident_data.label_planning.apply(lambda x: 2.0)
 
     plan_index = np.concatenate(data["cons_list_plan"])
+    group_list = _consecutiveLengh(plan_index)
+    print("Planned group num : ", len(group_list))
+    planned_group_list = []
+    planned_group_length = []
+    for each in group_list:
+        if len(each) > 20:
+            planned_group_list.append(each)
+            planned_group_length.append(len(each))
+    plan_index = [each[0] for each in planned_group_list]
+    print("Planned group num : ", len(planned_group_list))
     plan_data = all_data_with_label.iloc[plan_index].reset_index()
     # accident_data.label_planning = accident_data.label_planning.apply(lambda x: 2.0)
 
@@ -114,18 +134,24 @@ def _findSuicide(trial_data):
     label_suicide = trial_data.label_suicide
     nan_index = np.where(np.isnan(label_suicide))
     label_suicide.iloc[nan_index] = 0
-    suicide_start = np.where(label_suicide == 1)
-    if len(suicide_start[0]) == 0:
+    suicide_start = np.where(label_suicide == 1)[0]
+    group_list = _consecutiveLengh(suicide_start)
+    group_length = [len(each) for each in group_list]
+    print("Max suicide length : ", np.max(group_length))
+
+    if len(group_list) == 0 or (np.max(group_length) < 5):
+        print("No good suicide data.")
         return None
     else:
-        return trial_data.iloc[suicide_start[0][0]].values
+        print(group_list[np.argmax(group_length)])
+        return trial_data.reset_index().iloc[group_list[np.argmax(group_length)][0]].values[1:]
 
 
 def _findPlanned(trial_data, loc_dis):
     label_planning = trial_data.label_planning
     nan_index = np.where(np.isnan(label_planning))
     label_planning.iloc[nan_index] = 0
-    planning_index = np.where(label_planning == 1)
+    planning_index = np.where(label_planning == 1)[0]
     # PE = trial_data.apply(
     #     lambda x: [loc_dis[x.pacmanPos][each] if x.pacmanPos != each else 0 for each in x.energizers ]
     #     if not isinstance(x.energizers, float) else [0],
@@ -149,11 +175,15 @@ def _findPlanned(trial_data, loc_dis):
     #     return None
     # else:
     #     return trial_data.iloc[planning_index[0]].values
-    if len(planning_index[0]) == 0:
+    group_list = _consecutiveLengh(planning_index)
+    group_length = [len(each) for each in group_list]
+    print("Max planned group length : ", np.max(group_length))
+    if len(group_list) == 0 or (np.max(group_length) < 20):
+        print("No good planned hunting data.")
         return None
     else:
-        print(planning_index[0][0])
-        return trial_data.reset_index().iloc[planning_index[0][0]].values[1:]
+        print(group_list[np.argmax(group_length)])
+        return trial_data.reset_index().iloc[group_list[np.argmax(group_length)][0]].values[1:]
 
 
 def _extractTrialData(trial_data, loc_dis):
@@ -163,6 +193,10 @@ def _extractTrialData(trial_data, loc_dis):
     temp_suicide = _findSuicide(trial_data)
     # temp_planned = _findPlanned(trial_data, loc_dis)
     return temp_global, temp_local, temp_pessimistic, temp_suicide
+
+
+def _consecutiveLengh(num_list):
+    return np.split(num_list, np.where(np.diff(num_list) != 1)[0]+1)
 
 
 def extractStatus():
@@ -251,18 +285,27 @@ def extractStatus():
     #     with open("status/planned_hunting_status.pkl", "wb") as file:
     #         pickle.dump(planned_hunting_status, file)
     #     print("Finished writing planned hunting status {}.".format(planned_hunting_status.shape[0]))
-    planned_hunting_status = pd.concat([plan_data, accident_data], ignore_index=True)
-    if "level_0" in planned_hunting_status:
-        planned_hunting_status = planned_hunting_status.drop(columns = ["level_0"])
+    # planned_hunting_status = pd.concat([plan_data, accident_data], ignore_index=True)
+    if "level_0" in plan_data:
+        plan_data = plan_data.drop(columns = ["level_0"])
     with open("status/planned_hunting_status.pkl", "wb") as file:
-        pickle.dump(planned_hunting_status, file)
-    print("Finished writing planned hunting status {}.".format(planned_hunting_status.shape[0]))
+        pickle.dump(plan_data, file)
+    print("Finished writing planned hunting status {}.".format(plan_data.shape[0]))
+
+    if "level_0" in accident_data:
+        accident_data = accident_data.drop(columns = ["level_0"])
+    with open("status/accidental_hunting_status.pkl", "wb") as file:
+        pickle.dump(accident_data, file)
+    print("Finished writing accidental hunting status {}.".format(accident_data.shape[0]))
 
 
 
 
 if __name__ == '__main__':
-    # extractStatus()
+    # print(_consecutiveLengh([1,2,3,5,6,7,9,10,11]))
+    # print(_consecutiveLengh([]))
+
+    extractStatus()
     # with open("/home/qlyang/Documents/pacman/constants/all_data.pkl", "rb") as file:
     #     data = pickle.load(file)
     #     print(list(data.keys()))
@@ -285,7 +328,7 @@ if __name__ == '__main__':
     #     print()
     #     print()
 
-    with open("status/pessimistic_status.pkl", "rb") as file:
-        data = pickle.load(file)
-        print()
+    # with open("status/pessimistic_status.pkl", "rb") as file:
+    #     data = pickle.load(file)
+    #     print()
 

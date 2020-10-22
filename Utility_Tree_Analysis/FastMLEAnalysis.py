@@ -432,6 +432,7 @@ def preEstimation():
 #         FAST OPTIMIZATION
 # ===================================
 def _preProcessingQ(Q_value, last_dir, randomness_coeff = 1.0):
+    #TODO: new pre-processing from incremental MLE aaalysis
     '''
     Preprocessing for Q-value, including convert negative utility to non-negative, set utilities of unavailable 
     directions to -inf, and normalize utilities.
@@ -766,21 +767,21 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [1, 1, 1, 1, 1],
+        "params": [1, 1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
+        "bounds": [[0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["local", "global", "pessimistic", "planned_hunting", "suicide"]
+        "agents": ["local", "global", "pessimistic"]
     }
 
     # ============ ESTIMATION =============
-    # MLE(config)
+    MLE(config)
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config, save_res = True)
+    # movingWindowAnalysis(config, save_res = True)
 
     # ============ PLOTTING =============
     # Load the log of moving window analysis; log files are created in the analysis
-    agent_weight = np.load("MLE-agent_weight-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
-    is_success = np.load("MLE-is_success-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
-    plotWeightVariation(agent_weight, config["window"], is_success)
+    # agent_weight = np.load("MLE-agent_weight-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
+    # is_success = np.load("MLE-is_success-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
+    # plotWeightVariation(agent_weight, config["window"], is_success)
