@@ -74,11 +74,11 @@ class PlannedHuntingAgent:
                     np.nan, # inore fruits
                     self.ghost_status,
                     self.last_dir,
-                    depth=10,
+                    depth = 15,
                     ignore_depth = 0,
-                    ghost_attractive_thr=10,
-                    ghost_repulsive_thr=10,
-                    fruit_attractive_thr=10,
+                    ghost_attractive_thr=15,
+                    ghost_repulsive_thr=15,
+                    fruit_attractive_thr=15,
                     reward_coeff = 1.0,
                     risk_coeff = 0.0,
                     randomness_coeff=0.0,
@@ -117,6 +117,17 @@ class PlannedHuntingAgent:
                         print("Lost path : {} to {}".format(each_adjacent_pos, each_energizer_pos))
                 P_E_distance.append(temp_P_E_distance)
             P_E_distance = np.array(P_E_distance)
+            # Compute the distance between adjacent positions of Pacman and ghosts
+            P_G_distance = []  # (# of adjacent positions, # of ghosts)
+            for each_adjacent_pos in self.adjacent_pos:
+                temp_P_G_distance = []
+                for each_ghost in self.ghost_data:
+                    if tuple(each_ghost) != each_adjacent_pos:
+                        temp_P_G_distance.append(self.locs_df[each_adjacent_pos][tuple(each_ghost)])
+                    else:
+                        temp_P_G_distance.append(0.0)
+                P_G_distance.append(temp_P_G_distance)
+            P_G_distance = np.array(P_G_distance)
             # distance for closest energizer and closest ghost
             closest_energizer_index = np.argmin(P_E_distance, axis = 1) # closest energizer index for every adjacent position
             closest_P_E_distance = []
@@ -125,6 +136,9 @@ class PlannedHuntingAgent:
             closest_E_G_distance = []
             for each in closest_energizer_index:
                 closest_E_G_distance.append(np.min(E_G_distance[each]))
+            closest_P_G_distance = []
+            for each in range(len(self.adjacent_pos)):
+                closest_P_G_distance.append(np.min(P_G_distance[each]))
             # Compute utility of each adjacent positions (i.e., each moving direction)
             available_dir_utility = []
             for adjacent_index in range(len(self.available_dir)):
@@ -132,12 +146,16 @@ class PlannedHuntingAgent:
                 P_E = 1 if 0 == P_E else P_E
                 E_G = closest_E_G_distance[adjacent_index]
                 E_G = 1 if 0 == E_G else E_G
+                P_G = closest_P_G_distance[adjacent_index]
+                P_G = 1 if 0 == P_G else P_G
                 # temp_utility = (E_G - P_E) # pacman is closer to energizer compared with ghost
 
                 temp_utility = (
                     self.reward_amount[2] / P_E # reward for energizer
                     + self.reward_amount[8] / E_G # reward for ghost
                 )
+                # Add risk for ghosts
+                temp_utility = temp_utility - self.reward_amount[9] / P_G
                 if -5 < (E_G - P_E) < 0: # only compute risk when ghost is more closer to energizer than the Pacman
                     temp_utility = temp_utility + self.reward_amount[9] / (E_G - P_E) # risk for being eaten by ghost
                 available_dir_utility.append(temp_utility)
@@ -175,11 +193,14 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Planned hunting agent
-    cur_pos = (7, 5) # 108
-    ghost_data = [(7, 20), (10, 17)]
-    ghost_status = [4, 4]
-    energizer_data = [(23, 24)]
-    last_dir = "right"
+    cur_pos = (13, 33)
+    ghost_data = [(26, 33), (9, 27)]
+    ghost_status = [1, 1]
+    energizer_data = [(12, 30)]
+    bean_data = [(2, 5), (9, 5), (23, 5), (24, 5), (7, 6), (13, 7), (27, 7), (2, 8), (2, 9), (3, 9), (4, 9), (5, 9), (9, 9), (13, 9), (14, 9), (25, 9), (27, 9), (27, 10), (2, 11), (7, 12), (23, 12), (25, 12), (7, 13), (7, 14), (7, 15), (7, 16), (7, 20), (7, 21), (2, 24), (8, 24), (9, 24), (11, 24), (12, 24), (7, 26), (2, 27), (7, 27), (2, 30), (6, 30), (10, 30), (13, 30), (19, 30), (22, 30), (26, 30), (2, 31), (13, 31), (16, 31), (3, 33), (8, 33), (9, 33)]
+    reward_type = 4
+    fruit_pos = (16, 8)
+    last_dir = "left"
     agent = PlannedHuntingAgent(
         adjacent_data,
         adjacent_path,

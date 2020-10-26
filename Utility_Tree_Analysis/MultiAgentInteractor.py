@@ -63,7 +63,7 @@ class MultiAgentInteractor:
         self.reward_amount = readRewardAmount()
         # Randomness and laziness
         self.randomness_coeff = 1.0
-        self.laziness_coeff = 1.0
+        self.laziness_coeff = 2.0
         # Configuration (for global agent)
         self.global_depth = 15
         self.ignore_depth = 5
@@ -86,10 +86,10 @@ class MultiAgentInteractor:
         self.pessimistic_fruit_attractive_thr = 5
         self.pessimistic_ghost_repulsive_thr = 5
         # Configuration (for suicide agent)
-        self.suicide_depth = 5
-        self.suicide_ghost_attractive_thr = 5
-        self.suicide_fruit_attractive_thr = 5
-        self.suicide_ghost_repulsive_thr = 5
+        self.suicide_depth = 10
+        self.suicide_ghost_attractive_thr = 10
+        self.suicide_fruit_attractive_thr = 10
+        self.suicide_ghost_repulsive_thr = 10
         # Set of available directions
         self.dir_list = ['left', 'right', 'up', 'down']
         # Determine whether the game status is reseted after the last estimation. Notice that the game status should be
@@ -338,7 +338,7 @@ class MultiAgentInteractor:
         self.reset_flag = False
         # If multiple directions have the highest score, choose the first occurrence
         self.last_dir = self.dir_list[makeChoice(integrate_estimation)]
-        return integrate_estimation, agent_estimation
+        return integrate_estimation, agent_estimation, [self.dir_list.index(each) for each in self.suicide_agent.available_dir]
 
 
     def resetStatus(self, cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status):

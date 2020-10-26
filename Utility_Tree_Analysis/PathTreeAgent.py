@@ -324,7 +324,7 @@ class PathTree:
             else:
                 exact_reward += 0.0
         # Fruit reward
-        if not isinstance(existing_fruit, float):
+        if not isinstance(existing_fruit, float) and None != existing_fruit:
             if cur_position == self.fruit_pos:
                 exact_reward += self.reward_amount[int(self.reward_type)]
                 existing_fruit = np.nan

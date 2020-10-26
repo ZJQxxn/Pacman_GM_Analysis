@@ -73,7 +73,7 @@ class SuicideAgent:
             ghost_repulsive_thr = ghost_repulsive_thr,
             fruit_attractive_thr = fruit_attractive_thr,
             reward_coeff=1.0,
-            risk_coeff=1.0,
+            risk_coeff = 0.0,
             randomness_coeff = 0.0,
             laziness_coeff = 0.0
         )
@@ -94,7 +94,7 @@ class SuicideAgent:
             ghost_repulsive_thr=ghost_repulsive_thr,
             fruit_attractive_thr = fruit_attractive_thr,
             reward_coeff=1.0,
-            risk_coeff=1.0,
+            risk_coeff=0.0,
             randomness_coeff=0.0,
             laziness_coeff=0.0
         )
@@ -248,17 +248,15 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Suicide agent
-    cur_pos = (7, 18)
-    ghost_data = [(10, 15), (5, 18)]
-    ghost_status = [1, 2]
-    reward_pos = [(13, 9)]
-    energizer_data = [(2, 5), (16, 5), (6, 33)]
-    bean_data = [(3, 5), (11, 5), (18, 5), (20, 5), (21, 5), (22, 5), (27, 5), (27, 6), (22, 7), (27, 7), (13, 8),
-                 (14, 9), (16, 9), (18, 9), (27, 9), (27, 10), (19, 11), (16, 12), (19, 12), (22, 12), (24, 12),
-                 (16, 13), (13, 14), (16, 14), (2, 29), (2, 31), (7, 33), (8, 33), (2, 5), (16, 5), (6, 33)]
-    reward_type = 3
-    fruit_pos = (22, 13)
-    last_dir = "up"
+    cur_pos = (24, 30)
+    ghost_data = [(27, 26), (10, 22)]
+    ghost_status = [1, 1]
+    reward_pos = None
+    energizer_data = None
+    bean_data = [(26, 5), (27, 8), (9, 24), (4, 30), (10, 30), (13, 30), (13, 32), (5, 33), (10, 33), (15, 33)]
+    reward_type = None
+    fruit_pos = None
+    last_dir = None
     agent = SuicideAgent(
         adjacent_data, adjacent_path, locs_df, reward_amount,
         cur_pos,
