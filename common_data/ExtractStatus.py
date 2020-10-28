@@ -35,7 +35,14 @@ def _extractAllData():
             accident_group_length.append(len(each))
     accident_index = [each[0] for each in accident_group_list]
     print("Accident group num : ", len(accident_group_list))
-    accident_data = all_data_with_label.iloc[accident_index].reset_index()
+    accident_data = all_data_with_label.iloc[accident_index].reset_index(drop=True)
+    normal_ghost_index = []
+    for index in range(accident_data.shape[0]):
+        temp = accident_data.iloc[index][["ifscared1", "ifscared2"]].values
+        if np.all(temp < 3):
+            normal_ghost_index.append(index)
+    accident_data = accident_data.iloc[normal_ghost_index].reset_index(drop=True)
+    print("Alive step num : ", len(normal_ghost_index))
     # accident_data.label_planning = accident_data.label_planning.apply(lambda x: 2.0)
 
     plan_index = np.concatenate(data["cons_list_plan"])
@@ -49,7 +56,15 @@ def _extractAllData():
             planned_group_length.append(len(each))
     plan_index = [each[0] for each in planned_group_list]
     print("Planned group num : ", len(planned_group_list))
-    plan_data = all_data_with_label.iloc[plan_index].reset_index()
+    plan_data = all_data_with_label.iloc[plan_index].reset_index(drop=True)
+    normal_ghost_index = []
+    for index in range(plan_data.shape[0]):
+        temp = plan_data.iloc[index][["ifscared1", "ifscared2"]].values
+        if np.all(temp < 3):
+            normal_ghost_index.append(index)
+    plan_data = plan_data.iloc[normal_ghost_index].reset_index(drop=True)
+    print("Alive step num : ", len(normal_ghost_index))
+
     # accident_data.label_planning = accident_data.label_planning.apply(lambda x: 2.0)
 
     # accident_data = all_data_with_label.iloc[accident_index]
@@ -87,7 +102,8 @@ def _readLocDistance(filename):
 def _findLocal(trial_data):
     beans = trial_data.iloc[0].beans
     beans = len(beans) if not isinstance(beans, float) else 0
-    if beans > 32:
+    ghost_status = trial_data.iloc[0][["ifscared1", "ifscared2"]].values
+    if beans > 32 and np.all(ghost_status < 3):
         return trial_data.iloc[0].values
     else:
         return None
@@ -105,10 +121,15 @@ def _findGlobal(trial_data):
         axis = 1
     )
     global_start = np.where(is_global == 1)
+
     if len(global_start[0]) == 0:
         return None
     else:
+        ghost_status = trial_data.iloc[global_start[0][0]][["ifscared1", "ifscared2"]].values
+        if np.any(ghost_status >= 3):
+            return None
         return trial_data.iloc[global_start[0][0]].values
+
 
 
 def _findPessimistic(trial_data):
@@ -127,6 +148,9 @@ def _findPessimistic(trial_data):
     if len(evade_start[0]) == 0:
         return None
     else:
+        ghost_status = trial_data.iloc[evade_start[0][0]][["ifscared1", "ifscared2"]].values
+        if np.any(ghost_status >=3 ):
+            return None
         return trial_data.iloc[evade_start[0][0]].values
 
 
@@ -138,11 +162,15 @@ def _findSuicide(trial_data):
     group_list = _consecutiveLengh(suicide_start)
     group_length = [len(each) for each in group_list]
     print("Max suicide length : ", np.max(group_length))
-
     if len(group_list) == 0 or (np.max(group_length) < 5):
         print("No good suicide data.")
         return None
     else:
+        ghost_status = trial_data.reset_index(drop=True).iloc[group_list[np.argmax(group_length)][0]][
+            ["ifscared1", "ifscared2"]].values
+
+        if np.any(ghost_status >= 3):
+            return None
         print(group_list[np.argmax(group_length)])
         return trial_data.reset_index().iloc[group_list[np.argmax(group_length)][0]].values[1:]
 
@@ -306,6 +334,9 @@ if __name__ == '__main__':
     # print(_consecutiveLengh([]))
 
     extractStatus()
+
+
+    # _extractAllData()
     # with open("/home/qlyang/Documents/pacman/constants/all_data.pkl", "rb") as file:
     #     data = pickle.load(file)
     #     print(list(data.keys()))
@@ -328,7 +359,10 @@ if __name__ == '__main__':
     #     print()
     #     print()
 
-    # with open("status/pessimistic_status.pkl", "rb") as file:
+    # with open("status/suicide_status.pkl", "rb") as file:
     #     data = pickle.load(file)
+    #     a = np.sum(data["ifscared1"].values >= 3)
+    #     b = np.sum(data["ifscared2"].values >= 3)
+    #
     #     print()
 
