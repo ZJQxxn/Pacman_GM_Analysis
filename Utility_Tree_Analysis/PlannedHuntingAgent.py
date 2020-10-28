@@ -152,12 +152,12 @@ class PlannedHuntingAgent:
 
                 temp_utility = (
                     self.reward_amount[2] / P_E # reward for energizer
-                    + self.reward_amount[8] / E_G # reward for ghost
+                    # + self.reward_amount[8] / E_G # reward for ghost
                 )
                 # Add risk for ghosts
                 temp_utility = temp_utility - self.reward_amount[9] / P_G
-                if -5 < (E_G - P_E) < 0: # only compute risk when ghost is more closer to energizer than the Pacman
-                    temp_utility = temp_utility + self.reward_amount[9] / (E_G - P_E) # risk for being eaten by ghost
+                # if -5 < (E_G - P_E) < 0: # only compute risk when ghost is more closer to energizer than the Pacman
+                #     temp_utility = temp_utility + self.reward_amount[9] / (E_G - P_E) # risk for being eaten by ghost
                 available_dir_utility.append(temp_utility)
             available_dir_utility = np.array(available_dir_utility)
             for index, each in enumerate(self.available_dir):
