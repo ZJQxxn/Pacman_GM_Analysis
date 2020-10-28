@@ -63,7 +63,7 @@ class MultiAgentInteractor:
         self.reward_amount = readRewardAmount()
         # Randomness and laziness
         self.randomness_coeff = 1.0
-        self.laziness_coeff = 2.0
+        self.laziness_coeff = 1.0
         # Configuration (for global agent)
         self.global_depth = 15
         self.ignore_depth = 5
@@ -369,6 +369,12 @@ class MultiAgentInteractor:
         :return: VOID
         '''
         self.cur_pos = cur_pos
+        adj_num = sum([isinstance(self.adjacent_data[self.cur_pos][each], tuple) for each in self.adjacent_data[self.cur_pos]])
+        if adj_num > 2:
+            self.laziness_coeff = 1.0
+        else:
+            self.laziness_coeff = 2.0 #TODO: tips
+        # print("Laziness Coeff : ", self.laziness_coeff)
         self.energizer_data = energizer_data
         self.bean_data = bean_data
         self.ghost_data = ghost_data
@@ -401,21 +407,28 @@ if __name__ == '__main__':
 
     multiagent = MultiAgentInteractor("config.json")
 
-    cur_pos = (22, 27)
-    ghost_data = [(18, 27), (10, 21)]
-    ghost_status = np.array([1, 1])
-    energizer_data = [(13, 9), (9, 24), (22, 26)]
-    bean_data = [(5, 5), (9, 5), (16, 5), (21, 5), (26, 5), (2, 6), (27, 6), (7, 7), (2, 8), (11, 9), (22, 10),
-                 (4, 12), (22, 12), (16, 13), (15, 15), (18, 15), (22, 15), (15, 16), (7, 19), (22, 20), (22, 24),
-                 (25, 24), (2, 29), (22, 29), (17, 30), (23, 30), (25, 30), (5, 33), (11, 33)]
-    reward_type = 4
-    fruit_pos = (2, 7)
-    last_dir = "right"
+    cur_pos = (10, 21)
+    ghost_data = [(16, 21), (19, 21)]
+    ghost_status = [4, 4]
+    energizer_data = [(19, 10), (13, 12), (23, 33)]
+    bean_data = [(7, 5), (8, 5), (10, 5), (11, 5), (16, 5), (20, 5), (23, 5), (2, 6), (7, 6), (22, 6), (2, 7), (7, 7),
+                 (13, 7), (16, 7), (22, 7), (16, 8), (22, 8), (2, 9), (3, 9), (5, 9), (7, 9), (13, 9), (16, 9), (19, 9),
+                 (22, 9), (23, 9), (24, 9), (26, 9), (22, 10), (27, 10), (7, 11), (11, 12), (17, 12), (22, 12),
+                 (23, 12), (27, 12), (7, 13), (13, 13), (7, 14), (16, 14), (7, 17), (7, 19), (22, 22), (19, 23),
+                 (18, 24), (21, 24), (25, 24), (26, 24), (27, 24), (7, 26), (22, 26), (27, 26), (2, 27), (7, 27),
+                 (22, 27), (2, 28), (27, 28), (7, 29), (19, 29), (3, 30), (5, 30), (6, 30), (7, 30), (11, 30), (13, 30),
+                 (19, 30), (23, 30), (26, 30), (2, 31), (27, 31), (2, 32), (27, 32), (3, 33), (5, 33), (7, 33), (8, 33),
+                 (13, 33), (15, 33), (22, 33), (24, 33)]
+    reward_type = 3
+    fruit_pos = (7, 10)
+    last_dir = "down"
 
     multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
     multiagent.last_dir = last_dir
-    dir_prob, agent_Q = multiagent.estimateDir()
+    dir_prob, agent_Q, available_dir = multiagent.estimateDir()
     print("Q : ", agent_Q)
+    print("Integration Q : ", dir_prob)
+    print("Available dir : ", available_dir)
     # for index in range(15):
     #     each = all_data.iloc[index]
     #     cur_pos = each.pacmanPos
