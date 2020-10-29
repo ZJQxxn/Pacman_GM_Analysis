@@ -24,6 +24,10 @@ def _extractAllData():
         data = pickle.load(file)
     all_data_with_label = data["df_total"]
     all_data_with_label = all_data_with_label.sort_index()
+    print("Before shift : ", all_data_with_label.ghost1_dir.values[:5])
+    all_data_with_label.ghost1_dir = all_data_with_label.ghost1_dir.shift(periods = -1)
+    all_data_with_label.ghost2_dir = all_data_with_label.ghost2_dir.shift(periods = -1)
+    print("After shift : ", all_data_with_label.ghost1_dir.values[:5])
     accident_index = np.concatenate(data["cons_list_accident"])
     group_list = _consecutiveLengh(accident_index)
     print("Accident group num : ", len(group_list))
