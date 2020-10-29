@@ -38,8 +38,11 @@ def _extractAllData():
     accident_data = all_data_with_label.iloc[accident_index].reset_index(drop=True)
     normal_ghost_index = []
     for index in range(accident_data.shape[0]):
-        temp = accident_data.iloc[index][["ifscared1", "ifscared2"]].values
-        if np.all(temp < 3):
+        ghost_status = accident_data.iloc[index][["ifscared1", "ifscared2"]].values
+        ghost_loc = [tuple(each) for each in accident_data.iloc[index][["ghost1Pos", "ghost2Pos"]].values]
+        if np.all(ghost_status < 3):
+            if (14, 18) in ghost_loc or (14, 19) in ghost_loc:
+                continue
             normal_ghost_index.append(index)
     accident_data = accident_data.iloc[normal_ghost_index].reset_index(drop=True)
     print("Alive step num : ", len(normal_ghost_index))
@@ -59,8 +62,11 @@ def _extractAllData():
     plan_data = all_data_with_label.iloc[plan_index].reset_index(drop=True)
     normal_ghost_index = []
     for index in range(plan_data.shape[0]):
-        temp = plan_data.iloc[index][["ifscared1", "ifscared2"]].values
-        if np.all(temp < 3):
+        ghost_status = plan_data.iloc[index][["ifscared1", "ifscared2"]].values
+        ghost_loc = [tuple(each) for each in plan_data.iloc[index][["ghost1Pos", "ghost2Pos"]].values]
+        if np.all(ghost_status < 3):
+            if (14, 18) in ghost_loc or (14, 19) in ghost_loc:
+                continue
             normal_ghost_index.append(index)
     plan_data = plan_data.iloc[normal_ghost_index].reset_index(drop=True)
     print("Alive step num : ", len(normal_ghost_index))
@@ -102,8 +108,7 @@ def _readLocDistance(filename):
 def _findLocal(trial_data):
     beans = trial_data.iloc[0].beans
     beans = len(beans) if not isinstance(beans, float) else 0
-    ghost_status = trial_data.iloc[0][["ifscared1", "ifscared2"]].values
-    if beans > 32 and np.all(ghost_status < 3):
+    if beans > 32:
         return trial_data.iloc[0].values
     else:
         return None
@@ -126,6 +131,9 @@ def _findGlobal(trial_data):
         return None
     else:
         ghost_status = trial_data.iloc[global_start[0][0]][["ifscared1", "ifscared2"]].values
+        ghost_loc = [tuple(each) for each in trial_data.iloc[global_start[0][0]][["ghost1Pos", "ghost2Pos"]].values]
+        if (14, 18) in ghost_loc or (14, 19) in ghost_loc:
+            return None
         if np.any(ghost_status >= 3):
             return None
         return trial_data.iloc[global_start[0][0]].values
@@ -149,6 +157,9 @@ def _findPessimistic(trial_data):
         return None
     else:
         ghost_status = trial_data.iloc[evade_start[0][0]][["ifscared1", "ifscared2"]].values
+        ghost_loc = [tuple(each) for each in trial_data.iloc[evade_start[0][0]][["ghost1Pos", "ghost2Pos"]].values]
+        if (14, 18) in ghost_loc or (14, 19) in ghost_loc:
+            return None
         if np.any(ghost_status >=3 ):
             return None
         return trial_data.iloc[evade_start[0][0]].values
@@ -168,7 +179,9 @@ def _findSuicide(trial_data):
     else:
         ghost_status = trial_data.reset_index(drop=True).iloc[group_list[np.argmax(group_length)][0]][
             ["ifscared1", "ifscared2"]].values
-
+        ghost_loc = [tuple(each) for each in trial_data.reset_index(drop=True).iloc[group_list[np.argmax(group_length)][0]][["ghost1Pos", "ghost2Pos"]].values]
+        if (14, 18) in ghost_loc or (14, 19) in ghost_loc:
+            return None
         if np.any(ghost_status >= 3):
             return None
         print(group_list[np.argmax(group_length)])
