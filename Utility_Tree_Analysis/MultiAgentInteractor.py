@@ -371,9 +371,9 @@ class MultiAgentInteractor:
         self.cur_pos = cur_pos
         adj_num = sum([isinstance(self.adjacent_data[self.cur_pos][each], tuple) for each in self.adjacent_data[self.cur_pos]])
         if adj_num > 2:
-            self.laziness_coeff = 1.0
+            self.laziness_coeff = 0.1
         else:
-            self.laziness_coeff = 2.0 #TODO: tips
+            self.laziness_coeff = 0.5 #TODO: tips
         # print("Laziness Coeff : ", self.laziness_coeff)
         self.energizer_data = energizer_data
         self.bean_data = bean_data
@@ -407,15 +407,15 @@ if __name__ == '__main__':
 
     multiagent = MultiAgentInteractor("config.json")
 
-    cur_pos = (10, 30)  # 1457
-    ghost_data = [(16, 31), (12, 17)]
-    ghost_status = [1, 2]
-    energizer_data = [(10, 29)]
+    cur_pos = (22, 27)  # 1457
+    ghost_data = [(16, 26), (26, 24)]
+    ghost_status = [3, 5]
+    energizer_data = [(18, 5)]
     bean_data = [(13, 8), (3, 9), (4, 9), (13, 9), (10, 22), (26, 24), (27, 24), (27, 25), (27, 28), (10, 30), (13, 30),
                  (19, 30), (2, 33), (9, 33)]
     reward_type = None
     fruit_pos = None
-    last_dir = "left"
+    last_dir = "right"
 
     multiagent.resetStatus(cur_pos, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status)
     multiagent.last_dir = last_dir

@@ -61,33 +61,67 @@ class PlannedHuntingAgent:
         # If ghosts are scared or no energizer exists, degenerate to random agent
         if np.all(self.ghost_status >= 3) or isinstance(self.energizer_data, float) or self.energizer_data == []:
             if np.any(self.ghost_status > 3):
-                # Build a local path tree based on the current position
-                cur_pos_tree, _, _ = PathTree(
-                    self.adjacent_data,
-                    self.locs_df,
-                    self.reward_amount,
-                    self.cur_pos,
-                    np.nan, # ignore energizers
-                    np.nan, # ignore beans
-                    self.ghost_data,
-                    np.nan, # ignore fruits
-                    np.nan, # inore fruits
-                    self.ghost_status,
-                    self.last_dir,
-                    depth = 15,
-                    ignore_depth = 0,
-                    ghost_attractive_thr=15,
-                    ghost_repulsive_thr=15,
-                    fruit_attractive_thr=15,
-                    reward_coeff = 1.0,
-                    risk_coeff = 0.0,
-                    randomness_coeff=0.0,
-                    laziness_coeff=0.0
-                )._construct()
-                available_directions = [each.dir_from_parent for each in cur_pos_tree.children]
-                available_dir_utility = np.array([self._descendantUtility(each) for each in cur_pos_tree.children])
-                for index, each in enumerate(available_directions):
+                # # Build a local path tree based on the current position
+                # cur_pos_tree, _, _ = PathTree(
+                #     self.adjacent_data,
+                #     self.locs_df,
+                #     self.reward_amount,
+                #     self.cur_pos,
+                #     np.nan, # ignore energizers
+                #     np.nan, # ignore beans
+                #     self.ghost_data,
+                #     np.nan, # ignore fruits
+                #     np.nan, # inore fruits
+                #     self.ghost_status,
+                #     self.last_dir,
+                #     depth = 15,
+                #     ignore_depth = 0,
+                #     ghost_attractive_thr=15,
+                #     ghost_repulsive_thr=15,
+                #     fruit_attractive_thr=15,
+                #     reward_coeff = 1.0,
+                #     risk_coeff = 0.0,
+                #     randomness_coeff=0.0,
+                #     laziness_coeff=0.0
+                # )._construct()
+                # available_directions = [each.dir_from_parent for each in cur_pos_tree.children]
+                # available_dir_utility = np.array([self._descendantUtility(each) for each in cur_pos_tree.children])
+                # for index, each in enumerate(available_directions):
+                #     self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+
+                # Compute the distance between adjacent positions of Pacman and ghosts
+                P_G_distance = []  # (# of adjacent positions, # of ghosts)
+                for each_adjacent_pos in self.adjacent_pos:
+                    temp_P_G_distance = []
+                    for index, each_ghost in enumerate(self.ghost_data):
+                        if self.ghost_status[index] == 3:
+                            continue
+                        if tuple(each_ghost) != each_adjacent_pos:
+                            temp_P_G_distance.append(self.locs_df[each_adjacent_pos][tuple(each_ghost)])
+                        else:
+                            temp_P_G_distance.append(0.0)
+                    P_G_distance.append(temp_P_G_distance)
+                P_G_distance = np.array(P_G_distance)
+                closest_P_G_distance = []
+                for each in range(len(self.adjacent_pos)):
+                    closest_P_G_distance.append(np.min(P_G_distance[each]))
+                # Compute utility of each adjacent positions (i.e., each moving direction)
+                available_dir_utility = []
+                for adjacent_index in range(len(self.available_dir)):
+                    P_G = closest_P_G_distance[adjacent_index]
+                    temp_utility = 0.0
+                    # Ghost reward
+                    ghost_attractive_thr = 15
+                    if P_G < ghost_attractive_thr:
+                        R = self.reward_amount[8]
+                        T = ghost_attractive_thr
+                        if P_G <= ghost_attractive_thr:
+                            temp_utility += (-R / T) * P_G + R
+                    available_dir_utility.append(temp_utility)
+                available_dir_utility = np.array(available_dir_utility)
+                for index, each in enumerate(self.available_dir):
                     self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+                self.Q_value = np.array(self.Q_value)
             else:
                 self.Q_value = np.array([0.0, 0.0, 0.0, 0.0])
         # Else, has chance to plan hunting
@@ -204,14 +238,14 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Planned hunting agent
-    cur_pos = (10, 30) # 1457
-    ghost_data = [(16, 31), (12, 27)]
-    ghost_status = [1, 2]
-    energizer_data = [(10, 29)]
+    cur_pos = (22, 27) # 1457
+    ghost_data = [(16, 26), (26, 24)]
+    ghost_status = [3, 5]
+    energizer_data = [(18, 5)]
     bean_data = [(13, 8), (3, 9), (4, 9), (13, 9), (10, 22), (26, 24), (27, 24), (27, 25), (27, 28), (10, 30), (13, 30), (19, 30), (2, 33), (9, 33)]
     reward_type = None
     fruit_pos = None
-    last_dir = "left"
+    last_dir = "right"
 
     agent = PlannedHuntingAgent(
         adjacent_data,

@@ -152,6 +152,9 @@ def _readAuxiliaryData():
 
 
 def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount):
+    # TODO: ============================================
+    # TODO: Change to the current settings!!!!
+    # TODO: ============================================
     # Randomness and laziness
     randomness_coeff = 0.0
     laziness_coeff = 0.0
@@ -403,6 +406,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
 
 
 def preEstimation():
+    # TODO: ============================================
+    # TODO: Change to the current settings!!!!
+    # TODO: ============================================
     pd.options.mode.chained_assignment = None
     # Individual Estimation
     print("=" * 15, " Individual Estimation ", "=" * 15)
@@ -432,7 +438,9 @@ def preEstimation():
 #         FAST OPTIMIZATION
 # ===================================
 def _preProcessingQ(Q_value, last_dir, randomness_coeff = 1.0):
-    #TODO: new pre-processing from incremental MLE aaalysis
+    # TODO: ============================================
+    # TODO: No need to preprocess Q?
+    # TODO: ============================================
     '''
     Preprocessing for Q-value, including convert negative utility to non-negative, set utilities of unavailable 
     directions to -inf, and normalize utilities.
@@ -607,6 +615,9 @@ def MLE(config):
 
 
 def movingWindowAnalysis(config, save_res = True):
+    # TODO: ============================================
+    # TODO: Centering at the transition point.
+    # TODO: ============================================
     print("=" * 20, " Moving Window ", "=" * 20)
     print("Agent List :", config["agents"])
     window = config["window"]
@@ -703,6 +714,12 @@ def movingWindowAnalysis(config, save_res = True):
         np.save("{}-is_success-window{}-{}-new_agent.npy".format(config["method"], window, type), all_success)
         np.save("{}-at_cross_accuracy-window{}-{}-new_agent.npy".format(config["method"], window, type), at_cross_accuracy)
 
+
+def correlationAnalysis(config):
+    # TODO: ============================================
+    # TODO: Correlation between estimated labels and hand-crafted labels
+    # TODO: ============================================
+    pass
 
 # ===================================
 #         VISUALIZATION
