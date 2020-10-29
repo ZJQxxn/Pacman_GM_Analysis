@@ -112,7 +112,7 @@ class PlannedHuntingAgent:
                     if each_energizer_pos in self.locs_df[each_adjacent_pos]:
                         temp_P_E_distance.append(self.locs_df[each_adjacent_pos][each_energizer_pos])
                     elif each_energizer_pos == each_adjacent_pos:
-                        temp_P_E_distance.append(1.0)
+                        temp_P_E_distance.append(0.0)
                     else:
                         print("Lost path : {} to {}".format(each_adjacent_pos, each_energizer_pos))
                 P_E_distance.append(temp_P_E_distance)
@@ -143,12 +143,8 @@ class PlannedHuntingAgent:
             available_dir_utility = []
             for adjacent_index in range(len(self.available_dir)):
                 P_E = closest_P_E_distance[adjacent_index]
-                P_E = 1 if 0 == P_E else P_E
                 E_G = closest_E_G_distance[adjacent_index]
-                E_G = 1 if 0 == E_G else E_G
                 P_G = closest_P_G_distance[adjacent_index]
-                P_G = 1 if 0 == P_G else P_G
-                # temp_utility = (E_G - P_E) # pacman is closer to energizer compared with ghost
 
                 temp_utility = 0.0
                 # Energizer reward
@@ -208,13 +204,13 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Planned hunting agent
-    cur_pos = (10, 9)
-    ghost_data = [(13, 9), (6, 5)]
-    ghost_status = [1, 1]
-    energizer_data = [(13, 14)]
-    bean_data = [(7, 5), (8, 5), (10, 5), (11, 5), (16, 5), (20, 5), (23, 5), (2, 6), (7, 6), (22, 6), (2, 7), (7, 7), (13, 7), (16, 7), (22, 7), (16, 8), (22, 8), (2, 9), (3, 9), (5, 9), (7, 9), (13, 9), (16, 9), (19, 9), (22, 9), (23, 9), (24, 9), (26, 9), (22, 10), (27, 10), (7, 11), (11, 12), (17, 12), (22, 12), (23, 12), (27, 12), (7, 13), (13, 13), (7, 14), (16, 14), (7, 17), (7, 19), (22, 22), (19, 23), (18, 24), (21, 24), (25, 24), (26, 24), (27, 24), (7, 26), (22, 26), (27, 26), (2, 27), (7, 27), (22, 27), (2, 28), (27, 28), (7, 29), (19, 29), (3, 30), (5, 30), (6, 30), (7, 30), (11, 30), (13, 30), (19, 30), (23, 30), (26, 30), (2, 31), (27, 31), (2, 32), (27, 32), (3, 33), (5, 33), (7, 33), (8, 33), (13, 33), (15, 33), (22, 33), (24, 33)]
-    reward_type = 3
-    fruit_pos = (7, 10)
+    cur_pos = (10, 30) # 1457
+    ghost_data = [(16, 31), (12, 27)]
+    ghost_status = [1, 2]
+    energizer_data = [(10, 29)]
+    bean_data = [(13, 8), (3, 9), (4, 9), (13, 9), (10, 22), (26, 24), (27, 24), (27, 25), (27, 28), (10, 30), (13, 30), (19, 30), (2, 33), (9, 33)]
+    reward_type = None
+    fruit_pos = None
     last_dir = "left"
 
     agent = PlannedHuntingAgent(
@@ -227,8 +223,8 @@ if __name__ == '__main__':
         ghost_data,
         ghost_status,
         last_dir,
-        randomness_coeff = 1.0,
-        laziness_coeff = 1.0
+        randomness_coeff = 0.0,
+        laziness_coeff = 0.0
     )
     _, Q = agent.nextDir(return_Q=True)
     choice = agent.dir_list[makeChoice(Q)]
