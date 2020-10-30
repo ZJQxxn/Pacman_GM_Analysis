@@ -46,96 +46,59 @@ def oneHot(val):
     return onehot_vec
 
 
-def readDatasetFromPkl(filename, trial_name = None, only_necessary = False):
+def readTransitionData(filename):
     '''
-    Construct dataset from a .pkl file.
+    Read data for MLE analysis.
     :param filename: Filename.
     :param trial_name: Trial name.
     :return: 
     '''
     # Read data and pre-processing
     with open(filename, "rb") as file:
-        # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
-    if trial_name is not None: # explicitly indicate the trial
-        all_data = all_data[all_data.file == trial_name]
     if "level_0" not in all_data.columns.values:
-        all_data = all_data.reset_index()
+        all_data = all_data.reset_index(drop = True)
     # Exclude the (0, 18) position in data
     normal_data_index = []
     for index in range(all_data.shape[0]):
         if not isinstance(all_data.global_Q[index], list): # what if no normal Q?
             normal_data_index.append(index)
     all_data = all_data.iloc[normal_data_index]
-    true_prob = all_data.next_pacman_dir_fill
-    # Fill nan direction for optimization use
-    start_index = 0
-    while pd.isna(true_prob[start_index]):
-        start_index += 1
-    true_prob = true_prob[start_index:].reset_index(drop = True)
-    all_data = all_data[start_index:].reset_index(drop = True)
-    for index in range(1, true_prob.shape[0]):
-        if pd.isna(true_prob[index]):
-            true_prob[index] = true_prob[index - 1]
-    true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
-    # Construct the dataset
-    if only_necessary and "at_cross" in all_data.columns.values:
-        print("--- Only Necessary ---")
-        at_cross_index = np.where(all_data.at_cross)
-        X = all_data.iloc[at_cross_index]
-        Y = true_prob.iloc[at_cross_index]
-        # print("--- Data Shape {} ---".format(len(at_cross_index[0])))
-    else:
-        X = all_data
-        Y = true_prob
-    return X, Y
+    # Split into trajectories
+    trajectory_data = []
+    grouped_data = all_data.groupby(["file", "trajectory_index"])
+    for name, group in grouped_data:
+        group = group.reset_index(drop = True)
+        # True moving directions
+        true_prob = group.next_pacman_dir_fill
+        # Fill nan direction for optimization use
+        start_index = 0
+        while pd.isna(true_prob[start_index]):
+            start_index += 1
+        if start_index > 0:
+            true_prob[:start_index+1] = true_prob[start_index+1]
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+        trajectory_data.append([name, group, true_prob])
+    return trajectory_data
 
 
-def readTestingDatasetFromPkl(filename, trial_name = None, only_necessary = False):
-    '''
-    Construct dataset from a .pkl file.
-    :param filename: Filename.
-    :param trial_name: Trial name.
-    :return: 
-    '''
-    # Read data and pre-processing
-    with open(filename, "rb") as file:
-        # file.seek(0) # deal with the error that "could not find MARK"
-        all_data = pickle.load(file)
-    if trial_name is not None: # explicitly indicate the trial
-        all_data = all_data[all_data.file == trial_name]
-    if "level_0" not in all_data.columns.values:
-        all_data = all_data.reset_index()
-    # true_prob = all_data.next_pacman_dir_fill
-    true_prob = all_data.next_pacman_dir
-    # The indeices of data with a direction rather than nan
-    if only_necessary:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir, float) and x.at_cross
-    else:
-        not_nan_indication = lambda x: not isinstance(x.next_pacman_dir, float)
-    not_nan_index = np.where(all_data.apply(lambda x: not_nan_indication(x), axis = 1))[0]
-    all_data = all_data.iloc[not_nan_index]
-    true_prob = true_prob.iloc[not_nan_index]
-    true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
-    # Construct the dataset
-    if only_necessary and "at_cross" in all_data.columns.values:
-        print("--- Only Necessary ---")
-        at_cross_index = np.where(all_data.at_cross)
-        X = all_data.iloc[at_cross_index]
-        Y = true_prob.iloc[at_cross_index]
-        # print("--- Data Shape {} ---".format(len(at_cross_index[0])))
-    else:
-        X = all_data
-        Y = true_prob
-    return X, Y
-
+def readTrialData(filename):
+    # TODO: ============================================
+    # TODO: Read data of every trial
+    # TODO: ============================================
+    pass
 
 # ===================================
 #       INDIVIDUAL ESTIMATION
 # ===================================
 def _readData(filename):
+    '''
+    Read data for pre-estimation.
+    '''
     with open(filename, "rb") as file:
-        # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
     all_data = all_data.reset_index()
     print()
@@ -152,12 +115,9 @@ def _readAuxiliaryData():
 
 
 def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount):
-    # TODO: ============================================
-    # TODO: Change to the current settings!!!!
-    # TODO: ============================================
     # Randomness and laziness
-    randomness_coeff = 0.0
-    laziness_coeff = 0.0
+    randomness_coeff = 1.0
+    laziness_coeff = 1.0
     # Configuration (for global agent)
     global_depth = 15
     ignore_depth = 5
@@ -180,24 +140,22 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_fruit_attractive_thr = 5
     pessimistic_ghost_repulsive_thr = 5
     # Configuration (for suicide agent)
-    suicide_depth = 5
-    suicide_ghost_attractive_thr = 5
-    suicide_fruit_attractive_thr = 5
-    suicide_ghost_repulsive_thr = 5
+    suicide_depth = 10
+    suicide_ghost_attractive_thr = 10
+    suicide_fruit_attractive_thr = 10
+    suicide_ghost_repulsive_thr = 10
     # Configuration (flast direction)
     last_dir = all_data.pacman_dir.values
     last_dir[np.where(pd.isna(last_dir))] = None
     # Direction sstimation
     global_estimation = []
     local_estimation = []
-    optimistic_estimation = []
     pessimistic_estimation = []
     suicide_estimation = []
     planned_hunting_estimation = []
     # Q-value (utility)
     global_Q = []
     local_Q = []
-    optimistic_Q = []
     pessimistic_Q = []
     suicide_Q = []
     planned_hunting_Q = []
@@ -214,7 +172,6 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
         if cur_pos not in adjacent_data:
             global_Q.append([0.0, 0.0, 0.0, 0.0])
             local_Q.append([0.0, 0.0, 0.0, 0.0])
-            optimistic_Q.append([0.0, 0.0, 0.0, 0.0])
             pessimistic_Q.append([0.0, 0.0, 0.0, 0.0])
             suicide_Q.append([0.0, 0.0, 0.0, 0.0])
             planned_hunting_Q.append([0.0, 0.0, 0.0, 0.0])
@@ -256,7 +213,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=global_fruit_attractive_thr,
             ghost_repulsive_thr=global_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
-            laziness_coeff = laziness_coeff
+            laziness_coeff = laziness_coeff,
+            reward_coeff = 1.0,
+            risk_coeff = 0.0
         )
         global_result = global_agent.nextDir(return_Q=True)
         global_estimation.append(global_result[0])
@@ -274,41 +233,18 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_pos,
             ghost_status,
             last_dir[index],
-            depth=local_depth,
+            depth = local_depth,
             ghost_attractive_thr = local_ghost_attractive_thr,
             fruit_attractive_thr = local_fruit_attractive_thr,
             ghost_repulsive_thr = local_ghost_repulsive_thr,
-            randomness_coeff = randomness_coeff,
-            laziness_coeff = laziness_coeff
-        )
-        local_result = local_agent.nextDir(return_Q=True)
-        local_estimation.append(local_result[0])
-        local_Q.append(local_result[1])
-        # Optimistic agent
-        optimistic_agent = PathTree(
-            adjacent_data,
-            locs_df,
-            reward_amount,
-            cur_pos,
-            energizer_data,
-            bean_data,
-            ghost_data,
-            reward_type,
-            fruit_pos,
-            ghost_status,
-            last_dir[index],
-            depth = optimistic_depth,
-            ghost_attractive_thr = optimistic_ghost_attractive_thr,
-            fruit_attractive_thr = optimistic_fruit_attractive_thr,
-            ghost_repulsive_thr = optimistic_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
             laziness_coeff = laziness_coeff,
             reward_coeff = 1.0,
             risk_coeff = 0.0
         )
-        optimistic_result = optimistic_agent.nextDir(return_Q=True)
-        optimistic_estimation.append(optimistic_result[0])
-        optimistic_Q.append(optimistic_result[1])
+        local_result = local_agent.nextDir(return_Q=True)
+        local_estimation.append(local_result[0])
+        local_Q.append(local_result[1])
         # Pessimistic agent
         pessimistic_agent = PathTree(
             adjacent_data,
@@ -322,10 +258,10 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_pos,
             ghost_status,
             last_dir[index],
-            depth=pessimistic_depth,
-            ghost_attractive_thr=pessimistic_ghost_attractive_thr,
-            fruit_attractive_thr=pessimistic_fruit_attractive_thr,
-            ghost_repulsive_thr=pessimistic_ghost_repulsive_thr,
+            depth = pessimistic_depth,
+            ghost_attractive_thr = pessimistic_ghost_attractive_thr,
+            fruit_attractive_thr = pessimistic_fruit_attractive_thr,
+            ghost_repulsive_thr = pessimistic_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
             laziness_coeff = laziness_coeff,
             reward_coeff = 0.0,
@@ -384,9 +320,6 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     all_data["local_Q"] = np.tile(np.nan, num_samples)
     all_data["local_Q"] = all_data["local_Q"].apply(np.array)
     all_data["local_Q"] = local_Q
-    all_data["optimistic_Q"] = np.tile(np.nan, num_samples)
-    all_data["optimistic_Q"] = all_data["optimistic_Q"].apply(np.array)
-    all_data["optimistic_Q"] = optimistic_Q
     all_data["pessimistic_Q"] = np.tile(np.nan, num_samples)
     all_data["pessimistic_Q"] = all_data["pessimistic_Q"].apply(np.array)
     all_data["pessimistic_Q"] = pessimistic_Q
@@ -400,27 +333,20 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     print("Direction Estimation :")
     print("\n")
     print("Q value :")
-    print(all_data[["global_Q", "local_Q", "optimistic_Q",
-                    "pessimistic_Q", "suicide_Q", "planned_hunting_Q"]].iloc[:5])
+    print(all_data[["global_Q", "local_Q", "pessimistic_Q", "suicide_Q", "planned_hunting_Q"]].iloc[:5])
     return all_data
 
 
 def preEstimation():
-    # TODO: ============================================
-    # TODO: Change to the current settings!!!!
-    # TODO: ============================================
     pd.options.mode.chained_assignment = None
     # Individual Estimation
     print("=" * 15, " Individual Estimation ", "=" * 15)
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/global_data.pkl",
-        "../common_data/local_data.pkl",
-        "../common_data/global_testing_data.pkl",
-        "../common_data/local_testing_data.pkl"
+        "../common_data/transition/global_to_local.pkl",
+        "../common_data/transition/local_to_global.pkl",
+        "../common_data/transition/local_to_evade.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -429,8 +355,9 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}-new_agent.pkl".format(filename), "wb") as file:
+        with open("../common_data/transition/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
             pickle.dump(all_data, file)
+        print("Save to ", "../common_data/transition/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]))
     pd.options.mode.chained_assignment = "warn"
 
 
@@ -526,94 +453,6 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
         return (nll, dir_Q_value)
 
 
-def MLE(config):
-    print("=" * 20, " MLE ", "=" * 20)
-    print("Agent List :", config["agents"])
-    # Load experiment data
-    all_data, true_prob = readDatasetFromPkl(config["data_filename"], only_necessary=config["only_necessary"])
-    feasible_data_index = np.where(
-        all_data["{}_Q".format(config["agents"][0])].apply(lambda x: not isinstance(x, float))
-    )[0]
-    all_data = all_data.iloc[feasible_data_index]
-    true_prob = true_prob.iloc[feasible_data_index]
-    print("Number of samples : ", all_data.shape[0])
-    if "clip_samples" not in config or config["clip_samples"] is None:
-        num_samples = all_data.shape[0]
-    else:
-        num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
-    all_data = all_data.iloc[:num_samples]
-    true_prob = true_prob.iloc[:num_samples]
-    # pre-processing of Q-value
-    agent_normalizing_factors = []
-    agent_offset = []
-    for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-        preprocessing_res = _preProcessingQ(all_data[agent_name], last_dir = all_data.pacman_dir.values, randomness_coeff = 1.0)
-        agent_offset.append(preprocessing_res[0])
-        agent_normalizing_factors.append(preprocessing_res[1])
-        all_data[agent_name] = preprocessing_res[2]
-    print("Number of used samples : ", all_data.shape[0])
-    print("Agent Normalizing Factors : ", agent_normalizing_factors)
-    print("Agent Offset : ", agent_offset)
-    # Optimization
-    bounds = config["bounds"]
-    params = config["params"]
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
-
-    # Notes [Jiaqi Aug. 13]: -- about the lambda function --
-    # params = [0, 0, 0, 0]
-    # func = lambda parameter: func() [WRONG]
-    # func = lambda params: func() [CORRECT]
-    func = lambda params: negativeLikelihood(
-        params,
-        all_data,
-        true_prob,
-        config["agents"],
-        return_trajectory = False
-    )
-    is_success = False
-    retry_num = 0
-    while not is_success and retry_num < config["maximum_try"]:
-        res = scipy.optimize.minimize(
-            func,
-            x0=params,
-            method="SLSQP",
-            bounds=bounds, # exclude bounds and cons because the Q-value has different scales for different agents
-            tol=1e-5,
-            constraints = cons
-        )
-        is_success = res.success
-        if not is_success:
-            retry_num += 1
-            print("Failed, retrying...")
-    print("Initial guess : ", params)
-    print("Estimated Parameter : ", res.x)
-    print("Normalized Parameter (res / sum(res)): ", res.x / np.sum(res.x))
-    print("Message : ", res.message)
-    # Estimation
-    testing_data, testing_true_prob = readTestingDatasetFromPkl(
-        config["testing_data_filename"],
-        only_necessary=config["only_necessary"])
-    # not_nan_index = [each for each in not_nan_index if ]
-    print("Testing data num : ", testing_data.shape[0])
-    _, estimated_prob = negativeLikelihood(
-        res.x,
-        testing_data,
-        testing_true_prob,
-        config["agents"],
-        return_trajectory = True
-    )
-    true_dir = np.array([np.argmax(each) for each in testing_true_prob])
-    # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
-    correct_rate = np.sum(estimated_dir == true_dir)
-    print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
-
-
 def movingWindowAnalysis(config, save_res = True):
     # TODO: ============================================
     # TODO: Centering at the transition point.
@@ -622,7 +461,9 @@ def movingWindowAnalysis(config, save_res = True):
     print("Agent List :", config["agents"])
     window = config["window"]
     # Load experiment data
-    X, Y = readDatasetFromPkl(config["data_filename"], only_necessary = config["only_necessary"])
+    trajectory_data = readTransitionData(config["data_filename"])
+    X = trajectory_data[1]
+    Y = trajectory_data[2]
     print("Number of samples : ", X.shape[0])
     if "clip_samples" not in config or config["clip_samples"] is None:
         num_samples = X.shape[0]
@@ -630,18 +471,21 @@ def movingWindowAnalysis(config, save_res = True):
         num_samples = X.shape[0] if config["clip_samples"] > X.shape[0] else config["clip_samples"]
     X = X.iloc[:num_samples]
     Y = Y.iloc[:num_samples]
-    # pre-processing of Q-value
-    agent_normalizing_factors = []
-    agent_offset = []
-    for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-        preprocessing_res = _preProcessingQ(X[agent_name], X.pacman_dir.values, randomness_coeff=1.0)
-        agent_offset.append(preprocessing_res[0])
-        agent_normalizing_factors.append(preprocessing_res[1])
-        X[agent_name] = preprocessing_res[2]
-    print("Number of used samples : ", X.shape[0])
-    print("Agent Normalizing Factors : ", agent_normalizing_factors)
-    print("Agent Offset : ", agent_offset)
-    print("Number of used samples : ", X.shape[0])
+
+    # TODO: no need to normalize Q values.
+    # # pre-processing of Q-value
+    # agent_normalizing_factors = []
+    # agent_offset = []
+    # for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
+    #     preprocessing_res = _preProcessingQ(X[agent_name], X.pacman_dir.values, randomness_coeff=1.0)
+    #     agent_offset.append(preprocessing_res[0])
+    #     agent_normalizing_factors.append(preprocessing_res[1])
+    #     X[agent_name] = preprocessing_res[2]
+    # print("Number of used samples : ", X.shape[0])
+    # print("Agent Normalizing Factors : ", agent_normalizing_factors)
+    # print("Agent Offset : ", agent_offset)
+    # print("Number of used samples : ", X.shape[0])
+
     # Construct optimizer
     bounds = config["bounds"]
     params = config["params"]
@@ -768,13 +612,7 @@ if __name__ == '__main__':
     config = {
         # Filename
         # "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
-        "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
-        # Testing data filename
-        "testing_data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
-        # Method: "MLE" or "MEE"
-        "method": "MLE",
-        # Only making decisions when necessary
-        "only_necessary": False,
+        "data_filename": "../common_data/transition/local_to_evade-with_Q.pkl",
         # The number of samples used for estimation: None for using all the data
         "clip_samples": 200,
         # The window size
@@ -791,11 +629,8 @@ if __name__ == '__main__':
         "agents": ["local", "global", "pessimistic"]
     }
 
-    # ============ ESTIMATION =============
-    MLE(config)
-
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config, save_res = True)
+    movingWindowAnalysis(config, save_res = True)
 
     # ============ PLOTTING =============
     # Load the log of moving window analysis; log files are created in the analysis
