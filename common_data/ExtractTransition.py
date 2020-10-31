@@ -18,16 +18,17 @@ import copy
 
 def _extractAllData(trial_num = 2000):
     # Read data
-    # data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
-    # with open(data_filename, "rb") as file:
-    #     data = pickle.load(file)
-    # all_data_with_label = data["df_total"]
-
-    data_filename = "partial_data_with_reward_label_cross.pkl"
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
     with open(data_filename, "rb") as file:
-        all_data_with_label = pickle.load(file)
+        data = pickle.load(file)
+    all_data_with_label = data["df_total"]
+
+    # data_filename = "partial_data_with_reward_label_cross.pkl"
+    # with open(data_filename, "rb") as file:
+    #     all_data_with_label = pickle.load(file)
+
     all_data_with_label = all_data_with_label.sort_index()
-    label_list = ["label_local_graze", "label_local_graze", "label_global_optimal", "label_global_notoptimal", "label_global", "label_evade"]
+    label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_optimal", "label_global_notoptimal", "label_global", "label_evade"]
     all_data_with_label[label_list] = all_data_with_label[label_list].fillna(0)
     print("All data shape : ", all_data_with_label.shape)
     trial_name_list = np.unique(all_data_with_label.file.values)
@@ -181,7 +182,7 @@ def extractTransitionData():
     global_to_local= []
     # Read data
     all_data, trial_name_list = _extractAllData()
-    columns_values = np.append(all_data.columns.values, ["trajectory_index", "trajectory shape"])
+    columns_values = np.append(all_data.columns.values, ["trajectory_index", "trajectory_shape"])
     print("Used Trial Num : ", len(trial_name_list))
     # Extract data for every trial
     local2global_trial_num = 0
@@ -211,6 +212,7 @@ def extractTransitionData():
         local_to_global = pd.DataFrame(data = local_to_global, columns = columns_values)
         with open("transition/local_to_global.pkl", "wb") as file:
             pickle.dump(local_to_global, file)
+        print("Local_to_global trial num : ", local2global_trial_num)
         print("Finished writing local_to_global {}.".format(local_to_global.shape[0]))
     else:
         print("No local_to_global data!")
@@ -218,6 +220,7 @@ def extractTransitionData():
         local_to_evade = pd.DataFrame(data = local_to_evade, columns = columns_values)
         with open("transition/local_to_evade.pkl", "wb") as file:
             pickle.dump(local_to_evade, file)
+        print("Local_to_evade trial num : ", local2evade_trial_num)
         print("Finished writing local_to_evade {}.".format(local_to_evade.shape[0]))
     else:
         print("No local_to_evade data!")
@@ -225,6 +228,7 @@ def extractTransitionData():
         global_to_local = pd.DataFrame(data = global_to_local, columns = columns_values)
         with open("transition/global_to_local.pkl", "wb") as file:
             pickle.dump(global_to_local, file)
+        print("Global_to_local trial num : ", global2local_trial_num)
         print("Finished writing global_to_local {}.".format(global_to_local.shape[0]))
     else:
         print("No global_to_local data!")

@@ -13,12 +13,13 @@ import pickle
 import pandas as pd
 import numpy as np
 import scipy.optimize
-from sklearn.metrics import log_loss
+import scipy.stats
 import matplotlib.pyplot as plt
+import copy
 
 import sys
 sys.path.append("./")
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber, makeChoice
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from PathTreeAgent import PathTree
 from SuicideAgent import SuicideAgent
 from PlannedHuntingAgent import PlannedHuntingAgent
@@ -50,8 +51,6 @@ def readTransitionData(filename):
     '''
     Read data for MLE analysis.
     :param filename: Filename.
-    :param trial_name: Trial name.
-    :return: 
     '''
     # Read data and pre-processing
     with open(filename, "rb") as file:
@@ -81,15 +80,48 @@ def readTransitionData(filename):
             if pd.isna(true_prob[index]):
                 true_prob[index] = true_prob[index - 1]
         true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
-        trajectory_data.append([name, group, true_prob])
+        trajectory_data.append([name, group, true_prob, group.iloc[0]["trajectory shape"]])
+    temp = trajectory_data[0]
     return trajectory_data
 
 
 def readTrialData(filename):
-    # TODO: ============================================
-    # TODO: Read data of every trial
-    # TODO: ============================================
-    pass
+    '''
+        Read data for MLE analysis.
+        :param filename: Filename.
+        '''
+    # Read data and pre-processing
+    with open(filename, "rb") as file:
+        all_data = pickle.load(file)
+    if "level_0" not in all_data.columns.values:
+        all_data = all_data.reset_index(drop=True)
+    # Exclude the (0, 18) position in data
+    normal_data_index = []
+    for index in range(all_data.shape[0]):
+        if not isinstance(all_data.global_Q[index], list):  # what if no normal Q?
+            normal_data_index.append(index)
+    all_data = all_data.iloc[normal_data_index]
+    # Split into trials
+    trial_data = []
+    trial_name_list = np.unique(all_data.file.values)
+    for each in trial_name_list:
+        each_trial = all_data[all_data.file == each].reset_index(drop = True)
+        # True moving directions
+        true_prob = each_trial.next_pacman_dir_fill
+        # Fill nan direction for optimization use
+        start_index = 0
+        while pd.isna(true_prob[start_index]):
+            start_index += 1
+        if start_index > 0:
+            true_prob[:start_index + 1] = true_prob[start_index + 1]
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+        trial_data.append([each, each_trial, true_prob])
+    return trial_data
+
+
 
 # ===================================
 #       INDIVIDUAL ESTIMATION
@@ -364,54 +396,37 @@ def preEstimation():
 # ===================================
 #         FAST OPTIMIZATION
 # ===================================
-def _preProcessingQ(Q_value, last_dir, randomness_coeff = 1.0):
-    # TODO: ============================================
-    # TODO: No need to preprocess Q?
-    # TODO: ============================================
-    '''
-    Preprocessing for Q-value, including convert negative utility to non-negative, set utilities of unavailable 
-    directions to -inf, and normalize utilities.
-    :param Q_value: 
-    :return: 
-    '''
-    num_samples = Q_value.shape[0]
-    temp_Q = []
-    unavailable_index = []
-    available_index = []
-    for index in range(num_samples):
-        cur_Q = Q_value.iloc[index]
-        unavailable_index.append(np.where(cur_Q == 0))
-        available_index.append(np.where(cur_Q != 0))
-        # Add randomness and laziness
-        Q_scale = scaleOfNumber(np.max(np.abs(cur_Q)))
-        randomness = np.random.normal(loc=0, scale=0.1, size=len(available_index[index][0])) * Q_scale
-        Q_value.iloc[index][available_index[index]] = (
-            Q_value.iloc[index][available_index[index]]
-            + randomness_coeff * randomness
-        )# randomness
-        if last_dir[index] is not None and dir_list.index(last_dir[index]) in available_index[index][0]:
-            Q_value.iloc[index][dir_list.index(last_dir[index])] = (
-                Q_value.iloc[index][dir_list.index(last_dir[index])]
-                + Q_scale
-            )  # laziness
-        temp_Q.extend(Q_value.iloc[index])
-    # Convert  negative to non-negative
-    offset = 0.0
-    if np.any(np.array(temp_Q) < 0):
-        offset = np.min(temp_Q)
-    for index in range(num_samples):
-        Q_value.iloc[index][available_index[index]] = Q_value.iloc[index][available_index[index]] - offset + 1
-    # Normalizing
-    normalizing_factor = np.nanmax(temp_Q)
-    normalizing_factor = 1 if 0 == normalizing_factor else normalizing_factor
-    # Set unavailable directions
-    for index in range(num_samples):
-        # cur_Q = Q_value.iloc[index]
-        # unavailable_index = np.where(cur_Q == 0)
-        Q_value.iloc[index] = Q_value.iloc[index] / normalizing_factor
-        # Q_value.iloc[index_][unavailable_index[index_]] = -999
-        Q_value.iloc[index][unavailable_index[index]] = 0
-    return (offset, normalizing_factor, Q_value)
+def _makeChoice(prob):
+    copy_estimated = copy.deepcopy(prob)
+    if np.any(prob) < 0:
+        available_dir_index = np.where(prob != 0)
+        copy_estimated[available_dir_index] = copy_estimated[available_dir_index] - np.min(copy_estimated[available_dir_index]) + 1
+    return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
+
+
+def _estimationLabeling(Q_value, agent_list):
+    return agent_list[np.argmax(Q_value)]
+
+
+def _handcraftLabeling(labels):
+    labels = labels.fillna(0)
+    # local
+    if labels.label_local_graze or labels.label_local_graze_noghost:
+        return "local"
+    # evade (pessmistic)
+    elif labels.label_evade:
+        return "pessimistic"
+    # global
+    elif labels.label_global_optimal or labels.label_global_notoptimal or labels.label_global:
+        return "global"
+    # suicide
+    elif labels.label_suicide:
+        return "suicide"
+    # planned hunting
+    elif labels.label_true_planned_hunting:
+        return "planned_hunting"
+    else:
+        return None
 
 
 def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajectory = False):
@@ -437,7 +452,7 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
         for each_agent in range(len(agents_list)):
             agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
     dir_Q_value = agent_Q_value @ agent_weight
-    true_dir = true_prob.apply(lambda x: makeChoice(x)).values
+    true_dir = true_prob.apply(lambda x: _makeChoice(x)).values
     # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
     exp_prob = np.exp(dir_Q_value)
     for each_sample in range(num_samples):
@@ -453,117 +468,210 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
         return (nll, dir_Q_value)
 
 
-def movingWindowAnalysis(config, save_res = True):
-    # TODO: ============================================
-    # TODO: Centering at the transition point.
-    # TODO: ============================================
+def movingWindowAnalysis(config):
     print("=" * 20, " Moving Window ", "=" * 20)
+    transition_type = config["trajectory_data_filename"].split("/")[-1].split(".")[0].split("-")[0]
+    print(transition_type)
     print("Agent List :", config["agents"])
     window = config["window"]
-    # Load experiment data
-    trajectory_data = readTransitionData(config["data_filename"])
-    X = trajectory_data[1]
-    Y = trajectory_data[2]
-    print("Number of samples : ", X.shape[0])
-    if "clip_samples" not in config or config["clip_samples"] is None:
-        num_samples = X.shape[0]
-    else:
-        num_samples = X.shape[0] if config["clip_samples"] > X.shape[0] else config["clip_samples"]
-    X = X.iloc[:num_samples]
-    Y = Y.iloc[:num_samples]
-
-    # TODO: no need to normalize Q values.
-    # # pre-processing of Q-value
-    # agent_normalizing_factors = []
-    # agent_offset = []
-    # for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-    #     preprocessing_res = _preProcessingQ(X[agent_name], X.pacman_dir.values, randomness_coeff=1.0)
-    #     agent_offset.append(preprocessing_res[0])
-    #     agent_normalizing_factors.append(preprocessing_res[1])
-    #     X[agent_name] = preprocessing_res[2]
-    # print("Number of used samples : ", X.shape[0])
-    # print("Agent Normalizing Factors : ", agent_normalizing_factors)
-    # print("Agent Offset : ", agent_offset)
-    # print("Number of used samples : ", X.shape[0])
-
     # Construct optimizer
-    bounds = config["bounds"]
-    params = config["params"]
+    params = [1 for _ in range(len(config["agents"]))]
+    bounds = [[0, 1000] for _ in range(len(config["agents"]))]
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
         u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
         cons.append(l)
         cons.append(u)
-    func = lambda params: negativeLikelihood(
-        params,
-        sub_X,
-        sub_Y,
-        config["agents"],
-        return_trajectory=False
-    )
-    subset_index = np.arange(window, len(Y) - window)
-    all_coeff = []
-    all_correct_rate = []
-    all_success = []
-    at_cross_index = np.where(X.at_cross.values)[0] if "at_cross" in X.columns.values else []
-    at_cross_accuracy = []
-    # Moving the window
-    for index in subset_index:
-        print("Window at {}...".format(index))
-        sub_X = X[index - window:index + window]
-        sub_Y = Y[index - window:index + window]
-        # optimization in the window
-        is_success = False
-        retry_num = 0
-        while not is_success and retry_num < config["maximum_try"]:
-            res = scipy.optimize.minimize(
-                func,
-                x0 = params,
-                method="SLSQP",
-                bounds=bounds,
-                tol=1e-5,
-                constraints = cons
+    # Load trajectory data
+    trajectory_data = readTransitionData(config["trajectory_data_filename"])
+    trajectory_shapes = [each[3] if isinstance(each[3], list) else each[3][-1] for each in trajectory_data] # Unknown BUG:
+    trajectory_length = [min([each[1] - each[0] + 1, each[2] - each[1]]) for each in trajectory_shapes]
+    trajectory_length = min(trajectory_length)
+    print("Num of trajectories : ", len(trajectory_shapes))
+    print("Trajectory length : ", trajectory_length)
+    window_index = np.arange(1, 2*trajectory_length)
+    # (num of trajectories, num of windows, num of agents)
+    trajectory_weight = np.zeros((len(trajectory_data), len(window_index), len(config["agents"])))
+    # (num of trajectories, num of windows)
+    trajectory_cr = np.zeros((len(trajectory_data), len(window_index)))
+    # For each trajectory, estimate agent weights through sliding windows
+    for trajectory_index, trajectory in enumerate(trajectory_data):
+        start_index = trajectory_shapes[trajectory_index][1] - trajectory_length - trajectory_shapes[trajectory_index][0]
+        end_index = trajectory_shapes[trajectory_index][1] + trajectory_length - trajectory_shapes[trajectory_index][0]
+        X = trajectory[1].iloc[start_index:end_index]
+        Y = trajectory[2].iloc[start_index:end_index]
+        num_samples = len(Y)
+        print("-"*15)
+        print("Trajectory ", trajectory[0])
+        # for each window
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            sub_X = X[
+                    centering_point - window if centering_point - window >= 0 else 0
+                    :
+                    centering_point + window if centering_point + window < num_samples else num_samples
+                    ]
+            sub_Y = Y[
+                    centering_point - window if centering_point - window >= 0 else 0
+                    :
+                    centering_point + window if centering_point + window < num_samples else num_samples
+                    ]
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                sub_X,
+                sub_Y,
+                config["agents"],
+                return_trajectory=False
             )
-            is_success = res.success
-            if not is_success:
-                print("Fail, retrying...")
-                retry_num += 1
-        all_success.append(is_success)
-        # Correct rate
-        _, estimated_prob = negativeLikelihood(
-            res.x,
-            sub_X,
-            sub_Y,
-            config["agents"],
-            return_trajectory = True
-        )
-        # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-        estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
-        true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
-        correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-        all_correct_rate.append(correct_rate)
-        # The coefficient
-        all_coeff.append(res.x)
-        # Coefficient and accuracy for decision point
-        if index in at_cross_index:
-            at_cross_accuracy.append((index, res.x, correct_rate))
-    print("Average Coefficient: {}".format(np.mean(all_coeff, axis=0)))
-    print("Average Correct Rate: {}".format(np.mean(all_correct_rate)))
-    print("Average Correct Rate (Decision Position): {}".format(np.mean([each[2] for each in at_cross_accuracy])))
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0 = params,
+                    method = "SLSQP",
+                    bounds = bounds,
+                    tol = 1e-5,
+                    constraints = cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            trajectory_weight[trajectory_index, centering_index, :] = res.x
+            # correct rate in the window
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                sub_X,
+                sub_Y,
+                config["agents"],
+                return_trajectory = True
+            )
+            # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+            true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            trajectory_cr[trajectory_index, centering_index] = correct_rate
+    # Print out results and save data
+    print("Average Correct Rate: {}".format(np.nanmean(trajectory_cr, axis=0)))
+    avg_agent_weight = np.nanmean(trajectory_weight, axis=0)
+    print("Estimated label : ", [_estimationLabeling(each, config["agents"]) for each in avg_agent_weight])
     # Save estimated agent weights
-    if save_res:
-        type = "_".join(config['agents'])
-        np.save("{}-agent_weight-window{}-{}-new_agent.npy".format(config["method"], window, type), all_coeff)
-        np.save("{}-is_success-window{}-{}-new_agent.npy".format(config["method"], window, type), all_success)
-        np.save("{}-at_cross_accuracy-window{}-{}-new_agent.npy".format(config["method"], window, type), at_cross_accuracy)
+    np.save("../common_data/transition/{}-agent_weight.npy".format(transition_type), trajectory_weight)
+    np.save("../common_data/transition/{}-cr.npy".format(transition_type), trajectory_cr)
 
 
 def correlationAnalysis(config):
-    # TODO: ============================================
-    # TODO: Correlation between estimated labels and hand-crafted labels
-    # TODO: ============================================
-    pass
+    # Read trial data
+    temp_trial_data = readTrialData(config["trial_data_filename"])
+    trial_num = len(temp_trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = range(trial_num)
+    if config["trial_num"] is not None:
+        if config["trial_num"] < trial_num:
+            trial_index = np.random.choice(range(trial_num), config["trial_num"], replace = False)
+    trial_data = [temp_trial_data[each] for each in trial_index]
+    label_list = ["label_local_graze", "label_local_graze_noghost",
+                  "label_global_optimal", "label_global_notoptimal", "label_global",
+                  "label_evade",
+                  "label_suicide",
+                  "label_true_accidental_hunting",
+                  "label_true_planned_hunting"]
+    trial_weight = []
+    trial_cr = []
+    handcrafted_labels = []
+    estimated_labels = []
+    # Construct optimizer
+    params = [1 for _ in range(len(config["agents"]))]
+    bounds = [[0, 1000] for _ in range(len(config["agents"]))]
+    cons = []  # construct the bounds in the form of constraints
+    for par in range(len(bounds)):
+        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+        cons.append(l)
+        cons.append(u)
+    for trial_index, each in enumerate(trial_data):
+        print("-"*15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print(trial_name)
+        # Hand-crafted label
+        temp_handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
+        handcrafted_labels.append(temp_handcrafted_label)
+        # Estimating label through moving window analysis
+        window = config["trial_window"]
+        print("Trial length : ", trial_length)
+        window_index = np.arange(1, trial_length - 1)
+        # (num of windows, num of agents)
+        temp_weight = np.zeros((len(window_index), len(config["agents"])))
+        # (1, num of windows)
+        temp_cr = np.zeros((len(window_index), ))
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            sub_X = X[
+                    centering_point - window if centering_point - window >= 0 else 0
+                    :
+                    centering_point + window if centering_point + window < trial_length else trial_length
+                    ]
+            sub_Y = Y[
+                    centering_point - window if centering_point - window >= 0 else 0
+                    :
+                    centering_point + window if centering_point + window < trial_length else trial_length
+                    ]
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                sub_X,
+                sub_Y,
+                config["agents"],
+                return_trajectory=False
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            temp_weight[centering_index, :] = res.x
+            trial_weight.append(temp_weight)
+            # correct rate in the window
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                sub_X,
+                sub_Y,
+                config["agents"],
+                return_trajectory=True
+            )
+            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+            true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            temp_cr[centering_index] = correct_rate
+        trial_cr.append(temp_cr)
+        temp_estimated_label = [_estimationLabeling(each, config["agents"]) for each in temp_weight]
+        estimated_labels.append(temp_estimated_label)
+        print("Average correct rate for trial : ", np.nanmean(temp_cr))
+    print("Average correct rate for all : ", np.nanmean([np.nanmean(each) for each in trial_cr]))
+    # Save data
+    save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
+    np.save("../common_data/trial/{}-estimated_labels.npy".format(save_base), estimated_labels)
+    np.save("../common_data/trial/{}-handcrafted_labels.npy".format(save_base), handcrafted_labels)
+    np.save("../common_data/trial/{}-trial_cr.npy".format(save_base), trial_cr)
+
+
 
 # ===================================
 #         VISUALIZATION
@@ -599,6 +707,37 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
     plt.show()
 
 
+def _label2Index(labels):
+    label_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    label_val = copy.deepcopy(labels)
+    for index, each in enumerate(label_val):
+        if each is not None:
+            label_val[index] = label_list.index(each)
+        else:
+            label_val[index] = None
+    return label_val
+
+
+def computeCorrelation(config):
+    estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True)
+    handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
+    trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
+    trial_num = len(estimated_labels)
+    correlation = []
+    for index in range(trial_num):
+        estimated = np.array(_label2Index(estimated_labels[index]))
+        handcrafted = np.array(_label2Index(handcrafted_labels[index]))
+        handcrafted = handcrafted[1:len(handcrafted) - 1]  # TODO: check this; because of the moving window
+        # what about None value
+        not_none_index = np.where(handcrafted != None)
+        estimated = np.array(estimated)[not_none_index]
+        handcrafted = np.array(handcrafted)[not_none_index]
+        matching_rate = np.sum(estimated == handcrafted) / len(estimated)
+        # correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
+        correlation.append(matching_rate)
+    print("Matching rate : ", correlation)
+
+
 
 
 
@@ -610,29 +749,45 @@ if __name__ == '__main__':
     # Configurations
     pd.options.mode.chained_assignment = None
     config = {
+        # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
+        "agents": ["local", "global", "pessimistic", "suicide", "planned_hunting"],
+        # ==================================================================================
+        #                       For Sliding Window Analysis
         # Filename
-        # "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
-        "data_filename": "../common_data/transition/local_to_evade-with_Q.pkl",
-        # The number of samples used for estimation: None for using all the data
-        "clip_samples": 200,
+        "trajectory_data_filename": "../common_data/transition/global_to_local-with_Q.pkl",
         # The window size
-        "window": 10,
+        "window": 5,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
-        # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
-        "loss-func": "l2-norm",
-        # Initial guess of parameters
-        "params": [1, 1, 1],
-        # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
-        # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["local", "global", "pessimistic"]
+        # ==================================================================================
+
+        # ==================================================================================
+        #                       For Correlation Analysis
+        # Filename
+        "trial_data_filename": "../common_data/trial/5_trial_data-with_Q.pkl",
+        # The number of trials used for analysis
+        "trial_num" : None,
+        # Window size for correlation analysis
+        "trial_window" : 5,
+        # ==================================================================================
+
+        # ==================================================================================
+        #                       For Experimental Results Visualization
+        "estimated_label_filename" : "../common_data/trial/5_trial_data-with_Q-estimated_labels.npy",
+        "handcrafted_label_filename": "../common_data/trial/5_trial_data-with_Q-handcrafted_labels.npy",
+        "trial_cr_filename": "../common_data/trial/5_trial_data-with_Q-trial_cr.npy",
     }
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config, save_res = True)
+    # movingWindowAnalysis(config)
 
-    # ============ PLOTTING =============
+    # ============ Correlation =============
+    # correlationAnalysis(config)
+
+    # ============ VISUALIZATION =============
+
+    computeCorrelation(config)
+
     # Load the log of moving window analysis; log files are created in the analysis
     # agent_weight = np.load("MLE-agent_weight-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
     # is_success = np.load("MLE-is_success-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")

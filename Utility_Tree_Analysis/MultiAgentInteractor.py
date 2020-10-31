@@ -76,11 +76,6 @@ class MultiAgentInteractor:
         self.local_fruit_attractive_thr = 5
         self.local_ghost_repulsive_thr = 5
         # # Configuration (for optimistic agent)
-        # self.optimistic_depth = 5
-        # self.optimistic_ghost_attractive_thr = 5
-        # self.optimistic_fruit_attractive_thr = 5
-        # self.optimistic_ghost_repulsive_thr = 5
-        # Configuration (for pessimistic agent)
         self.pessimistic_depth = 5
         self.pessimistic_ghost_attractive_thr = 5
         self.pessimistic_fruit_attractive_thr = 5
@@ -156,7 +151,7 @@ class MultiAgentInteractor:
         )
         # Estimate the moving direction
         global_result = self.global_agent.nextDir(return_Q = True)
-        global_Q =global_result[1]
+        global_Q = global_result[1]
         return global_Q
 
 

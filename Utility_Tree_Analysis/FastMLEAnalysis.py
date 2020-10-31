@@ -15,10 +15,11 @@ import numpy as np
 import scipy.optimize
 from sklearn.metrics import log_loss
 import matplotlib.pyplot as plt
+import copy
 
 import sys
 sys.path.append("./")
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber, makeChoice
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from PathTreeAgent import PathTree
 from SuicideAgent import SuicideAgent
 from PlannedHuntingAgent import PlannedHuntingAgent
@@ -134,8 +135,10 @@ def readTestingDatasetFromPkl(filename, trial_name = None, only_necessary = Fals
 #       INDIVIDUAL ESTIMATION
 # ===================================
 def _readData(filename):
+    '''
+    Read data for pre-estimation.
+    '''
     with open(filename, "rb") as file:
-        # file.seek(0) # deal with the error that "could not find MARK"
         all_data = pickle.load(file)
     all_data = all_data.reset_index()
     print()
@@ -153,8 +156,8 @@ def _readAuxiliaryData():
 
 def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount):
     # Randomness and laziness
-    randomness_coeff = 0.0
-    laziness_coeff = 0.0
+    randomness_coeff = 1.0
+    laziness_coeff = 1.0
     # Configuration (for global agent)
     global_depth = 15
     ignore_depth = 5
@@ -177,24 +180,22 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_fruit_attractive_thr = 5
     pessimistic_ghost_repulsive_thr = 5
     # Configuration (for suicide agent)
-    suicide_depth = 5
-    suicide_ghost_attractive_thr = 5
-    suicide_fruit_attractive_thr = 5
-    suicide_ghost_repulsive_thr = 5
+    suicide_depth = 10
+    suicide_ghost_attractive_thr = 10
+    suicide_fruit_attractive_thr = 10
+    suicide_ghost_repulsive_thr = 10
     # Configuration (flast direction)
     last_dir = all_data.pacman_dir.values
     last_dir[np.where(pd.isna(last_dir))] = None
     # Direction sstimation
     global_estimation = []
     local_estimation = []
-    optimistic_estimation = []
     pessimistic_estimation = []
     suicide_estimation = []
     planned_hunting_estimation = []
     # Q-value (utility)
     global_Q = []
     local_Q = []
-    optimistic_Q = []
     pessimistic_Q = []
     suicide_Q = []
     planned_hunting_Q = []
@@ -211,7 +212,6 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
         if cur_pos not in adjacent_data:
             global_Q.append([0.0, 0.0, 0.0, 0.0])
             local_Q.append([0.0, 0.0, 0.0, 0.0])
-            optimistic_Q.append([0.0, 0.0, 0.0, 0.0])
             pessimistic_Q.append([0.0, 0.0, 0.0, 0.0])
             suicide_Q.append([0.0, 0.0, 0.0, 0.0])
             planned_hunting_Q.append([0.0, 0.0, 0.0, 0.0])
@@ -253,7 +253,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_attractive_thr=global_fruit_attractive_thr,
             ghost_repulsive_thr=global_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
-            laziness_coeff = laziness_coeff
+            laziness_coeff = laziness_coeff,
+            reward_coeff = 1.0,
+            risk_coeff = 0.0
         )
         global_result = global_agent.nextDir(return_Q=True)
         global_estimation.append(global_result[0])
@@ -271,41 +273,18 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_pos,
             ghost_status,
             last_dir[index],
-            depth=local_depth,
+            depth = local_depth,
             ghost_attractive_thr = local_ghost_attractive_thr,
             fruit_attractive_thr = local_fruit_attractive_thr,
             ghost_repulsive_thr = local_ghost_repulsive_thr,
-            randomness_coeff = randomness_coeff,
-            laziness_coeff = laziness_coeff
-        )
-        local_result = local_agent.nextDir(return_Q=True)
-        local_estimation.append(local_result[0])
-        local_Q.append(local_result[1])
-        # Optimistic agent
-        optimistic_agent = PathTree(
-            adjacent_data,
-            locs_df,
-            reward_amount,
-            cur_pos,
-            energizer_data,
-            bean_data,
-            ghost_data,
-            reward_type,
-            fruit_pos,
-            ghost_status,
-            last_dir[index],
-            depth = optimistic_depth,
-            ghost_attractive_thr = optimistic_ghost_attractive_thr,
-            fruit_attractive_thr = optimistic_fruit_attractive_thr,
-            ghost_repulsive_thr = optimistic_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
             laziness_coeff = laziness_coeff,
             reward_coeff = 1.0,
             risk_coeff = 0.0
         )
-        optimistic_result = optimistic_agent.nextDir(return_Q=True)
-        optimistic_estimation.append(optimistic_result[0])
-        optimistic_Q.append(optimistic_result[1])
+        local_result = local_agent.nextDir(return_Q=True)
+        local_estimation.append(local_result[0])
+        local_Q.append(local_result[1])
         # Pessimistic agent
         pessimistic_agent = PathTree(
             adjacent_data,
@@ -319,10 +298,10 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             fruit_pos,
             ghost_status,
             last_dir[index],
-            depth=pessimistic_depth,
-            ghost_attractive_thr=pessimistic_ghost_attractive_thr,
-            fruit_attractive_thr=pessimistic_fruit_attractive_thr,
-            ghost_repulsive_thr=pessimistic_ghost_repulsive_thr,
+            depth = pessimistic_depth,
+            ghost_attractive_thr = pessimistic_ghost_attractive_thr,
+            fruit_attractive_thr = pessimistic_fruit_attractive_thr,
+            ghost_repulsive_thr = pessimistic_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
             laziness_coeff = laziness_coeff,
             reward_coeff = 0.0,
@@ -381,9 +360,6 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     all_data["local_Q"] = np.tile(np.nan, num_samples)
     all_data["local_Q"] = all_data["local_Q"].apply(np.array)
     all_data["local_Q"] = local_Q
-    all_data["optimistic_Q"] = np.tile(np.nan, num_samples)
-    all_data["optimistic_Q"] = all_data["optimistic_Q"].apply(np.array)
-    all_data["optimistic_Q"] = optimistic_Q
     all_data["pessimistic_Q"] = np.tile(np.nan, num_samples)
     all_data["pessimistic_Q"] = all_data["pessimistic_Q"].apply(np.array)
     all_data["pessimistic_Q"] = pessimistic_Q
@@ -397,8 +373,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     print("Direction Estimation :")
     print("\n")
     print("Q value :")
-    print(all_data[["global_Q", "local_Q", "optimistic_Q",
-                    "pessimistic_Q", "suicide_Q", "planned_hunting_Q"]].iloc[:5])
+    print(all_data[["global_Q", "local_Q", "pessimistic_Q", "suicide_Q", "planned_hunting_Q"]].iloc[:5])
     return all_data
 
 
@@ -409,12 +384,9 @@ def preEstimation():
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/1-2-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl",
-        "../common_data/global_data.pkl",
-        "../common_data/local_data.pkl",
-        "../common_data/global_testing_data.pkl",
-        "../common_data/local_testing_data.pkl"
+        # "../common_data/status/accidental_hunting_status.pkl",
+        # "../common_data/partial_data_with_reward_label_cross.pkl",
+        "../common_data/trial/500_trial_data.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -423,14 +395,22 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}-new_agent.pkl".format(filename), "wb") as file:
+        with open("../common_data/trial/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
             pickle.dump(all_data, file)
+        print("Save to ", "../common_data/trial/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]))
     pd.options.mode.chained_assignment = "warn"
 
 
 # ===================================
 #         FAST OPTIMIZATION
 # ===================================
+def _makeChoice(prob):
+    copy_estimated = copy.deepcopy(prob)
+    if np.any(prob) < 0:
+        available_dir_index = np.where(prob != 0)
+        copy_estimated[available_dir_index] = copy_estimated[available_dir_index] - np.min(copy_estimated[available_dir_index]) + 1
+    return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
+
 def _preProcessingQ(Q_value, last_dir, randomness_coeff = 1.0):
     #TODO: new pre-processing from incremental MLE aaalysis
     '''
@@ -502,7 +482,7 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
         for each_agent in range(len(agents_list)):
             agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
     dir_Q_value = agent_Q_value @ agent_weight
-    true_dir = true_prob.apply(lambda x: makeChoice(x)).values
+    true_dir = true_prob.apply(lambda x: _makeChoice(x)).values
     # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
     exp_prob = np.exp(dir_Q_value)
     for each_sample in range(num_samples):
@@ -535,17 +515,19 @@ def MLE(config):
         num_samples = all_data.shape[0] if config["clip_samples"] > all_data.shape[0] else config["clip_samples"]
     all_data = all_data.iloc[:num_samples]
     true_prob = true_prob.iloc[:num_samples]
-    # pre-processing of Q-value
-    agent_normalizing_factors = []
-    agent_offset = []
-    for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
-        preprocessing_res = _preProcessingQ(all_data[agent_name], last_dir = all_data.pacman_dir.values, randomness_coeff = 1.0)
-        agent_offset.append(preprocessing_res[0])
-        agent_normalizing_factors.append(preprocessing_res[1])
-        all_data[agent_name] = preprocessing_res[2]
-    print("Number of used samples : ", all_data.shape[0])
-    print("Agent Normalizing Factors : ", agent_normalizing_factors)
-    print("Agent Offset : ", agent_offset)
+
+    # # pre-processing of Q-value
+    # agent_normalizing_factors = []
+    # agent_offset = []
+    # for agent_name in ["{}_Q".format(each) for each in config["agents"]]:
+    #     preprocessing_res = _preProcessingQ(all_data[agent_name], last_dir = all_data.pacman_dir.values, randomness_coeff = 1.0)
+    #     agent_offset.append(preprocessing_res[0])
+    #     agent_normalizing_factors.append(preprocessing_res[1])
+    #     all_data[agent_name] = preprocessing_res[2]
+    # print("Number of used samples : ", all_data.shape[0])
+    # print("Agent Normalizing Factors : ", agent_normalizing_factors)
+    # print("Agent Offset : ", agent_offset)
+
     # Optimization
     bounds = config["bounds"]
     params = config["params"]
@@ -601,7 +583,7 @@ def MLE(config):
     )
     true_dir = np.array([np.argmax(each) for each in testing_true_prob])
     # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-    estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
+    estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
     correct_rate = np.sum(estimated_dir == true_dir)
     print("Correct rate on testing data: ", correct_rate / len(testing_true_prob))
 
@@ -684,7 +666,7 @@ def movingWindowAnalysis(config, save_res = True):
             return_trajectory = True
         )
         # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
-        estimated_dir = np.array([makeChoice(each) for each in estimated_prob])
+        estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
         true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
         correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
         all_correct_rate.append(correct_rate)
@@ -743,7 +725,7 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    # preEstimation()
+    preEstimation()
 
 
     # Configurations
@@ -751,9 +733,9 @@ if __name__ == '__main__':
     config = {
         # Filename
         # "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
-        "data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
+        "data_filename": "../common_data/status/accidental_hunting_status-with_Q.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/partial_data_with_reward_label_cross.pkl-new_agent.pkl",
+        "testing_data_filename": "../common_data/status/accidental_hunting_status-with_Q.pkl",
         # Method: "MLE" or "MEE"
         "method": "MLE",
         # Only making decisions when necessary
@@ -769,13 +751,13 @@ if __name__ == '__main__':
         # Initial guess of parameters
         "params": [1, 1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000]], # TODO: the bound...
+        "bounds": [[0, 1000], [0, 1000], [0, 1000]],
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
         "agents": ["local", "global", "pessimistic"]
     }
 
     # ============ ESTIMATION =============
-    MLE(config)
+    # MLE(config)
 
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config, save_res = True)
