@@ -384,9 +384,9 @@ def preEstimation():
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        # "../common_data/status/accidental_hunting_status.pkl",
+        "../common_data/status/all_accidental_hunting_data.pkl",
         # "../common_data/partial_data_with_reward_label_cross.pkl",
-        "../common_data/trial/500_trial_data.pkl",
+        # "../common_data/trial/500_trial_data.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -395,9 +395,9 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("../common_data/trial/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
+        with open("../common_data/status/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
             pickle.dump(all_data, file)
-        print("Save to ", "../common_data/trial/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]))
+        print("Save to ", "../common_data/status/{}-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]))
     pd.options.mode.chained_assignment = "warn"
 
 
@@ -725,7 +725,7 @@ def plotWeightVariation(all_agent_weight, window, is_success = None):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    preEstimation()
+    # preEstimation()
 
 
     # Configurations
@@ -733,9 +733,9 @@ if __name__ == '__main__':
     config = {
         # Filename
         # "data_filename": "../common_data/1-1-Omega-15-Jul-2019-1.csv-trial_data_with_label.pkl-new_agent.pkl",
-        "data_filename": "../common_data/status/accidental_hunting_status-with_Q.pkl",
+        "data_filename": "../common_data/status/all_accidental_hunting_data-with_Q.pkl",
         # Testing data filename
-        "testing_data_filename": "../common_data/status/accidental_hunting_status-with_Q.pkl",
+        "testing_data_filename": "../common_data/status/all_accidental_hunting_data-with_Q.pkl",
         # Method: "MLE" or "MEE"
         "method": "MLE",
         # Only making decisions when necessary
@@ -749,15 +749,15 @@ if __name__ == '__main__':
         # Loss function (required when method = "MEE"): "l2-norm" or "cross-entropy"
         "loss-func": "l2-norm",
         # Initial guess of parameters
-        "params": [1, 1, 1],
+        "params": [1, 1],
         # Bounds for optimization
-        "bounds": [[0, 1000], [0, 1000], [0, 1000]],
+        "bounds": [[0, 1000], [0, 1000]],
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["local", "global", "pessimistic"]
+        "agents": ["local", "global"]
     }
 
     # ============ ESTIMATION =============
-    # MLE(config)
+    MLE(config)
 
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config, save_res = True)

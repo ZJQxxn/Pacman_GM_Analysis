@@ -344,42 +344,26 @@ def extractStatus():
     print("Finished writing accidental hunting status {}.".format(accident_data.shape[0]))
 
 
+def extractAccidentalHunting():
+    # Configurations
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    # Read data
+    with open(data_filename, "rb") as file:
+        data = pickle.load(file)
+    all_data_with_label = data["df_total"]
+    all_data_with_label = all_data_with_label.sort_index()
+    accident_index = np.concatenate(data["cons_list_accident"])
+    accident_index = np.random.choice(accident_index, 20000, replace=False)
+    print("Accident data num : ", len(accident_index))
+    accident_data = all_data_with_label.iloc[accident_index].reset_index(drop=True)
+    with open("./status/all_accidental_hunting_data.pkl", "wb") as file:
+        pickle.dump(accident_data, file)
+
+
 
 
 if __name__ == '__main__':
-    # print(_consecutiveLengh([1,2,3,5,6,7,9,10,11]))
-    # print(_consecutiveLengh([]))
-
-    extractStatus()
-
-
-    # _extractAllData()
-    # with open("/home/qlyang/Documents/pacman/constants/all_data.pkl", "rb") as file:
-    #     data = pickle.load(file)
-    #     print(list(data.keys()))
-    # all_data = data["df_total"]
-    # print("Columns : ", all_data.columns.values)
-    # print("Data Shape : ", all_data.shape)
-    # trial_list = np.unique(all_data.file.values)
-    # print("Trial Num : ", len(trial_list))
-    # print("Trial Sample : ", trial_list[:3])
     #
-    # accident = data["cons_list_accident"]
-    # print("Accident length : ", len(accident))
-    # print(accident.shape)
-    # print(accident[:10])
+    # extractStatus()
 
-    # with open("status/planned_hunting_status.pkl", "rb") as file:
-    #     data = pickle.load(file)
-    #     wo = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == True)[0]][["file", "origin_index","energizers", "label_planning"]]
-    #     w = data.iloc[np.where(data.energizers.apply(lambda x: isinstance(x, float)).values == False)[0]][["file", "origin_index","energizers", "label_planning"]]
-    #     print()
-    #     print()
-
-    # with open("status/suicide_status.pkl", "rb") as file:
-    #     data = pickle.load(file)
-    #     a = np.sum(data["ifscared1"].values >= 3)
-    #     b = np.sum(data["ifscared2"].values >= 3)
-    #
-    #     print()
-
+    extractAccidentalHunting()

@@ -16,6 +16,7 @@ import scipy.optimize
 import scipy.stats
 import matplotlib.pyplot as plt
 import copy
+import seaborn
 
 import sys
 sys.path.append("./")
@@ -74,13 +75,18 @@ def readTransitionData(filename):
         start_index = 0
         while pd.isna(true_prob[start_index]):
             start_index += 1
+            if start_index == len(true_prob):
+                break
+        if start_index == len(true_prob):
+            print("Moving direction of trajectory {} is all nan.".format(name))
+            continue
         if start_index > 0:
             true_prob[:start_index+1] = true_prob[start_index+1]
         for index in range(1, true_prob.shape[0]):
             if pd.isna(true_prob[index]):
                 true_prob[index] = true_prob[index - 1]
         true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
-        trajectory_data.append([name, group, true_prob, group.iloc[0]["trajectory shape"]])
+        trajectory_data.append([name, group, true_prob, group.iloc[0]["trajectory_shape"]])
     temp = trajectory_data[0]
     return trajectory_data
 
@@ -112,6 +118,11 @@ def readTrialData(filename):
         start_index = 0
         while pd.isna(true_prob[start_index]):
             start_index += 1
+            if start_index == len(true_prob):
+                break
+        if start_index == len(true_prob):
+            print("Moving direciton of trial {} is all nan.".format(each))
+            continue
         if start_index > 0:
             true_prob[:start_index + 1] = true_prob[start_index + 1]
         for index in range(1, true_prob.shape[0]):
@@ -503,7 +514,7 @@ def movingWindowAnalysis(config):
         Y = trajectory[2].iloc[start_index:end_index]
         num_samples = len(Y)
         print("-"*15)
-        print("Trajectory ", trajectory[0])
+        print("Trajectory {} : ".format(trajectory_index), trajectory[0])
         # for each window
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
@@ -676,34 +687,137 @@ def correlationAnalysis(config):
 # ===================================
 #         VISUALIZATION
 # ===================================
-def plotWeightVariation(all_agent_weight, window, is_success = None):
+def plotWeightVariation(config, plot_sem = False, need_normalization = False):
     # Determine agent names
-    agent_name = ["local", "global", "pessimistic", "planned_hunting", "suicide"]
-    agent_color = ["red", "blue", "green", "cyan", "magenta", "black"]
+    agent_list = config["agent_list"]
+    agent_color = {
+        "local":"red",
+        "global":"blue",
+        "pessimistic":"green",
+        "suicide":"cyan",
+        "planned_hunting":"magenta"
+    }
+    # Read data
+    local2global_weight = np.load(config["local_to_global_agent_weight"])
+    local2global_cr = np.load(config["local_to_global_cr"])
+    local2evade_weight = np.load(config["local_to_evade_agent_weight"])
+    local2evade_cr = np.load(config["local_to_evade_cr"])
+    global2local_weight = np.load(config["global_to_local_agent_weight"])
+    global2local_cr = np.load(config["global_to_local_cr"])
+
     # Plot weight variation
-    all_coeff = np.array(all_agent_weight)
-    if is_success is not None:
-        for index in range(1, is_success.shape[0]):
-            if not is_success[index]:
-                all_agent_weight[index] = all_agent_weight[index - 1]
-    # Noamalize
-    # all_coeff = all_coeff / np.max(all_coeff)
-    for index in range(all_coeff.shape[0]):
-        all_coeff[index] = all_coeff[index] / np.sum(all_coeff[index])
-        # all_coeff[index] = all_coeff[index] / np.linalg.norm(all_coeff[index])
-    for index in range(5):
-        plt.plot(all_coeff[:, index], color = agent_color[index], ms = 3, lw = 5,label = agent_name[index])
-    plt.ylabel("Agent Weight ($\\beta$)", fontsize=20)
-    plt.yticks(fontsize = 15)
-    plt.xlim(0, all_coeff.shape[0] - 1)
-    x_ticks = list(range(0, all_coeff.shape[0], 10))
-    if (all_coeff.shape[0] - 1) not in x_ticks:
-        x_ticks.append(all_coeff.shape[0] - 1)
+    plt.subplot(1 ,3, 1)
+    agent_name = agent_list[0]
+    plt.title("Local $\\rightarrow$ Global (avg cr = {avg:.3f})".format(avg = np.nanmean(local2global_cr)), fontsize = 20)
+    avg_local2global_weight = np.nanmean(local2global_weight, axis = 0)
+    # normalization
+    if need_normalization:
+        for index in range(avg_local2global_weight.shape[0]):
+            avg_local2global_weight[index, :]  = avg_local2global_weight[index, :] / np.max(avg_local2global_weight[index, :])
+            local2global_weight[:, index, :] = local2global_weight[:, index, :] / np.max(local2global_weight[:, index, :])
+    sem_local2global_weight  = scipy.stats.sem(local2global_weight, axis=0, nan_policy = "omit")
+    for index in range(len(agent_name)):
+        plt.plot(avg_local2global_weight[:, index], color = agent_color[agent_name[index]], ms = 3, lw = 5,label = agent_name[index])
+        if plot_sem:
+            plt.fill_between(
+                np.arange(0, len(avg_local2global_weight)),
+                avg_local2global_weight[:, index] - sem_local2global_weight[:, index],
+                avg_local2global_weight[:, index] + sem_local2global_weight[:, index],
+                # color="#dcb2ed",
+                color=agent_color[agent_name[index]],
+                alpha=0.3,
+                linewidth=4
+            )
+    plt.ylabel("Normalized Agent Weight", fontsize=20)
+    plt.xlim(0, avg_local2global_weight.shape[0] - 1)
+    centering_point = (len(avg_local2global_weight) - 1) / 2
+    x_ticks = [str(int(each)) for each in np.arange(0-centering_point, 0, 1)]
+    x_ticks.append("$\\mathbf{c}$")
+    x_ticks.extend([str(int(each)) for each in np.arange(1, len(avg_local2global_weight)-centering_point, 1)])
+    if (avg_local2global_weight.shape[0] - 1) not in x_ticks:
+        x_ticks.append(avg_local2global_weight.shape[0] - 1)
     x_ticks = np.array(x_ticks)
-    plt.xticks(x_ticks, x_ticks + window, fontsize=20)
-    plt.xlabel("Time Step", fontsize = 20)
+    plt.xticks(np.arange(len(avg_local2global_weight)), x_ticks, fontsize=15)
+    plt.xlabel("Time Step", fontsize = 15)
     plt.yticks(fontsize=15)
-    plt.legend(fontsize=15, ncol=6)
+    plt.ylim(0.1, 1.1)
+    plt.legend(loc = "lower center", fontsize=15, ncol=len(agent_name))
+    # plt.show()
+
+    plt.subplot(1 ,3, 2)
+    agent_name = agent_list[1]
+    plt.title("Local $\\rightarrow$ Evade  (avg cr = {avg:.3f})".format(avg = np.nanmean(local2evade_cr)), fontsize = 20)
+    avg_local2evade_weight = np.nanmean(local2evade_weight, axis=0)
+    # normalization
+    if need_normalization:
+        for index in range(avg_local2evade_weight.shape[0]):
+            avg_local2evade_weight[index, :] = avg_local2evade_weight[index, :] / np.max(avg_local2evade_weight[index, :])
+            local2evade_weight[:, index, :] = local2evade_weight[:, index, :] / np.max(local2evade_weight[:, index, :])
+    sem_local2evade_weight = scipy.stats.sem(local2evade_weight, axis=0, nan_policy = "omit")
+    for index in range(len(agent_name)):
+        plt.plot(avg_local2evade_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5, label=agent_name[index])
+        if plot_sem:
+            plt.fill_between(
+                np.arange(0, len(avg_local2evade_weight)),
+                avg_local2evade_weight[:, index] - sem_local2evade_weight[:, index],
+                avg_local2evade_weight[:, index] + sem_local2evade_weight[:, index],
+                # color="#dcb2ed",
+                color=agent_color[agent_name[index]],
+                alpha=0.3,
+                linewidth=4
+            )
+    # plt.ylabel("Agent Weight ($\\beta$)", fontsize=15)
+    plt.xlim(0, avg_local2evade_weight.shape[0] - 1)
+    centering_point = (len(avg_local2evade_weight) - 1) / 2
+    x_ticks = [str(int(each)) for each in np.arange(0 - centering_point, 0, 1)]
+    x_ticks.append("$\\mathbf{c}$")
+    x_ticks.extend([str(int(each)) for each in np.arange(1, len(avg_local2evade_weight) - centering_point, 1)])
+    if (avg_local2evade_weight.shape[0] - 1) not in x_ticks:
+        x_ticks.append(avg_local2evade_weight.shape[0] - 1)
+    x_ticks = np.array(x_ticks)
+    plt.xticks(np.arange(len(avg_local2evade_weight)), x_ticks, fontsize=15)
+    plt.xlabel("Time Step", fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.ylim(0.1, 1.1)
+    plt.legend(loc = "lower center", fontsize=15, ncol=len(agent_name))
+    # plt.show()
+
+    plt.subplot(1, 3, 3)
+    agent_name = agent_list[2]
+    plt.title("Global $\\rightarrow$ Local  (avg cr = {avg:.3f})".format(avg = np.nanmean(global2local_cr)), fontsize = 20)
+    avg_global2local_weight = np.nanmean(global2local_weight, axis=0)
+    # normalization
+    if need_normalization:
+        for index in range(avg_global2local_weight.shape[0]):
+            avg_global2local_weight[index, :] = avg_global2local_weight[index, :] / np.max(avg_global2local_weight[index, :])
+            global2local_weight[:, index, :] = global2local_weight[:, index, :] / np.max(global2local_weight[:, index, :])
+    sem_global2local_weight = scipy.stats.sem(global2local_weight, axis=0, nan_policy = "omit")
+    for index in range(len(agent_name)):
+        plt.plot(avg_global2local_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5, label=agent_name[index])
+        if plot_sem:
+            plt.fill_between(
+                np.arange(0, len(avg_global2local_weight)),
+                avg_global2local_weight[:, index] - sem_global2local_weight[:, index],
+                avg_global2local_weight[:, index] + sem_global2local_weight[:, index],
+                # color="#dcb2ed",
+                color=agent_color[agent_name[index]],
+                alpha=0.3,
+                linewidth=4
+            )
+    # plt.ylabel("Agent Weight ($\\beta$)", fontsize=15)
+    plt.xlim(0, avg_global2local_weight.shape[0] - 1)
+    centering_point = (len(avg_global2local_weight) - 1) / 2
+    x_ticks = [str(int(each)) for each in np.arange(0 - centering_point, 0, 1)]
+    x_ticks.append("$\\mathbf{c}$")
+    x_ticks.extend([str(int(each)) for each in np.arange(1, len(avg_global2local_weight) - centering_point, 1)])
+    if (avg_global2local_weight.shape[0] - 1) not in x_ticks:
+        x_ticks.append(avg_global2local_weight.shape[0] - 1)
+    x_ticks = np.array(x_ticks)
+    plt.xticks(np.arange(len(avg_global2local_weight)), x_ticks, fontsize=15)
+    plt.xlabel("Time Step", fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.ylim(0.1, 1.1)
+    plt.legend(loc = "lower center", fontsize=15, ncol=len(agent_name))
     plt.show()
 
 
@@ -723,19 +837,46 @@ def computeCorrelation(config):
     handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
     trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
     trial_num = len(estimated_labels)
-    correlation = []
+    trial_matching_rate = []
+    # trial_correlation = []
     for index in range(trial_num):
         estimated = np.array(_label2Index(estimated_labels[index]))
         handcrafted = np.array(_label2Index(handcrafted_labels[index]))
         handcrafted = handcrafted[1:len(handcrafted) - 1]  # TODO: check this; because of the moving window
         # what about None value
         not_none_index = np.where(handcrafted != None)
-        estimated = np.array(estimated)[not_none_index]
-        handcrafted = np.array(handcrafted)[not_none_index]
-        matching_rate = np.sum(estimated == handcrafted) / len(estimated)
-        # correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
-        correlation.append(matching_rate)
-    print("Matching rate : ", correlation)
+        if len(not_none_index[0]) != 0:
+            estimated = np.array(estimated)[not_none_index]
+            handcrafted = np.array(handcrafted)[not_none_index]
+            matching_rate = np.sum(estimated == handcrafted) / len(estimated)
+            # trial_correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
+            trial_matching_rate.append(matching_rate)
+    print("-"*15)
+    print("Matching rate : ")
+    print("Max : ", np.nanmax(trial_matching_rate))
+    print("Min : ", np.nanmin(trial_matching_rate))
+    print("Median : ", np.nanmedian(trial_matching_rate))
+    print("Average : ", np.nanmean(trial_matching_rate))
+    # print("-" * 15)
+    # print("Correlation : ")
+    # print("Max : ", np.nanmax(trial_correlation))
+    # print("Min : ", np.nanmin(trial_correlation))
+    # print("Median : ", np.nanmedian(trial_correlation))
+    # print("Average : ", np.nanmean(trial_correlation))
+    # histogram
+    plt.title("Label Matching on 500 Trials", fontsize = 20)
+    plt.hist(trial_matching_rate)
+    plt.xlabel("Correct Rate (estimated label = hand-crafted label)", fontsize = 20)
+    plt.xlim(0, 1.0)
+    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
+    plt.ylabel("# of Trials", fontsize=20)
+    plt.yticks(fontsize=20)
+
+    # plt.subplot(1, 2, 2)
+    # plt.hist([each[0] for each in trial_correlation])
+
+    plt.show()
+
 
 
 
@@ -750,7 +891,8 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
     config = {
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
-        "agents": ["local", "global", "pessimistic", "suicide", "planned_hunting"],
+        # "agents": ["local", "global", "pessimistic", "suicide", "planned_hunting"],
+        "agents": ["local", "global"],
         # ==================================================================================
         #                       For Sliding Window Analysis
         # Filename
@@ -764,7 +906,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/5_trial_data-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/500_trial_data-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -773,9 +915,17 @@ if __name__ == '__main__':
 
         # ==================================================================================
         #                       For Experimental Results Visualization
-        "estimated_label_filename" : "../common_data/trial/5_trial_data-with_Q-estimated_labels.npy",
-        "handcrafted_label_filename": "../common_data/trial/5_trial_data-with_Q-handcrafted_labels.npy",
-        "trial_cr_filename": "../common_data/trial/5_trial_data-with_Q-trial_cr.npy",
+        "estimated_label_filename" : "../common_data/trial/500_trial_data-with_Q-estimated_labels.npy",
+        "handcrafted_label_filename": "../common_data/trial/500_trial_data-with_Q-handcrafted_labels.npy",
+        "trial_cr_filename": "../common_data/trial/500_trial_data-with_Q-trial_cr.npy",
+
+        "local_to_global_agent_weight" : "../common_data/transition/relevant_agents/local_to_global-agent_weight.npy",
+        "local_to_global_cr": "../common_data/transition/relevant_agents/local_to_global-cr.npy",
+        "local_to_evade_agent_weight": "../common_data/transition/relevant_agents/local_to_evade-agent_weight.npy",
+        "local_to_evade_cr": "../common_data/transition/relevant_agents/local_to_evade-cr.npy",
+        "global_to_local_agent_weight": "../common_data/transition/relevant_agents/global_to_local-agent_weight.npy",
+        "global_to_local_cr": "../common_data/transition/relevant_agents/global_to_local-cr.npy",
+        "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"]]
     }
 
     # ============ MOVING WINDOW =============
@@ -785,10 +935,5 @@ if __name__ == '__main__':
     # correlationAnalysis(config)
 
     # ============ VISUALIZATION =============
-
-    computeCorrelation(config)
-
-    # Load the log of moving window analysis; log files are created in the analysis
-    # agent_weight = np.load("MLE-agent_weight-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
-    # is_success = np.load("MLE-is_success-window10-local_global_pessimistic_planned_hunting_suicide-new_agent.npy")
-    # plotWeightVariation(agent_weight, config["window"], is_success)
+    # computeCorrelation(config)
+    plotWeightVariation(config, plot_sem = True, need_normalization = True)
