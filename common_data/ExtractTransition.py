@@ -16,16 +16,16 @@ import pickle
 import copy
 
 
-def _extractAllData(trial_num = 2000):
+def _extractAllData(trial_num = 20000):
     # Read data
-    # data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
-    # with open(data_filename, "rb") as file:
-    #     data = pickle.load(file)
-    # all_data_with_label = data["df_total"]
-
-    data_filename = "partial_data_with_reward_label_cross.pkl"
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
     with open(data_filename, "rb") as file:
-        all_data_with_label = pickle.load(file)
+        data = pickle.load(file)
+    all_data_with_label = data["df_total"]
+
+    # data_filename = "partial_data_with_reward_label_cross.pkl"
+    # with open(data_filename, "rb") as file:
+    #     all_data_with_label = pickle.load(file)
 
     all_data_with_label = all_data_with_label.sort_index()
     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_optimal", "label_global_notoptimal", "label_global", "label_evade"]
@@ -61,7 +61,7 @@ def _readLocDistance(filename):
     return dict_locs_df
 
 
-def _findTransitionPoint(state1_indication, state2_indication):
+def _findTransitionPoint(state1_indication, state2_indication, length):
     state1_indication = [int(each) for each in state1_indication.values]
     state2_indication = [int(each) for each in state2_indication.values]
     nums = len(state1_indication)
@@ -95,7 +95,7 @@ def _findTransitionPoint(state1_indication, state2_indication):
                     continue
                 else:
                     break
-            if second_state_count >= 10 and first_state_count >= 10:
+            if second_state_count >= length and first_state_count >= length:
                 # [starting step, centering step, ending step]
                 trajectories.append([
                     each - first_state_count + 1 if each - first_state_count + 1 >= 0 else 0,
@@ -114,15 +114,15 @@ def _local2Global(trial_data):
         lambda x: x.label_global_optimal == 1 or x.label_global_notoptimal == 1 or x.label_global == 1,
         axis = 1
     )
-    trajectory_point = _findTransitionPoint(is_local, is_global)
+    trajectory_point = _findTransitionPoint(is_local, is_global, 15)
     if len(trajectory_point) == 0:
         return None
     else:
         trajectory_data = []
         for trajectory_index, each in enumerate(trajectory_point):
             for index in range(each[0], each[2] + 1):
-                each = np.append(trial_data.iloc[index].values, [trajectory_index, each])
-                trajectory_data.append(each)
+                each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
+                trajectory_data.append(each_step)
     return trajectory_data
 
 
@@ -135,15 +135,15 @@ def _local2Evade(trial_data):
         lambda x: x.label_evade == 1,
         axis=1
     )
-    trajectory_point = _findTransitionPoint(is_local, is_evade)
+    trajectory_point = _findTransitionPoint(is_local, is_evade, 5)
     if len(trajectory_point) == 0:
         return None
     else:
         trajectory_data = []
         for trajectory_index, each in enumerate(trajectory_point):
             for index in range(each[0], each[2] + 1):
-                each = np.append(trial_data.iloc[index].values, [trajectory_index, each])
-                trajectory_data.append(each)
+                each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
+                trajectory_data.append(each_step)
     return trajectory_data
 
 
@@ -156,7 +156,7 @@ def _global2Local(trial_data):
         lambda x: x.label_global_optimal == 1 or x.label_global_notoptimal == 1 or x.label_global == 1,
         axis=1
     )
-    trajectory_point = _findTransitionPoint(is_global, is_local)
+    trajectory_point = _findTransitionPoint(is_global, is_local, 15)
     if len(trajectory_point) == 0:
         return None
     else:

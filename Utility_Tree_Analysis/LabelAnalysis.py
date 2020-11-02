@@ -58,12 +58,18 @@ def readTransitionData(filename):
         all_data = pickle.load(file)
     if "level_0" not in all_data.columns.values:
         all_data = all_data.reset_index(drop = True)
-    # Exclude the (0, 18) position in data
-    normal_data_index = []
     for index in range(all_data.shape[0]):
-        if not isinstance(all_data.global_Q[index], list): # what if no normal Q?
-            normal_data_index.append(index)
-    all_data = all_data.iloc[normal_data_index]
+        if isinstance(all_data.global_Q[index], list): # what if no normal Q?
+            if index == all_data.shape[0] - 1:
+                if isinstance(all_data.global_Q[index - 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index - 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index - 1]
+            else:
+                if isinstance(all_data.global_Q[index+1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index + 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index + 1]
     # Split into trajectories
     trajectory_data = []
     grouped_data = all_data.groupby(["file", "trajectory_index"])
@@ -87,7 +93,7 @@ def readTransitionData(filename):
                 true_prob[index] = true_prob[index - 1]
         true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
         trajectory_data.append([name, group, true_prob, group.iloc[0]["trajectory_shape"]])
-    temp = trajectory_data[0]
+    # temp = trajectory_data[0]
     return trajectory_data
 
 
@@ -101,12 +107,18 @@ def readTrialData(filename):
         all_data = pickle.load(file)
     if "level_0" not in all_data.columns.values:
         all_data = all_data.reset_index(drop=True)
-    # Exclude the (0, 18) position in data
-    normal_data_index = []
     for index in range(all_data.shape[0]):
-        if not isinstance(all_data.global_Q[index], list):  # what if no normal Q?
-            normal_data_index.append(index)
-    all_data = all_data.iloc[normal_data_index]
+        if isinstance(all_data.global_Q[index], list):  # what if no normal Q?
+            if index == all_data.shape[0] - 1:
+                if isinstance(all_data.global_Q[index - 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index - 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index - 1]
+            else:
+                if isinstance(all_data.global_Q[index + 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index + 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index + 1]
     # Split into trials
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -211,16 +223,11 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
         # Extract game status and Pacman status
         each = all_data.iloc[index]
         cur_pos = eval(each.pacmanPos) if isinstance(each.pacmanPos, str) else each.pacmanPos
-        # In case the Pacman position does not exists, e.g. (0, 18)
-        if cur_pos not in adjacent_data:
-            global_Q.append([0.0, 0.0, 0.0, 0.0])
-            local_Q.append([0.0, 0.0, 0.0, 0.0])
-            pessimistic_Q.append([0.0, 0.0, 0.0, 0.0])
-            suicide_Q.append([0.0, 0.0, 0.0, 0.0])
-            planned_hunting_Q.append([0.0, 0.0, 0.0, 0.0])
-            continue
-        else:
-            estimated_index.append(index)
+        # The tunnel
+        if cur_pos == (0, 18):
+            cur_pos = (1, 18)
+        if cur_pos == (29, 18):
+            cur_pos = (28, 18)
         energizer_data = eval(each.energizers) if isinstance(each.energizers, str) else each.energizers
         bean_data = eval(each.beans) if isinstance(each.beans, str) else each.beans
         ghost_data = np.array([eval(each.ghost1_pos), eval(each.ghost2_pos)]) \
@@ -387,8 +394,8 @@ def preEstimation():
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        "../common_data/transition/global_to_local.pkl",
-        "../common_data/transition/local_to_global.pkl",
+        # "../common_data/transition/global_to_local.pkl",
+        # "../common_data/transition/local_to_global.pkl",
         "../common_data/transition/local_to_evade.pkl",
     ]
     for filename in filename_list:
@@ -501,7 +508,7 @@ def movingWindowAnalysis(config):
     trajectory_length = min(trajectory_length)
     print("Num of trajectories : ", len(trajectory_shapes))
     print("Trajectory length : ", trajectory_length)
-    window_index = np.arange(1, 2*trajectory_length)
+    window_index = np.arange(window, 2*trajectory_length - window+ 1)
     # (num of trajectories, num of windows, num of agents)
     trajectory_weight = np.zeros((len(trajectory_data), len(window_index), len(config["agents"])))
     # (num of trajectories, num of windows)
@@ -509,7 +516,7 @@ def movingWindowAnalysis(config):
     # For each trajectory, estimate agent weights through sliding windows
     for trajectory_index, trajectory in enumerate(trajectory_data):
         start_index = trajectory_shapes[trajectory_index][1] - trajectory_length - trajectory_shapes[trajectory_index][0]
-        end_index = trajectory_shapes[trajectory_index][1] + trajectory_length - trajectory_shapes[trajectory_index][0]
+        end_index = trajectory_shapes[trajectory_index][1] + trajectory_length - trajectory_shapes[trajectory_index][0] + 1
         X = trajectory[1].iloc[start_index:end_index]
         Y = trajectory[2].iloc[start_index:end_index]
         num_samples = len(Y)
@@ -518,16 +525,8 @@ def movingWindowAnalysis(config):
         # for each window
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
-            sub_X = X[
-                    centering_point - window if centering_point - window >= 0 else 0
-                    :
-                    centering_point + window if centering_point + window < num_samples else num_samples
-                    ]
-            sub_Y = Y[
-                    centering_point - window if centering_point - window >= 0 else 0
-                    :
-                    centering_point + window if centering_point + window < num_samples else num_samples
-                    ]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
             # estimation in the window
             func = lambda params: negativeLikelihood(
                 params,
@@ -570,8 +569,8 @@ def movingWindowAnalysis(config):
     avg_agent_weight = np.nanmean(trajectory_weight, axis=0)
     print("Estimated label : ", [_estimationLabeling(each, config["agents"]) for each in avg_agent_weight])
     # Save estimated agent weights
-    np.save("../common_data/transition/{}-agent_weight.npy".format(transition_type), trajectory_weight)
-    np.save("../common_data/transition/{}-cr.npy".format(transition_type), trajectory_cr)
+    np.save("../common_data/transition/{}-window{}-agent_weight.npy".format(transition_type, window), trajectory_weight)
+    np.save("../common_data/transition/{}-window{}-cr.npy".format(transition_type, window), trajectory_cr)
 
 
 def correlationAnalysis(config):
@@ -616,7 +615,7 @@ def correlationAnalysis(config):
         # Estimating label through moving window analysis
         window = config["trial_window"]
         print("Trial length : ", trial_length)
-        window_index = np.arange(1, trial_length - 1)
+        window_index = np.arange(window, trial_length - window)
         # (num of windows, num of agents)
         temp_weight = np.zeros((len(window_index), len(config["agents"])))
         # (1, num of windows)
@@ -624,16 +623,8 @@ def correlationAnalysis(config):
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
-            sub_X = X[
-                    centering_point - window if centering_point - window >= 0 else 0
-                    :
-                    centering_point + window if centering_point + window < trial_length else trial_length
-                    ]
-            sub_Y = Y[
-                    centering_point - window if centering_point - window >= 0 else 0
-                    :
-                    centering_point + window if centering_point + window < trial_length else trial_length
-                    ]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
             # estimation in the window
             func = lambda params: negativeLikelihood(
                 params,
@@ -896,9 +887,9 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Sliding Window Analysis
         # Filename
-        "trajectory_data_filename": "../common_data/transition/global_to_local-with_Q.pkl",
+        "trajectory_data_filename": "../common_data/transition/local_to_global-with_Q.pkl",
         # The window size
-        "window": 5,
+        "window": 3,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
         # ==================================================================================
@@ -910,7 +901,7 @@ if __name__ == '__main__':
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
-        "trial_window" : 5,
+        "trial_window" : 3,
         # ==================================================================================
 
         # ==================================================================================
@@ -919,12 +910,12 @@ if __name__ == '__main__':
         "handcrafted_label_filename": "../common_data/trial/500_trial_data-with_Q-handcrafted_labels.npy",
         "trial_cr_filename": "../common_data/trial/500_trial_data-with_Q-trial_cr.npy",
 
-        "local_to_global_agent_weight" : "../common_data/transition/relevant_agents/local_to_global-agent_weight.npy",
-        "local_to_global_cr": "../common_data/transition/relevant_agents/local_to_global-cr.npy",
-        "local_to_evade_agent_weight": "../common_data/transition/relevant_agents/local_to_evade-agent_weight.npy",
-        "local_to_evade_cr": "../common_data/transition/relevant_agents/local_to_evade-cr.npy",
-        "global_to_local_agent_weight": "../common_data/transition/relevant_agents/global_to_local-agent_weight.npy",
-        "global_to_local_cr": "../common_data/transition/relevant_agents/global_to_local-cr.npy",
+        "local_to_global_agent_weight" : "../common_data/transition/relevant_agents/local_to_global-window3-agent_weight.npy",
+        "local_to_global_cr": "../common_data/transition/relevant_agents/local_to_global-window3-cr.npy",
+        "local_to_evade_agent_weight": "../common_data/transition/relevant_agents/local_to_evade-window3-agent_weight.npy",
+        "local_to_evade_cr": "../common_data/transition/relevant_agents/local_to_evade-window3-cr.npy",
+        "global_to_local_agent_weight": "../common_data/transition/relevant_agents/global_to_local-window3-agent_weight.npy",
+        "global_to_local_cr": "../common_data/transition/relevant_agents/global_to_local-window3-cr.npy",
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"]]
     }
 
@@ -932,8 +923,8 @@ if __name__ == '__main__':
     # movingWindowAnalysis(config)
 
     # ============ Correlation =============
-    # correlationAnalysis(config)
+    correlationAnalysis(config)
 
     # ============ VISUALIZATION =============
     # computeCorrelation(config)
-    plotWeightVariation(config, plot_sem = True, need_normalization = True)
+    # plotWeightVariation(config, plot_sem = True, need_normalization = True)

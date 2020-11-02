@@ -62,10 +62,8 @@ for y in range(positions.shape[0]):
 # Add the tunnel (connect the leftmost and the rightmost)
 adjacent_dict[(2,18)] = {"left":(1,18), "right":(3,18),"up":None, "down":None}
 adjacent_dict[(1,18)] = {"left":(28,18), "right":(2,18),"up":None, "down":None}
-# adjacent_dict[(1,19)] = {"left":(30,19), "right":(2,19),"up":None, "down":None}
 adjacent_dict[(27,18)] = {"left":(26,18), "right":(28,18),"up":None, "down":None}
 adjacent_dict[(28,18)] = {"left":(27,18), "right":(1,18),"up":None, "down":None}
-# adjacent_dict[(30,19)] = {"left":(29,19), "right":(1,19),"up":None, "down":None}
 
 # entrance of home
 # adjacent_dict[(15,17)] = {"left":None, "right":None,"up":(15, 16), "down":(15, 18)}
@@ -74,8 +72,6 @@ adjacent_dict[(28,18)] = {"left":(27,18), "right":(1,18),"up":None, "down":None}
 # adjacent_dict[(16,16)] = {"left":(15, 16), "right":(17, 16),"up":None, "down":(16, 17)}
 # adjacent_dict[(15,18)] = {"left":(14, 18), "right":(16, 18),"up":(15, 17), "down":(15, 19)}
 # adjacent_dict[(16,18)] = {"left":(15, 18), "right":(17, 18),"up":(16, 17), "down":(16, 19)}
-
-print()
 
 # str_adjacent_dict = {}
 # for key in adjacent_dict.keys():
