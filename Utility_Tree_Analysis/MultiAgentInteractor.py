@@ -76,10 +76,10 @@ class MultiAgentInteractor:
         self.local_fruit_attractive_thr = 5
         self.local_ghost_repulsive_thr = 5
         # # Configuration (for optimistic agent)
-        self.pessimistic_depth = 15
-        self.pessimistic_ghost_attractive_thr = 15
-        self.pessimistic_fruit_attractive_thr = 15
-        self.pessimistic_ghost_repulsive_thr = 15
+        self.pessimistic_depth = 10
+        self.pessimistic_ghost_attractive_thr = 10
+        self.pessimistic_fruit_attractive_thr = 10
+        self.pessimistic_ghost_repulsive_thr = 10
         # Configuration (for suicide agent)
         self.suicide_depth = 10
         self.suicide_ghost_attractive_thr = 10

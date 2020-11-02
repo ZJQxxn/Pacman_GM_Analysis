@@ -18,14 +18,14 @@ import copy
 
 def _extractAllData(trial_num = 2000):
     # Read data
-    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
-    with open(data_filename, "rb") as file:
-        data = pickle.load(file)
-    all_data_with_label = data["df_total"]
-
-    # data_filename = "partial_data_with_reward_label_cross.pkl"
+    # data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
     # with open(data_filename, "rb") as file:
-    #     all_data_with_label = pickle.load(file)
+    #     data = pickle.load(file)
+    # all_data_with_label = data["df_total"]
+
+    data_filename = "partial_data_with_reward_label_cross.pkl"
+    with open(data_filename, "rb") as file:
+        all_data_with_label = pickle.load(file)
 
     all_data_with_label = all_data_with_label.sort_index()
     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_optimal", "label_global_notoptimal", "label_global", "label_evade"]
@@ -74,7 +74,7 @@ def _findTransitionPoint(state1_indication, state2_indication):
         trajectories = []
         for index, each in enumerate(transition_point):
             # time period for the first state
-            first_state_count = 1 # because of the diff == -1 position
+            first_state_count = 0 # because of the diff == -1 position
             cur = each
             start_index = 0 if index == 0 else transition_point[index - 1]
             while cur >= start_index:
@@ -98,7 +98,7 @@ def _findTransitionPoint(state1_indication, state2_indication):
             if second_state_count >= 10 and first_state_count >= 10:
                 # [starting step, centering step, ending step]
                 trajectories.append([
-                    each - first_state_count + 2 if each - first_state_count + 2 >= 0 else 0,
+                    each - first_state_count + 1 if each - first_state_count + 1 >= 0 else 0,
                     each,
                     each + second_state_count if each + second_state_count < nums else nums - 1
                 ])
@@ -163,8 +163,8 @@ def _global2Local(trial_data):
         trajectory_data = []
         for trajectory_index, each in enumerate(trajectory_point):
             for index in range(each[0], each[2] + 1):
-                each = np.append(trial_data.iloc[index].values, [trajectory_index, each])
-                trajectory_data.append(each)
+                each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
+                trajectory_data.append(each_step)
     return trajectory_data
 
 
