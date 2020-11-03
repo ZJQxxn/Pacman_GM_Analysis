@@ -210,7 +210,7 @@ def extractTransitionData():
         os.mkdir("transition")
     if len(local_to_global) > 0:
         local_to_global = pd.DataFrame(data = local_to_global, columns = columns_values)
-        with open("transition/local_to_global.pkl", "wb") as file:
+        with open("transition/relevant_agents/local_to_global.pkl", "wb") as file:
             pickle.dump(local_to_global, file)
         print("Local_to_global trial num : ", local2global_trial_num)
         print("Finished writing local_to_global {}.".format(local_to_global.shape[0]))
@@ -218,7 +218,7 @@ def extractTransitionData():
         print("No local_to_global data!")
     if len(local_to_evade) > 0:
         local_to_evade = pd.DataFrame(data = local_to_evade, columns = columns_values)
-        with open("transition/local_to_evade.pkl", "wb") as file:
+        with open("transition/relevant_agents/local_to_evade.pkl", "wb") as file:
             pickle.dump(local_to_evade, file)
         print("Local_to_evade trial num : ", local2evade_trial_num)
         print("Finished writing local_to_evade {}.".format(local_to_evade.shape[0]))
@@ -226,7 +226,7 @@ def extractTransitionData():
         print("No local_to_evade data!")
     if len(global_to_local) > 0:
         global_to_local = pd.DataFrame(data = global_to_local, columns = columns_values)
-        with open("transition/global_to_local.pkl", "wb") as file:
+        with open("transition/relevant_agents/global_to_local.pkl", "wb") as file:
             pickle.dump(global_to_local, file)
         print("Global_to_local trial num : ", global2local_trial_num)
         print("Finished writing global_to_local {}.".format(global_to_local.shape[0]))
