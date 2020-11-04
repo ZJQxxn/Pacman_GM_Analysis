@@ -6,7 +6,7 @@ Author:
     Jiaqi Zhang <zjqseu@gmail.com>
 
 Date:
-    4 Nov. 2020
+    29 Oct. 2020
 '''
 
 import os
@@ -61,33 +61,6 @@ def _readLocDistance(filename):
     return dict_locs_df
 
 
-def _findDiscontinuePeriod(ls):
-    ls = np.array(ls)
-    continue_period = []
-    if np.all(ls == 0):
-        return [len(ls)]
-    # if starts with 0s
-    if ls[0] == 0:
-        index = 0
-        while ls[index] == 0:
-            index += 1
-        continue_period.append(index)
-        ls = ls[index:]
-    # end with 0s
-    if ls[len(ls)-1] == 0:
-        index = 0
-        while ls[len(ls)- 1 - index] == 0:
-            index += 1
-        continue_period.append(index)
-        ls = ls[:len(ls) - index]
-    # the rest parts starting with 1
-    absdiff = np.abs(np.diff(ls))
-    # Runs start and end where absdiff is 1.
-    ranges = np.where(absdiff == 1)[0].reshape(-1, 2)
-    continue_period.extend(list(ranges[:,1] - ranges[:,0]))
-    return continue_period
-
-
 def _findTransitionPoint(state1_indication, state2_indication, length):
     state1_indication = [int(each) for each in state1_indication.values]
     state2_indication = [int(each) for each in state2_indication.values]
@@ -100,21 +73,34 @@ def _findTransitionPoint(state1_indication, state2_indication, length):
     else:
         trajectories = []
         for index, each in enumerate(transition_point):
+            # time period for the first state
+            first_state_count = 0 # because of the diff == -1 position
             cur = each
-            # trajectory is not long nough
-            if cur-length < 0 or  cur + 1 + length >= len(state1_indication):
-                continue
-            first_phase = state1_indication[cur-length:cur]
-            second_phase = state2_indication[cur+1:cur + 1 + length]
-            first_max_discontinue_period = _findDiscontinuePeriod(first_phase)
-            second_max_discontinue_period = _findDiscontinuePeriod(second_phase)
-            first_max_discontinue_period = [0] if len(first_max_discontinue_period) == 0 else first_max_discontinue_period
-            second_max_discontinue_period = [0] if len(second_max_discontinue_period) == 0 else second_max_discontinue_period
-            if max(first_max_discontinue_period) <= 3 and max(second_max_discontinue_period) <= 3:
+            start_index = 0 if index == 0 else transition_point[index - 1]
+            while cur >= start_index:
+                if state1_indication[cur] == 1:
+                    first_state_count += 1
+                    cur -= 1
+                    continue
+                else:
+                    break
+            # time period for the second state
+            second_state_count = 0  # because of the diff == 1 position
+            cur = each + 1
+            end_index = nums if (index == len(transition_point)-1) else transition_point[index + 1]
+            while cur < end_index:
+                if state2_indication[cur] == 1:
+                    second_state_count += 1
+                    cur += 1
+                    continue
+                else:
+                    break
+            if second_state_count >= length and first_state_count >= length:
+                # [starting step, centering step, ending step]
                 trajectories.append([
-                    each - length, # starting index
-                    each, # centering index
-                    each + length + 1 # ending index
+                    each - first_state_count + 1 if each - first_state_count + 1 >= 0 else 0,
+                    each,
+                    each + second_state_count if each + second_state_count < nums else nums - 1
                 ])
     return trajectories
 
@@ -125,7 +111,7 @@ def _local2Global(trial_data):
         axis = 1
     )
     is_global = trial_data[["label_global_optimal", "label_global_notoptimal", "label_global"]].apply(
-        lambda x: x.label_global_optimal == 1,
+        lambda x: x.label_global_optimal == 1 or x.label_global_notoptimal == 1 or x.label_global == 1,
         axis = 1
     )
     trajectory_point = _findTransitionPoint(is_local, is_global, 15)
@@ -167,7 +153,7 @@ def _global2Local(trial_data):
         axis=1
     )
     is_global = trial_data[["label_global_optimal", "label_global_notoptimal", "label_global"]].apply(
-        lambda x: x.label_global_optimal,
+        lambda x: x.label_global_optimal == 1 or x.label_global_notoptimal == 1 or x.label_global == 1,
         axis=1
     )
     trajectory_point = _findTransitionPoint(is_global, is_local, 15)
@@ -224,7 +210,7 @@ def extractTransitionData():
         os.mkdir("transition")
     if len(local_to_global) > 0:
         local_to_global = pd.DataFrame(data = local_to_global, columns = columns_values)
-        with open("transition/local_to_global.pkl", "wb") as file:
+        with open("transition/old_transition/local_to_global.pkl", "wb") as file:
             pickle.dump(local_to_global, file)
         print("Local_to_global trial num : ", local2global_trial_num)
         print("Finished writing local_to_global {}.".format(local_to_global.shape[0]))
@@ -232,7 +218,7 @@ def extractTransitionData():
         print("No local_to_global data!")
     if len(local_to_evade) > 0:
         local_to_evade = pd.DataFrame(data = local_to_evade, columns = columns_values)
-        with open("transition/local_to_evade.pkl", "wb") as file:
+        with open("transition/old_transition/local_to_evade.pkl", "wb") as file:
             pickle.dump(local_to_evade, file)
         print("Local_to_evade trial num : ", local2evade_trial_num)
         print("Finished writing local_to_evade {}.".format(local_to_evade.shape[0]))
@@ -240,7 +226,7 @@ def extractTransitionData():
         print("No local_to_evade data!")
     if len(global_to_local) > 0:
         global_to_local = pd.DataFrame(data = global_to_local, columns = columns_values)
-        with open("transition/global_to_local.pkl", "wb") as file:
+        with open("transition/old_transition/global_to_local.pkl", "wb") as file:
             pickle.dump(global_to_local, file)
         print("Global_to_local trial num : ", global2local_trial_num)
         print("Finished writing global_to_local {}.".format(global_to_local.shape[0]))
@@ -249,16 +235,6 @@ def extractTransitionData():
 
 
 if __name__ == '__main__':
-    #
-    # ls = [1,1,0,0,1,0,1,0,0,0,0]
-    # print(_findDiscontinuePeriod(ls))
-    #
-    # ls = [0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1]
-    # print(_findDiscontinuePeriod(ls))
-    # ls = [1,1,1]
-    # print(_findDiscontinuePeriod(ls))
-
-
     # Extract transition data
     extractTransitionData()
 

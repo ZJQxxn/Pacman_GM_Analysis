@@ -395,8 +395,8 @@ def preEstimation():
     adjacent_data, locs_df, adjacent_path, reward_amount = _readAuxiliaryData()
     print("Finished reading auxiliary data.")
     filename_list = [
-        # "../common_data/transition/global_to_local.pkl",
-        # "../common_data/transition/local_to_global.pkl",
+        "../common_data/transition/global_to_local.pkl",
+        "../common_data/transition/local_to_global.pkl",
         "../common_data/transition/local_to_evade.pkl",
     ]
     for filename in filename_list:
@@ -482,7 +482,7 @@ def _label2Index(labels):
     return label_val
 
 
-def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajectory = False):
+def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajectory = False, need_intercept = False):
     '''
     Estimate agent weights with utility (Q-value).
     :param param: 
@@ -494,7 +494,14 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
     if 0 == len(agents_list) or None == agents_list:
         raise ValueError("Undefined agents list!")
     else:
-        agent_weight = [param[i] for i in range(len(param))]
+        if need_intercept:
+            if len(agents_list)+1 != len(param):
+                raise ValueError("Specify intercept!")
+            agent_weight = [param[i] for i in range(len(param)-1)]
+            intercept = param[-1]
+        else:
+            agent_weight = [param[i] for i in range(len(param))]
+            intercept = 0
     # Compute estimation error
     nll = 0  # negative log likelihood
     num_samples = all_data.shape[0]
@@ -504,7 +511,7 @@ def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajector
     for each_sample in range(num_samples):
         for each_agent in range(len(agents_list)):
             agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
-    dir_Q_value = agent_Q_value @ agent_weight
+    dir_Q_value = agent_Q_value @ agent_weight + intercept # add intercept
     true_dir = true_prob.apply(lambda x: _makeChoice(x)).values
     # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
     exp_prob = np.exp(dir_Q_value)
@@ -530,6 +537,9 @@ def movingWindowAnalysis(config):
     # Construct optimizer
     params = [1 for _ in range(len(config["agents"]))]
     bounds = [[0, 1000] for _ in range(len(config["agents"]))]
+    if config["need_intercept"]:
+        params.append(1)
+        bounds.append([-1000, 1000])
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
@@ -545,7 +555,9 @@ def movingWindowAnalysis(config):
     print("Trajectory length : ", trajectory_length)
     window_index = np.arange(window, 2*trajectory_length - window+ 1)
     # (num of trajectories, num of windows, num of agents)
-    trajectory_weight = np.zeros((len(trajectory_data), len(window_index), len(config["agents"])))
+    trajectory_weight = np.zeros(
+        (len(trajectory_data), len(window_index), len(config["agents"]) if not config["need_intercept"] else len(config["agents"]) + 1)
+    )
     # (num of trajectories, num of windows)
     trajectory_cr = np.zeros((len(trajectory_data), len(window_index)))
     # For each trajectory, estimate agent weights through sliding windows
@@ -568,7 +580,8 @@ def movingWindowAnalysis(config):
                 sub_X,
                 sub_Y,
                 config["agents"],
-                return_trajectory=False
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
             )
             is_success = False
             retry_num = 0
@@ -592,7 +605,8 @@ def movingWindowAnalysis(config):
                 sub_X,
                 sub_Y,
                 config["agents"],
-                return_trajectory = True
+                return_trajectory = True,
+                need_intercept=config["need_intercept"]
             )
             # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
             estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
@@ -601,11 +615,16 @@ def movingWindowAnalysis(config):
             trajectory_cr[trajectory_index, centering_index] = correct_rate
     # Print out results and save data
     print("Average Correct Rate: {}".format(np.nanmean(trajectory_cr, axis=0)))
-    avg_agent_weight = np.nanmean(trajectory_weight, axis=0)
+    if config["need_intercept"]:
+        avg_agent_weight = np.nanmean(trajectory_weight[:, :, :-1], axis=0)
+    else:
+        avg_agent_weight = np.nanmean(trajectory_weight, axis=0)
     print("Estimated label : ", [_estimationLabeling(each, config["agents"]) for each in avg_agent_weight])
     # Save estimated agent weights
-    np.save("../common_data/transition/{}-window{}-agent_weight.npy".format(transition_type, window), trajectory_weight)
-    np.save("../common_data/transition/{}-window{}-cr.npy".format(transition_type, window), trajectory_cr)
+    np.save("../common_data/transition/{}-window{}-agent_weight-{}_intercept.npy".format(
+        transition_type, window, "w" if config["need_intercept"] else "wo"), trajectory_weight)
+    np.save("../common_data/transition/{}-window{}-cr-{}_intercept.npy".format(
+        transition_type, window,"w" if config["need_intercept"] else "wo"), trajectory_cr)
 
 
 def correlationAnalysis(config):
@@ -631,6 +650,9 @@ def correlationAnalysis(config):
     # Construct optimizer
     params = [1 for _ in range(len(config["agents"]))]
     bounds = [[0, 1000] for _ in range(len(config["agents"]))]
+    if config["need_intercept"]:
+        params.append(1)
+        bounds.append([-1000, 1000])
     cons = []  # construct the bounds in the form of constraints
     for par in range(len(bounds)):
         l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
@@ -652,8 +674,7 @@ def correlationAnalysis(config):
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         # (num of windows, num of agents)
-        temp_weight = np.zeros((len(window_index), len(config["agents"])))
-        # (1, num of windows)
+        temp_weight = np.zeros((len(window_index), len(config["agents"]) if not config["need_intercept"] else len(config["agents"]) + 1))
         temp_cr = np.zeros((len(window_index), ))
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
@@ -666,7 +687,8 @@ def correlationAnalysis(config):
                 sub_X,
                 sub_Y,
                 config["agents"],
-                return_trajectory=False
+                return_trajectory = False,
+                need_intercept = config["need_intercept"]
             )
             is_success = False
             retry_num = 0
@@ -691,22 +713,31 @@ def correlationAnalysis(config):
                 sub_X,
                 sub_Y,
                 config["agents"],
-                return_trajectory=True
+                return_trajectory = True,
+                need_intercept = config["need_intercept"]
             )
             estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
             true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
             correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
             temp_cr[centering_index] = correct_rate
         trial_cr.append(temp_cr)
-        temp_estimated_label = [_estimationLabeling(each, config["agents"]) for each in temp_weight]
+        if config["need_intercept"]:
+            temp_estimated_label = [_estimationLabeling(each, config["agents"]) for each in temp_weight[:,:-1]]
+        else:
+            temp_estimated_label = [_estimationLabeling(each, config["agents"]) for each in temp_weight]
         estimated_labels.append(temp_estimated_label)
         print("Average correct rate for trial : ", np.nanmean(temp_cr))
     print("Average correct rate for all : ", np.nanmean([np.nanmean(each) for each in trial_cr]))
     # Save data
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/trial/{}-window{}-estimated_labels.npy".format(save_base, window), estimated_labels)
-    np.save("../common_data/trial/{}-window{}-handcrafted_labels.npy".format(save_base, window), handcrafted_labels)
-    np.save("../common_data/trial/{}-window{}-trial_cr.npy".format(save_base, window), trial_cr)
+    np.save("../common_data/trial/{}-window{}-{}_intercept-estimated_labels.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), estimated_labels)
+    np.save("../common_data/trial/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
+    np.save("../common_data/trial/{}-window{}-{}_intercept-trial_cr.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_cr)
+    np.save("../common_data/trial/{}-window{}-{}_intercept-trial_weight.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
 
 
 
@@ -753,7 +784,8 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
             local2global_weight = local2global_weight / np.max(local2global_weight)
         else:
             raise NotImplementedError("Undefined normalizing type {}!".format(normalizing_type))
-    sem_local2global_weight  = scipy.stats.sem(local2global_weight, axis=0, nan_policy = "omit")
+    # sem_local2global_weight  = scipy.stats.sem(local2global_weight, axis=0, nan_policy = "omit")
+    sem_local2global_weight = np.std(local2global_weight, axis=0)
     for index in range(len(agent_name)):
         plt.plot(avg_local2global_weight[:, index], color = agent_color[agent_name[index]], ms = 3, lw = 5,label = agent_name[index])
         if plot_sem:
@@ -787,7 +819,7 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
     plt.xticks(x_ticks_index, x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize = 15)
     plt.yticks(fontsize=15)
-    plt.ylim(0.1, 1.1)
+    plt.ylim(0.0, 1.1)
     plt.legend(loc = "lower center", fontsize=15, ncol=len(agent_name))
     # plt.show()
 
@@ -812,7 +844,8 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
             local2evade_weight = local2evade_weight / np.max(local2global_weight)
         else:
             raise NotImplementedError("Undefined normalizing type {}!".format(normalizing_type))
-    sem_local2evade_weight = scipy.stats.sem(local2evade_weight, axis=0, nan_policy = "omit")
+    # sem_local2evade_weight = scipy.stats.sem(local2evade_weight, axis=0, nan_policy = "omit")
+    sem_local2evade_weight = np.std(local2evade_weight, axis=0)
     for index in range(len(agent_name)):
         plt.plot(avg_local2evade_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5, label=agent_name[index])
         if plot_sem:
@@ -837,7 +870,7 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
     plt.xticks(np.arange(len(avg_local2evade_weight)), x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(0.1, 1.1)
+    plt.ylim(0.0, 1.1)
     plt.legend(loc = "lower center", fontsize=15, ncol=len(agent_name))
     # plt.show()
 
@@ -851,18 +884,19 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
             raise ValueError("The type of normalizing should be specified!")
         elif "step" == normalizing_type:
             for index in range(avg_global2local_weight.shape[0]):
-                # avg_global2local_weight[index, :]  = avg_global2local_weight[index, :] / np.max(avg_global2local_weight[index, :])
+                avg_global2local_weight[index, :]  = avg_global2local_weight[index, :] / np.max(avg_global2local_weight[index, :])
                 global2local_weight[:, index, :] = global2local_weight[:, index, :] / np.max(global2local_weight[:, index, :])
         elif "sum" == normalizing_type:
             for index in range(avg_global2local_weight.shape[0]):
-                # avg_global2local_weight[index, :]  = avg_global2local_weight[index, :] / np.linalg.norm(avg_global2local_weight[index, :])
+                avg_global2local_weight[index, :]  = avg_global2local_weight[index, :] / np.linalg.norm(avg_global2local_weight[index, :])
                 global2local_weight[:, index, :] = global2local_weight[:, index, :] / np.linalg.norm(global2local_weight[:, index, :])
         elif "all" == normalizing_type:
-            # avg_global2local_weight = avg_global2local_weight / np.max(avg_global2local_weight)
+            avg_global2local_weight = avg_global2local_weight / np.max(avg_global2local_weight)
             global2local_weight = global2local_weight / np.max(global2local_weight)
         else:
             raise NotImplementedError("Undefined normalizing type {}!".format(normalizing_type))
-    sem_global2local_weight = scipy.stats.sem(global2local_weight, axis=0, nan_policy = "omit")
+    # sem_global2local_weight = scipy.stats.sem(global2local_weight, axis=0, nan_policy = "omit")
+    sem_global2local_weight = np.std(global2local_weight, axis=0)
     for index in range(len(agent_name)):
         plt.plot(avg_global2local_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5, label=agent_name[index])
         if plot_sem:
@@ -882,8 +916,8 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
         x_ticks = [-13, -10, -7, -4, -1, "$\mathbf{c}$", 1, 4, 7, 10, 13]
         x_ticks_index = [1, 4, 7, 10, 13, 14, 15, 18, 21, 24, 27]
     elif "window3" in config["global_to_local_agent_weight"].split("-"):
-        x_ticks = [-13, -10, -7, -4, -1, "$\mathbf{c}$", 1, 4, 7, 10, 13]
-        x_ticks_index = [1, 4, 7, 10, 13, 14, 15, 18, 21, 24, 27]
+        x_ticks = [-10, -7, -4, -1, "$\mathbf{c}$", 1, 4, 7, 10]
+        x_ticks_index = [2, 5, 8, 11, 12, 13, 16, 19, 22]
     else:
         x_ticks = [str(int(each)) for each in np.arange(0 - centering_point, 0, 1)]
         x_ticks.append("$\\mathbf{c}$")
@@ -896,16 +930,17 @@ def plotWeightVariation(config, plot_sem = False, need_normalization = False, no
     plt.xticks(x_ticks_index, x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(0.1, 1.1)
+    plt.ylim(0.0, 1.1)
     plt.legend(loc = "lower center", fontsize=15, ncol=len(agent_name))
     plt.show()
 
 
-def computeCorrelation(config):
+def plotCorrelation(config):
     window = config["trial_window"]
     estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True)
     handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
     trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
+    trial_weight = np.load(config["trial_weight_filename"], allow_pickle=True)
     trial_num = len(estimated_labels)
     trial_matching_rate = []
     # trial_correlation = []
@@ -945,7 +980,7 @@ def computeCorrelation(config):
     # print("Median : ", np.nanmedian(trial_correlation))
     # print("Average : ", np.nanmean(trial_correlation))
     # histogram
-    plt.title("Label Matching on 500 Trials", fontsize = 20)
+    plt.title("Label Matching on 500 Trials (avg cr = {cr:.4f})".format(cr=np.mean([np.mean(each) for each in trial_cr])), fontsize = 20)
     plt.hist(trial_matching_rate)
     plt.xlabel("Correct Rate (estimated label = hand-crafted label)", fontsize = 20)
     plt.xlim(0, 1.0)
@@ -965,7 +1000,7 @@ def computeCorrelation(config):
 
 if __name__ == '__main__':
     # # Pre-estimation
-    # preEstimation()
+    preEstimation()
 
 
     # Configurations
@@ -988,12 +1023,13 @@ if __name__ == '__main__':
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
         # "agents": ["local", "global", "pessimistic", "suicide", "planned_hunting"],
         "agents": agents,
+        "need_intercept" : True,
         # ==================================================================================
         #                       For Sliding Window Analysis
         # Filename
         "trajectory_data_filename": "../common_data/transition/{}-with_Q.pkl".format(type),
         # The window size
-        "window": 1,
+        "window": 3,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
         # ==================================================================================
@@ -1005,21 +1041,22 @@ if __name__ == '__main__':
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
-        "trial_window" : 8,
+        "trial_window" : 2,
         # ==================================================================================
 
         # ==================================================================================
         #                       For Experimental Results Visualization
-        "estimated_label_filename" : "../common_data/trial/500_trial_data-with_Q-window1-estimated_labels.npy",
-        "handcrafted_label_filename": "../common_data/trial/500_trial_data-with_Q-window1-handcrafted_labels.npy",
-        "trial_cr_filename": "../common_data/trial/500_trial_data-with_Q-window1-trial_cr.npy",
+        "estimated_label_filename" : "../common_data/trial/5_trial_data-with_Q-window2-w_intercept-estimated_labels.npy",
+        "handcrafted_label_filename": "../common_data/trial/5_trial_data-with_Q-window2-w_intercept-handcrafted_labels.npy",
+        "trial_cr_filename": "../common_data/trial/5_trial_data-with_Q-window2-w_intercept-trial_cr.npy",
+        "trial_weight_filename": "../common_data/trial/5_trial_data-with_Q-window2-w_intercept-trial_weight.npy",
 
-        "local_to_global_agent_weight" : "../common_data/transition/relevant_agents/local_to_global-window1-agent_weight.npy",
-        "local_to_global_cr": "../common_data/transition/relevant_agents/local_to_global-window1-cr.npy",
-        "local_to_evade_agent_weight": "../common_data/transition/relevant_agents/local_to_evade-window1-agent_weight.npy",
-        "local_to_evade_cr": "../common_data/transition/relevant_agents/local_to_evade-window1-cr.npy",
-        "global_to_local_agent_weight": "../common_data/transition/relevant_agents/global_to_local-window1-agent_weight.npy",
-        "global_to_local_cr": "../common_data/transition/relevant_agents/global_to_local-window1-cr.npy",
+        "local_to_global_agent_weight" : "../common_data/transition/local_to_global-window5-agent_weight.npy",
+        "local_to_global_cr": "../common_data/transition/local_to_global-window5-cr.npy",
+        "local_to_evade_agent_weight": "../common_data/transition/local_to_evade-window1-agent_weight.npy",
+        "local_to_evade_cr": "../common_data/transition/local_to_evade-window1-cr.npy",
+        "global_to_local_agent_weight": "../common_data/transition/global_to_local-window5-agent_weight.npy",
+        "global_to_local_cr": "../common_data/transition/global_to_local-window5-cr.npy",
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"]]
     }
 
@@ -1030,5 +1067,5 @@ if __name__ == '__main__':
     # correlationAnalysis(config)
 
     # ============ VISUALIZATION =============
-    computeCorrelation(config)
-    # plotWeightVariation(config, plot_sem = True, need_normalization = True, normalizing_type="step") # step / sum / all
+    # plotCorrelation(config)
+    # plotWeightVariation(config, plot_sem = True, need_normalization = True, normalizing_type="sum") # step / sum / all
