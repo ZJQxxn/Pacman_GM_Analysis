@@ -949,6 +949,14 @@ def singleTrialFitting(config):
     trial_data = readTrialData(config["single_trial_data_filename"])
     trial_num = len(trial_data)
     print("Num of trials : ", trial_num)
+
+    trial_name_list = ["10-1-Omega-02-Aug-2019-1.csv"]
+    temp_trial_Data = []
+    for each in trial_data:
+        if each[0] in trial_name_list:
+            temp_trial_Data.append(each)
+    trial_data = temp_trial_Data
+
     label_list = ["label_local_graze", "label_local_graze_noghost",
                   "label_global_optimal", "label_global_notoptimal", "label_global",
                   "label_evade",
@@ -1041,12 +1049,13 @@ def singleTrialFitting(config):
         # Estimated labels
         #TODO: W*Q, normalization
         for i in range(len(weight)):
-                weight[i, :-1] = weight[i, :-1] * [scaleOfNumber(each) for each in np.max(np.abs(trial_Q[i]), axis=(0, 2))]
+                weight[i, :-1] = weight[i, :-1] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i]), axis=(0, 2))]
         if config["need_intercept"]:
             estimated_label = [_estimationLabeling(each, agent_name) for each in weight[:,:-1]]
         else:
             estimated_label = [_estimationLabeling(each, agent_name) for each in weight]
-        is_matched = [(estimated_label[i] in handcrafted_label[i]) for i in label_not_nan_index]
+        # is_matched = [(estimated_label[i] in handcrafted_label[i]) for i in label_not_nan_index]
+        is_matched = [(len(np.intersect1d(estimated_label[i], handcrafted_label[i])) > 0) for i in label_not_nan_index]
         print("Label matching rate : ", np.sum(is_matched) / len(is_matched))
         # Plot weight variation of this trial
         agent_color = {
@@ -1056,7 +1065,7 @@ def singleTrialFitting(config):
             "suicide": "cyan",
             "planned_hunting": "magenta"
         }
-        plt.title("Agent Weight Variation (avg cr = {avg:.3f})".format(avg=np.nanmean(cr)), fontsize=20)
+        plt.title("{} (avg cr = {avg:.3f})".format(trial_name, avg=np.nanmean(cr)), fontsize=20)
         # normalization
         for index in range(weight.shape[0]):
             weight[index, :] = weight[index, :] / np.linalg.norm(weight[index, :])
@@ -1067,7 +1076,11 @@ def singleTrialFitting(config):
         # TODO: what about None value; multiple hand-crafted labels
         for i in range(len(handcrafted_label)):
             if handcrafted_label[i] is not None:
-                plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
+                if len(handcrafted_label[i]) == 2:
+                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.05, color=agent_color[handcrafted_label[i][0]])
+                    plt.fill_between(x=[i, i + 1], y1=-0.05, y2=-0.1, color=agent_color[handcrafted_label[i][1]])
+                else:
+                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
 
         plt.ylabel("Normalized Agent Weight", fontsize=20)
         plt.xlim(0, weight.shape[0] - 1)
@@ -1458,6 +1471,8 @@ def plotCorrelation(config, contribution = True):
         for i in range(len(trial_weight)):
             for j in range(len(trial_weight[i])):
                 trial_weight[i][j, :] = trial_weight[i][j, :] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i][j]), axis = (0, 2))]
+                # trial_weight[i][j, :] = trial_weight[i][j, :] * [each for each in
+                #                                                  np.nanmax(np.abs(trial_Q[i][j]), axis=(0, 2))]
     estimated_labels = []
     for index in range(len(trial_weight)):
         temp_estimated_labels = [_estimationLabeling(each, config["correlation_agents"]) for each in trial_weight[index]]
@@ -1682,7 +1697,7 @@ if __name__ == '__main__':
         # Filename
         "trajectory_data_filename": "../common_data/transition/{}-with_Q.pkl".format(type),
         # The window size
-        "window": 1,
+        "window": 3,
         # Maximum try of estimation, in case the optimization will fail
         "maximum_try": 5,
         # Agents: at least one of "global", "local", "optimistic", "pessimistic", "suicide", "planned_hunting".
@@ -1704,7 +1719,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Single Trial Analysis
         # Filename
-        "single_trial_data_filename": "../common_data/trial/5_trial_data-with_Q.pkl",
+        "single_trial_data_filename": "../common_data/trial/500_trial_data-with_Q.pkl",
         # Window size for correlation analysis
         "single_trial_window": 10,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
@@ -1777,7 +1792,7 @@ if __name__ == '__main__':
 
     # ============ VISUALIZATION =============
     # plotCorrelation(config, contribution = True)
-    plotWeightVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum") # step / sum / all
+    # plotWeightVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum") # step / sum / all
     # plotBeanNumVSCr(config)
 
     # _checkError(config)
