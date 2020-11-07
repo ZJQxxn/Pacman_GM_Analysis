@@ -480,7 +480,11 @@ def _makeChoice(prob):
 
 
 def _estimationLabeling(Q_value, agent_list):
-    return agent_list[np.argmax(Q_value)]
+    indicies = np.argsort(Q_value)
+    estimated_label = [agent_list[each] for each in indicies[-2:]]
+    # if Q_value[indicies[-2]] - Q_value[indicies[-3]] <= 0.1:
+    #     estimated_label.append(agent_list[indicies[-3]])
+    return estimated_label
 
 
 def _handcraftLabeling(labels):
@@ -933,8 +937,8 @@ def incrementalAnalysis(config):
     # save correct rate data
     if "incremental" not in os.listdir("../common_data"):
         os.mkdir("../common_data/incremental")
-    np.save("../common_data/incremental/window{}-incremental_cr-{}_intercept.npy".format(
-        window, "w" if config["need_intercept"] else "wo"), all_cr)
+    np.save("../common_data/incremental/{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+        config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
 def singleTrialFitting(config):
@@ -1438,7 +1442,7 @@ def plotWeightVariation(config, plot_sem = False, contribution = True, need_norm
     plt.show()
 
 
-def plotCorrelation(config):
+def plotCorrelation(config, contribution = True):
     window = config["trial_window"]
     # Read data
     # trial_weight : (num of trials, num of windows, num of agents + 1)
@@ -1447,12 +1451,13 @@ def plotCorrelation(config):
     handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
     trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
     trial_weight = np.load(config["trial_weight_filename"], allow_pickle=True)
-    trial_weight = [trial_weight[index][:, :5] for index in range(len(trial_weight))]
+    trial_weight = [trial_weight[index][:, :5] for index in range(len(trial_weight))] #TODO: what about wo_intercept
     trial_Q = np.load(config["trial_Q_filename"], allow_pickle=True)
     # TODO: W*Q, normalization
-    for i in range(len(trial_weight)):
-        for j in range(len(trial_weight[i])):
-            trial_weight[i][j, :] = trial_weight[i][j, :] * [scaleOfNumber(each) for each in np.max(np.abs(trial_Q[i][j]), axis = (0, 2))]
+    if contribution:
+        for i in range(len(trial_weight)):
+            for j in range(len(trial_weight[i])):
+                trial_weight[i][j, :] = trial_weight[i][j, :] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i][j]), axis = (0, 2))]
     estimated_labels = []
     for index in range(len(trial_weight)):
         temp_estimated_labels = [_estimationLabeling(each, config["correlation_agents"]) for each in trial_weight[index]]
@@ -1468,6 +1473,7 @@ def plotCorrelation(config):
         estimated = np.array(estimated_labels[index])
         handcrafted = np.array(handcrafted_labels[index])
         handcrafted = handcrafted[window:len(handcrafted) - window]
+        # if len(estimated) != len(handcrafted):
         if len(estimated) != len(handcrafted):
             raise IndexError("len(estimated labels) != len(hand-crafted labels)")
         # what about None value
@@ -1478,7 +1484,7 @@ def plotCorrelation(config):
             estimated = np.array(estimated)[not_none_index]
             handcrafted = np.array(handcrafted)[not_none_index]
             for i in range(len(estimated)):
-                if estimated[i] in list(handcrafted[i]):
+                if len(np.intersect1d(estimated[i], handcrafted[i])) > 0:
                     is_matched.append(1)
                 else:
                     is_matched.append(0)
@@ -1513,62 +1519,137 @@ def plotCorrelation(config):
     plt.show()
 
 
+def _checkError(config):
+    window = config["trial_window"]
+    # Read data
+    # trial_weight : (num of trials, num of windows, num of agents + 1)
+    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
+    handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
+    trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
+    trial_weight = np.load(config["trial_weight_filename"], allow_pickle=True)
+    trial_weight = [trial_weight[index][:, :5] for index in range(len(trial_weight))]
+    normalized_weight = copy.deepcopy(trial_weight)
+    trial_Q = np.load(config["trial_Q_filename"], allow_pickle=True)
+    # TODO: W*Q, normalization
+    for i in range(len(trial_weight)):
+        for j in range(len(trial_weight[i])):
+            normalized_weight[i][j, :] = normalized_weight[i][j, :] * [scaleOfNumber(each) for each in np.max(np.abs(trial_Q[i][j]), axis = (0, 2))]
+    estimated_labels = []
+    for index in range(len(trial_weight)):
+        temp_estimated_labels = [_estimationLabeling(each, config["correlation_agents"]) for each in normalized_weight[index]]
+        estimated_labels.append(temp_estimated_labels)
+
+    trial_num = len(estimated_labels)
+    trial_matching_rate = []
+    # trial_correlation = []
+    is_matched = []
+    wrong_matched = {"global": [], "local":[], "pessimistic":[], "planned_hunting":[], "suicide":[]}
+    for index in range(trial_num):
+        # estimated = np.array(_label2Index(estimated_labels[index]))
+        # handcrafted = np.array(_label2Index(handcrafted_labels[index]))
+        estimated = np.array(estimated_labels[index])
+        handcrafted = np.array(handcrafted_labels[index])
+        handcrafted = handcrafted[window:len(handcrafted) - window]
+        temp_normalized_weight = normalized_weight[index]
+        temp_weight = trial_weight[index]
+        # if len(estimated) != len(handcrafted):
+        if len(estimated) != len(handcrafted):
+            raise IndexError("len(estimated labels) != len(hand-crafted labels)")
+        # what about None value
+        not_none_index = np.where(handcrafted != None)
+        if isinstance(not_none_index, tuple):
+            not_none_index = not_none_index[0]
+        if len(not_none_index) != 0:
+            estimated = np.array(estimated)[not_none_index]
+            handcrafted = np.array(handcrafted)[not_none_index]
+            temp_weight = temp_weight[not_none_index]
+            temp_normalized_weight = temp_normalized_weight[not_none_index]
+            for i in range(len(estimated)):
+                if len(np.intersect1d(estimated[i], handcrafted[i])) > 0:
+                    is_matched.append(1)
+                else:
+                    for k in handcrafted[i]:
+                        wrong_matched[k].append([handcrafted[i], estimated[i], temp_normalized_weight[i], temp_weight[i]])
+                    is_matched.append(0)
+            # matching_rate = np.sum(estimated == handcrafted) / len(estimated)
+            matching_rate = np.sum(is_matched) / len(is_matched)
+            # trial_correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
+            trial_matching_rate.append(matching_rate)
+    print("-"*15)
+    print("Matching rate : ")
+    print("Max : ", np.nanmax(trial_matching_rate))
+    print("Min : ", np.nanmin(trial_matching_rate))
+    print("Median : ", np.nanmedian(trial_matching_rate))
+    print("Average : ", np.nanmean(trial_matching_rate))
+    print("-"*15)
+    local = wrong_matched["local"]
+    global_data = wrong_matched["global"]
+    planned = wrong_matched["planned_hunting"]
+    suicide = wrong_matched["suicide"]
+    pessimistic = wrong_matched["pessimistic"]
+    print()
+
+
 def plotBeanNumVSCr(config):
     print("-"*15)
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["bean_vs_cr_filename"], allow_pickle = True)
-    bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
-    agent_cr  = [each[3] for each in bean_vs_cr]
+    bean_num = []
+    agent_cr = []
+    for i in bean_vs_cr:
+        for j in i:
+            bean_num.append(len(j[2]))
+            agent_cr.append(j[3])
+    # bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
+    # agent_cr  = [each[3] for each in bean_vs_cr]
     max_bean_num = max(bean_num)
     min_bean_num = min(bean_num)
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
-    bin_size = config["bin_size"]
-    if (max_bean_num + 1 - min_bean_num) % bin_size == 0:
-        ind = np.arange(min_bean_num, max_bean_num + 1, bin_size) # TODO: check this
-    else:
-        ind = np.arange(min_bean_num, max_bean_num + 1, bin_size)
-    step_nums = np.zeros_like(ind)
-    bean_agent_cr = [[] for _ in ind]
+    agent_index = [0, 2, 3, 4, 5] # (local, + global, + pessimistic, + planned hunting, +suicide)
+    first_phase_agent_cr = [] # num of beans <= 10
+    second_phase_agent_cr = [] # 10 < num of beans < 80
+    third_phase_agent_cr = [] # num of beans > 80
     # every bin
     for index, each in enumerate(bean_num):
-        bean_index = each // bin_size
-        # if min_bean_num <= cur_data.beans_num <= max_bean_num:
-        #     bean_index = bean_nums[cur_data.beans_num - min_bean_num]
-        if bean_index >= len(step_nums):
-            bean_index = len(step_nums) - 1
-        step_nums[bean_index] += 1
-        bean_agent_cr[bean_index].append(agent_cr[index])
+        if each <= 10:
+            first_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+        elif 10 < each < 80:
+            second_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+        else:
+            third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
 
-    # TODO: change to bar plot
+    # plotting
+    x_ticks = ["local", "+ global", "+ pessi.", "+ plan.", "+suicide"]
+    x_index = np.arange(0, len(x_ticks) / 2, 0.5)
 
-    # cr = np.divide(correct_nums, step_nums)[::-1]
-    # plt.subplot(1, 2, 1)
-    # plt.bar(np.arange(len(ind)) - 0.45, cr, width=0.45, align="edge")
-    # # plt.legend(loc="upper left", fontsize=20)
-    # plt.xlabel("# of beans", fontsize=20)
-    # x_ticks = ["[{}, {})".format(ind[i], ind[i + 1]) for i in range(len(ind) - 1)]
-    # x_ticks.append(f'[{ind[-1]}, $\infty$)')
-    # plt.xticks(np.arange(len(ind)), x_ticks[::-1], fontsize=20)
-    # plt.ylabel("Correct Rate", fontsize=20)
-    # plt.yticks(fontsize=20)
-    # plt.ylim(0, 1.1)
-    plt.figure(figsize=(10,15))
-    avg_cr = [np.mean(each, axis = 0) for each in bean_agent_cr][::-1]
-    var_cr = [np.var(each, axis = 0) for each in bean_agent_cr][::-1]
-    # plt.subplot(1, 2, 2)
-    x_index = np.arange(len(ind))
+    plt.subplot(1, 3, 1)
+    plt.title("# of Beans $\leqslant$ 10", fontsize  =20)
+    avg_cr = np.mean(first_phase_agent_cr, axis = 0)
+    var_cr = np.var(first_phase_agent_cr, axis = 0)
     plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
-    # plt.plot([x_index[0], x_index[-1]],  [np.mean(avg_cr), np.mean(avg_cr)], "k--", lw = 5)
-    # plt.legend(loc="upper left", fontsize=20)
-    plt.xlabel("# of beans", fontsize = 20)
-    x_ticks = ["[{}, {})".format(ind[i], ind[i + 1]) for i in range(len(ind) - 1)]
-    x_ticks.append(f'[{ind[-1]}, $\infty$)')
-    plt.xticks(x_index, x_ticks[::-1], fontsize=15)
-    plt.ylabel("Correct Rate", fontsize = 20)
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.ylabel("Direction Estimation Correct Rate", fontsize = 20)
     plt.yticks(fontsize=15)
     plt.ylim(0.7, 1.02)
 
+    plt.subplot(1, 3, 2)
+    plt.title("10 < # of Beans < 80", fontsize=20)
+    avg_cr = np.mean(second_phase_agent_cr, axis=0)
+    var_cr = np.var(second_phase_agent_cr, axis=0)
+    plt.errorbar(x_index, avg_cr, yerr=var_cr, fmt="k", mfc="r", marker="o", linestyle="", ms=15, elinewidth=5)
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([])
+    plt.ylim(0.7, 1.02)
+
+    plt.subplot(1, 3, 3)
+    plt.title("80 $\leqslant$ # of Beans", fontsize=20)
+    avg_cr = np.mean(third_phase_agent_cr, axis=0)
+    var_cr = np.var(third_phase_agent_cr, axis=0)
+    plt.errorbar(x_index, avg_cr, yerr=var_cr, fmt="k", mfc="r", marker="o", linestyle="", ms=15, elinewidth=5)
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([])
+    plt.ylim(0.7, 1)
     plt.show()
 
 
@@ -1595,7 +1676,7 @@ if __name__ == '__main__':
         agents = ["local", "pessimistic"]
 
     config = {
-        "need_intercept" : False,
+        "need_intercept" : True,
         # ==================================================================================
         #                       For Sliding Window Analysis
         # Filename
@@ -1635,7 +1716,7 @@ if __name__ == '__main__':
         "incremental_data_filename": "../common_data/trial/500_trial_data-with_Q.pkl",
         # Window size for correlation analysis
         "incremental_window": 3,
-        "incremental_num_trial" : 100,
+        "incremental_num_trial" : 500,
         # ==================================================================================
 
         # ==================================================================================
@@ -1657,27 +1738,27 @@ if __name__ == '__main__':
 
         # ------------------------------------------------------------------------------------
 
-        "local_to_global_agent_weight" : "../common_data/transition/local_to_global-window2-agent_weight-w_intercept.npy",
-        "local_to_global_cr": "../common_data/transition/local_to_global-window2-cr-w_intercept.npy",
-        "local_to_global_Q": "../common_data/transition/local_to_global-window2-Q-w_intercept.npy",
+        "local_to_global_agent_weight" : "../common_data/transition/local_to_global-window1-agent_weight-w_intercept.npy",
+        "local_to_global_cr": "../common_data/transition/local_to_global-window1-cr-w_intercept.npy",
+        "local_to_global_Q": "../common_data/transition/local_to_global-window1-Q-w_intercept.npy",
 
-        "local_to_evade_agent_weight": "../common_data/transition/local_to_evade-window2-agent_weight-w_intercept.npy",
-        "local_to_evade_cr": "../common_data/transition/local_to_evade-window2-cr-w_intercept.npy",
-        "local_to_evade_Q": "../common_data/transition/local_to_evade-window2-Q-w_intercept.npy",
+        "local_to_evade_agent_weight": "../common_data/transition/local_to_evade-window1-agent_weight-w_intercept.npy",
+        "local_to_evade_cr": "../common_data/transition/local_to_evade-window1-cr-w_intercept.npy",
+        "local_to_evade_Q": "../common_data/transition/local_to_evade-window1-Q-w_intercept.npy",
 
-        "global_to_local_agent_weight": "../common_data/transition/global_to_local-window2-agent_weight-w_intercept.npy",
-        "global_to_local_cr": "../common_data/transition/global_to_local-window2-cr-w_intercept.npy",
-        "global_to_local_Q": "../common_data/transition/global_to_local-window2-Q-w_intercept.npy",
+        "global_to_local_agent_weight": "../common_data/transition/global_to_local-window1-agent_weight-w_intercept.npy",
+        "global_to_local_cr": "../common_data/transition/global_to_local-window1-cr-w_intercept.npy",
+        "global_to_local_Q": "../common_data/transition/global_to_local-window1-Q-w_intercept.npy",
 
-        "evade_to_local_agent_weight": "../common_data/transition/evade_to_local-window2-agent_weight-w_intercept.npy",
-        "evade_to_local_cr": "../common_data/transition/evade_to_local-window2-cr-w_intercept.npy",
-        "evade_to_local_Q": "../common_data/transition/evade_to_local-window2-Q-w_intercept.npy",
+        "evade_to_local_agent_weight": "../common_data/transition/evade_to_local-window1-agent_weight-w_intercept.npy",
+        "evade_to_local_cr": "../common_data/transition/evade_to_local-window1-cr-w_intercept.npy",
+        "evade_to_local_Q": "../common_data/transition/evade_to_local-window1-Q-w_intercept.npy",
 
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"], ["local", "pessimistic"]],
 
         # ------------------------------------------------------------------------------------
 
-        "bean_vs_cr_filename" : "../common_data/incremental/window3-incremental_cr-w_intercept.npy",
+        "bean_vs_cr_filename" : "../common_data/incremental/window3-incremental_cr-wo_intercept.npy",
         "bin_size" : 10,
     }
     print("Window size for moving window analysis : ", config["window"])
@@ -1695,6 +1776,8 @@ if __name__ == '__main__':
     # incrementalAnalysis(config)
 
     # ============ VISUALIZATION =============
-    # plotCorrelation(config)
+    # plotCorrelation(config, contribution = True)
     plotWeightVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum") # step / sum / all
     # plotBeanNumVSCr(config)
+
+    # _checkError(config)
