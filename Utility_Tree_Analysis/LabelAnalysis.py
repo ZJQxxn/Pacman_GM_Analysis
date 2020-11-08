@@ -481,7 +481,8 @@ def _makeChoice(prob):
 
 def _estimationLabeling(Q_value, agent_list):
     indicies = np.argsort(Q_value)
-    estimated_label = [agent_list[each] for each in indicies[-2:]]
+    # estimated_label = [agent_list[each] for each in indicies[-2:]]
+    estimated_label = agent_list[indicies[-1]]
     # if Q_value[indicies[-2]] - Q_value[indicies[-3]] <= 0.1:
     #     estimated_label.append(agent_list[indicies[-3]])
     return estimated_label
@@ -951,13 +952,9 @@ def correlationAnalysis(config):
 
 
 def multipleLabelAnalysis(config):
-    # TODO: ==============================
-    # TODO: Change to multiple label analysis
-    # TODO: local + global / pessimistic + planned + suicide
-    # TODO: ==============================
-
+    print("== Multi Label Aalysis ==")
     # Read trial data
-    agents_list = ["{}_Q".format(each) for each in config["correlation_agents"]]
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
     window = config["trial_window"]
     temp_trial_data = readTrialData(config["trial_data_filename"])
     trial_num = len(temp_trial_data)
@@ -973,128 +970,129 @@ def multipleLabelAnalysis(config):
                   "label_suicide",
                   "label_true_accidental_hunting",
                   "label_true_planned_hunting"]
-    trial_weight = []
-    trial_cr = []
-    handcrafted_labels = []
-    estimated_labels = []
-    trial_bean_vs_cr = []
+
+    trial_weight_main = []
+    trial_weight_rest = []
     trial_Q = []
-    # Construct optimizer
-    params = [1 for _ in range(len(config["correlation_agents"]))]
-    bounds = [[0, 1000] for _ in range(len(config["correlation_agents"]))]
-    if config["need_intercept"]:
-        params.append(1)
-        bounds.append([-1000, 1000])
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
+    handcrafted_labels = []
+    trial_matching_rate = []
+    all_estimated_label = []
     for trial_index, each in enumerate(trial_data):
         print("-"*15)
         trial_name = each[0]
         X = each[1]
         Y = each[2]
         trial_length = X.shape[0]
-        print(trial_name)
+        print(trial_index, " : ", trial_name)
         # Hand-crafted label
         temp_handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
+        temp_handcrafted_label = temp_handcrafted_label[window:-window]
         handcrafted_labels.append(temp_handcrafted_label)
         # Estimating label through moving window analysis
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         # (num of windows, num of agents)
-        temp_weight = np.zeros((len(window_index), len(config["correlation_agents"]) if not config["need_intercept"] else len(config["correlation_agents"]) + 1))
-        temp_cr = np.zeros((len(window_index), ))
+        temp_weight_main = np.zeros((len(window_index), 2 if not config["need_intercept"] else 3))
+        temp_weight_rest = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
         # (num of windows, window size, num of agents, num pf directions)
         temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        trial_estimated_label = []
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
             cur_step = X.iloc[centering_point]
             sub_X = X[centering_point - window:centering_point + window + 1]
             sub_Y = Y[centering_point - window:centering_point + window + 1]
-            # estimation in the window
-            func = lambda params: negativeLikelihood(
-                params,
-                sub_X,
-                sub_Y,
-                config["correlation_agents"],
-                return_trajectory = False,
-                need_intercept = config["need_intercept"]
-            )
-            is_success = False
-            retry_num = 0
-            while not is_success and retry_num < config["maximum_try"]:
-                res = scipy.optimize.minimize(
-                    func,
-                    x0=params,
-                    method="SLSQP",
-                    bounds=bounds,
-                    tol=1e-5,
-                    constraints=cons
-                )
-                is_success = res.success
-                if not is_success:
-                    print("Fail, retrying...")
-                    retry_num += 1
-            temp_weight[centering_index, :] = res.x
-            # correct rate in the window
-            _, estimated_prob = negativeLikelihood(
-                res.x,
-                sub_X,
-                sub_Y,
-                config["correlation_agents"],
-                return_trajectory = True,
-                need_intercept = config["need_intercept"]
-            )
-            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
-            true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
-            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-            # trial name, pacman pos, beans, energizers, fruit pos, true dir, estimated dir, is correct, window cr
-            trial_bean_vs_cr.append(
-                [
-                    trial_name,
-                    cur_step.pacmanPos,
-                    cur_step.beans,
-                    cur_step.energizers,
-                    cur_step.fruitPos,
-                    true_dir[len(sub_Y) // 2],
-                    estimated_dir[len(sub_Y) // 2],
-                    true_dir[len(sub_Y) // 2] == estimated_dir[len(sub_Y) // 2],
-                    correct_rate
-                ]
-            )
-            temp_cr[centering_index] = correct_rate
             Q_value = sub_X[agents_list].values
             for i in range(window * 2 + 1):  # num of samples in a window
                 for j in range(5):  # number of agents
                     temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
-        trial_cr.append(temp_cr)
-        trial_weight.append(temp_weight)
+            # estimation in the window
+            window_estimated_label = []
+            for agent_index, agent_name in enumerate([["global", "local"], ["pessimistic", "suicide", "planned_hunting"]]):
+                # Construct optimizer
+                params = [1 for _ in range(len(agent_name))]
+                bounds = [[0, 1000] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < config["maximum_try"]:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                if agent_index == 0:
+                    temp_weight_main[centering_index, :] = res.x
+                    contribution = temp_weight_main[centering_index, :-1] * \
+                                   [scaleOfNumber(each) for each in np.max(np.abs(temp_trial_Q[centering_index, :, [0, 1], :]), axis=(1, 2))]
+                    # contribution = temp_weight_main[centering_index, :-1] * \
+                    #                [each for each in
+                    #                 np.nanmean(temp_trial_Q[centering_index, :, [0, 1], :], axis=(1, 2))]
+                else:
+                    temp_weight_rest[centering_index, :] = res.x
+                    contribution = temp_weight_rest[centering_index, :-1] * \
+                                   [scaleOfNumber(each) for each in np.max(np.abs(temp_trial_Q[centering_index, :, [2, 3, 4], :]), axis=(1, 2))]
+                    # contribution = temp_weight_rest[centering_index, :-1] * \
+                    #                [each for each in
+                    #                 np.nanmean(temp_trial_Q[centering_index, :, [2, 3, 4], :], axis=(1, 2))]
+                window_estimated_label.append(_estimationLabeling(contribution, agent_name))
+            trial_estimated_label.append(window_estimated_label)
+        matched_num = 0
+        not_nan_num = 0
+        for i in range(len(temp_handcrafted_label)):
+            if temp_handcrafted_label[i] is not None:
+                not_nan_num += 1
+                if len(np.intersect1d(temp_handcrafted_label[i], trial_estimated_label[i])) > 0:
+                    matched_num += 1
+        print(" Trial label matching rate : ", matched_num / not_nan_num if not_nan_num != 0 else "Nan trial")
+        trial_matching_rate.append(matched_num / not_nan_num)
+        trial_weight_main.append(temp_weight_main)
+        trial_weight_rest.append(temp_weight_rest)
         trial_Q.append(temp_trial_Q)
-        if config["need_intercept"]:
-            temp_estimated_label = [_estimationLabeling(each, config["correlation_agents"]) for each in temp_weight[:,:-1]]
-        else:
-            temp_estimated_label = [_estimationLabeling(each, config["correlation_agents"]) for each in temp_weight]
-        estimated_labels.append(temp_estimated_label)
-        print("Average correct rate for trial : ", np.nanmean(temp_cr))
-    print("Average correct rate for all : ", np.nanmean([np.nanmean(each) for each in trial_cr]))
+        all_estimated_label.append(trial_estimated_label)
     # Save data
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/trial/{}-window{}-{}_intercept-estimated_labels.npy".format(
-        save_base, window, "w" if config["need_intercept"] else "wo"), estimated_labels)
-    np.save("../common_data/trial/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+    np.save("../common_data/multi_label/{}-window{}-{}_intercept-multi_labels.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
+    np.save("../common_data/multi_label/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
-    np.save("../common_data/trial/{}-window{}-{}_intercept-trial_cr.npy".format(
-        save_base, window, "w" if config["need_intercept"] else "wo"), trial_cr)
-    np.save("../common_data/trial/{}-window{}-{}_intercept-trial_weight.npy".format(
-        save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
-    np.save("../common_data/trial/{}-window{}-{}_intercept-bean_vs_cr.npy".format(
-        save_base, window, "w" if config["need_intercept"] else "wo"), trial_bean_vs_cr)
-    np.save("../common_data/trial/{}-window{}-{}_intercept-Q.npy".format(
+    np.save("../common_data/multi_label/{}-window{}-{}_intercept-matching_rate.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
+    np.save("../common_data/multi_label/{}-window{}-{}_intercept-trial_weight_main.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight_main)
+    np.save("../common_data/multi_label/{}-window{}-{}_intercept-trial_weight_rest.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight_rest)
+    np.save("../common_data/multi_label/{}-window{}-{}_intercept-Q.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
+    # Report
+    print("Average matching rate : ", np.mean(trial_matching_rate))
+    print("Min matching rate : ", np.min(trial_matching_rate))
+    print("Max matching rate : ", np.max(trial_matching_rate))
 
 
 def incrementalAnalysis(config):
@@ -1209,13 +1207,15 @@ def singleTrialFitting(config):
     trial_num = len(trial_data)
     print("Num of trials : ", trial_num)
 
-    trial_name_list = ["10-1-Omega-02-Aug-2019-1.csv", "1-1-Omega-19-Aug-2019-1.csv",
-                       "1-1-Omega-22-Jul-2019-1.csv", "1-4-Omega-21-Jun-2019-1.csv"]
-    temp_trial_Data = []
-    for each in trial_data:
-        if each[0] in trial_name_list:
-            temp_trial_Data.append(each)
-    trial_data = temp_trial_Data
+    # trial_name_list = ["10-1-Omega-02-Aug-2019-1.csv", "1-1-Omega-19-Aug-2019-1.csv",
+    #                    "1-1-Omega-22-Jul-2019-1.csv", "1-4-Omega-21-Jun-2019-1.csv"]
+    trial_name_list = None
+    if trial_name_list is not None and len(trial_name_list) > 0:
+        temp_trial_Data = []
+        for each in trial_data:
+            if each[0] in trial_name_list:
+                temp_trial_Data.append(each)
+        trial_data = temp_trial_Data
 
     with open("../common_data/single_trial/trial_data.pkl", "wb") as file:
         pickle.dump(trial_data, file)
@@ -1229,9 +1229,11 @@ def singleTrialFitting(config):
 
     all_hand_crafted = []
     all_estimated = []
-    all_weight = []
+    all_weight_main = []
+    all_weight_rest = []
     all_Q = []
 
+    multi_agent_list = [["global", "local"], ["pessimistic", "suicide", "planned_hunting"]]
     # Construct optimizer
     params = [1 for _ in range(len(agent_name))]
     bounds = [[0, 1000] for _ in range(len(agent_name))]
@@ -1263,73 +1265,109 @@ def singleTrialFitting(config):
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         # (num of windows, num of agents)
-        weight = np.zeros((len(window_index), len(agent_name) if not config["need_intercept"] else len(agent_name) + 1))
+        temp_weight_main = np.zeros((len(window_index), 2 if not config["need_intercept"] else 3))
+        temp_weight_rest = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
+
         cr = np.zeros((len(window_index), ))
         # (num of windows, window size, num of agents, num pf directions)
-        trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
         # For each trial, estimate agent weights through sliding windows
+
+        trial_estimated_label = []
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
             cur_step = X.iloc[centering_point]
             sub_X = X[centering_point - window:centering_point + window + 1]
             sub_Y = Y[centering_point - window:centering_point + window + 1]
-            # estimation in the window
-            func = lambda params: negativeLikelihood(
-                params,
-                sub_X,
-                sub_Y,
-                agent_name,
-                return_trajectory = False,
-                need_intercept = config["need_intercept"]
-            )
-            is_success = False
-            retry_num = 0
-            while not is_success and retry_num < config["maximum_try"]:
-                res = scipy.optimize.minimize(
-                    func,
-                    x0=params,
-                    method="SLSQP",
-                    bounds=bounds,
-                    tol=1e-5,
-                    constraints=cons
-                )
-                is_success = res.success
-                if not is_success:
-                    print("Fail, retrying...")
-                    retry_num += 1
-            weight[centering_index, :] = res.x
-            # correct rate in the window
-            _, estimated_prob = negativeLikelihood(
-                res.x,
-                sub_X,
-                sub_Y,
-                agent_name,
-                return_trajectory = True,
-                need_intercept = config["need_intercept"]
-            )
-            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
-            true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
-            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-            cr[centering_index] = correct_rate
             Q_value = sub_X[agents_list].values
             for i in range(window * 2 + 1):  # num of samples in a window
                 for j in range(5):  # number of agents
-                    trial_Q[centering_index, i, j, :] = Q_value[i][j]
-        print("Average correct rate for trial : ", np.nanmean(cr))
-        all_weight.append(weight)
-        # Estimated labels
-        #TODO: W*Q, normalization
-        for i in range(len(weight)):
-                weight[i, :-1] = weight[i, :-1] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i]), axis=(0, 2))]
-        all_Q.append(trial_Q)
-        if config["need_intercept"]:
-            estimated_label = [_estimationLabeling(each, agent_name) for each in weight[:,:-1]]
-        else:
-            estimated_label = [_estimationLabeling(each, agent_name) for each in weight]
-        all_estimated.append(estimated_label)
-        # is_matched = [(estimated_label[i] in handcrafted_label[i]) for i in label_not_nan_index]
-        is_matched = [(len(np.intersect1d(estimated_label[i], handcrafted_label[i])) > 0) for i in label_not_nan_index]
-        print("Label matching rate : ", np.sum(is_matched) / len(is_matched))
+                    temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
+            # estimation in the window
+            window_estimated_label = []
+            for agent_index, agent_name in enumerate(multi_agent_list):
+                # Construct optimizer
+                params = [1 for _ in range(len(agent_name))]
+                bounds = [[0, 1000] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < config["maximum_try"]:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                if agent_index == 0:
+                    temp_weight_main[centering_index, :] = res.x
+                    contribution = temp_weight_main[centering_index, :-1] * \
+                                   [scaleOfNumber(each) for each in
+                                    np.max(np.abs(temp_trial_Q[centering_index, :, [0, 1], :]), axis=(1, 2))]
+                    # contribution = temp_weight_main[centering_index, :-1] * \
+                    #                [each for each in
+                    #                 np.nanmean(temp_trial_Q[centering_index, :, [0, 1], :], axis=(1, 2))]
+                else:
+                    temp_weight_rest[centering_index, :] = res.x
+                    contribution = temp_weight_rest[centering_index, :-1] * \
+                                   [scaleOfNumber(each) for each in
+                                    np.max(np.abs(temp_trial_Q[centering_index, :, [2, 3, 4], :]), axis=(1, 2))]
+                    # contribution = temp_weight_rest[centering_index, :-1] * \
+                    #                [each for each in
+                    #                 np.nanmean(temp_trial_Q[centering_index, :, [2, 3, 4], :], axis=(1, 2))]
+                window_estimated_label.append(_estimationLabeling(contribution, agent_name))
+            trial_estimated_label.append(window_estimated_label)
+        matched_num = 0
+        not_nan_num = 0
+        for i in range(len(handcrafted_label)):
+            if handcrafted_label[i] is not None:
+                not_nan_num += 1
+                if len(np.intersect1d(handcrafted_label[i], trial_estimated_label[i])) > 0:
+                    matched_num += 1
+        print(" Trial label matching rate : ", matched_num / not_nan_num if not_nan_num != 0 else "Nan trial")
+
+
+        all_weight_main.append(temp_weight_main)
+        all_weight_rest.append(temp_weight_rest)
+        all_estimated.append(trial_estimated_label)
+
+        # # Estimated labels
+        # #TODO: W*Q, normalization
+        # for i in range(len(weight)):
+        #         weight[i, :-1] = weight[i, :-1] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i]), axis=(0, 2))]
+        # all_Q.append(trial_Q)
+        # if config["need_intercept"]:
+        #     estimated_label = [_estimationLabeling(each, agent_name) for each in weight[:,:-1]]
+        # else:
+        #     estimated_label = [_estimationLabeling(each, agent_name) for each in weight]
+        # all_estimated.append(estimated_label)
+        # # is_matched = [(estimated_label[i] in handcrafted_label[i]) for i in label_not_nan_index]
+        # is_matched = [(len(np.intersect1d(estimated_label[i], handcrafted_label[i])) > 0) for i in label_not_nan_index]
+        # print("Label matching rate : ", np.sum(is_matched) / len(is_matched))
+
         # Plot weight variation of this trial
         agent_color = {
             "local": "red",
@@ -1340,11 +1378,34 @@ def singleTrialFitting(config):
         }
         plt.title("{} (avg cr = {avg:.3f})".format(trial_name, avg=np.nanmean(cr)), fontsize=20)
         # normalization
-        for index in range(weight.shape[0]):
-            weight[index, :] = weight[index, :] / np.linalg.norm(weight[index, :])
-        for index in range(len(agent_name)):
-            plt.plot(weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
-                     label=agent_name[index])
+        for index in range(temp_weight_main.shape[0]):
+            if config["need_intercept"]:
+                temp_weight_main[index, :-1] = temp_weight_main[index, :-1] / np.linalg.norm(temp_weight_main[index, :-1])
+            else:
+                temp_weight_main[index, :] = temp_weight_main[index, :] / np.linalg.norm(temp_weight_main[index, :])
+        for index in range(temp_weight_rest.shape[0]):
+            if config["need_intercept"]:
+                temp_weight_rest[index, :-1] = temp_weight_rest[index, :-1] / np.linalg.norm(temp_weight_rest[index, :-1])
+            else:
+                temp_weight_rest[index, :] = temp_weight_rest[index, :] / np.linalg.norm(temp_weight_rest[index, :])
+
+        plt.subplot(2, 1, 1)
+        plt.title(trial_name, fontsize = 15)
+        for index in range(len(multi_agent_list[0])):
+            plt.plot(temp_weight_main[:, index], color=agent_color[multi_agent_list[0][index]], ms=3, lw=5,
+                     label=multi_agent_list[0][index])
+        plt.ylabel("Normalized Agent Weight", fontsize=20)
+        plt.xlim(0, temp_weight_main.shape[0] - 1)
+        plt.xlabel("Time Step", fontsize=15)
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-0.1, 1.1)
+        plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name))
+
+        plt.subplot(2, 1, 2)
+        for index in range(len(multi_agent_list[1])):
+            plt.plot(temp_weight_rest[:, index], color=agent_color[multi_agent_list[1][index]], ms=3, lw=5,
+                     label=multi_agent_list[1][index])
         # plot hand-crafted label
         # TODO: what about None value; multiple hand-crafted labels
         for i in range(len(handcrafted_label)):
@@ -1356,7 +1417,7 @@ def singleTrialFitting(config):
                     plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
 
         plt.ylabel("Normalized Agent Weight", fontsize=20)
-        plt.xlim(0, weight.shape[0] - 1)
+        plt.xlim(0, temp_weight_rest.shape[0] - 1)
         plt.xlabel("Time Step", fontsize=15)
         plt.xticks(fontsize = 15)
         plt.yticks(fontsize=15)
@@ -1364,11 +1425,12 @@ def singleTrialFitting(config):
         plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name))
         plt.show()
 
-    # Save data
-    np.save("../common_data/single_trial/hand_crafted_labels.npy", all_hand_crafted)
-    np.save("../common_data/single_trial/estimated_labels.npy", all_estimated)
-    np.save("../common_data/single_trial/agent_weights.npy", all_weight)
-    np.save("../common_data/single_trial/agent_contributions.npy", all_Q)
+        all_Q.append(temp_trial_Q)
+    # # Save data
+    # np.save("../common_data/single_trial/hand_crafted_labels.npy", all_hand_crafted)
+    # np.save("../common_data/single_trial/estimated_labels.npy", all_estimated)
+    # np.save("../common_data/single_trial/agent_weights.npy", all_weight)
+    # np.save("../common_data/single_trial/agent_contributions.npy", all_Q)
 
 
 def simpleMLE(config):
@@ -1512,12 +1574,13 @@ def plotWeightVariation(config, plot_sem = False, contribution = True, need_norm
             raise ValueError("The type of normalizing should be specified!")
         elif "step" == normalizing_type:
             for index in range(avg_local2global_weight.shape[0]):
-                avg_local2global_weight[index, :]  = avg_local2global_weight[index, :] / np.max(avg_local2global_weight[index, :])
-                local2global_weight[:, index, :] = local2global_weight[:, index, :] / np.max(local2global_weight[:, index, :])
+                #TODO: what if no intercept !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
+                avg_local2global_weight[index, :-1]  = avg_local2global_weight[index, :-1] / np.max(avg_local2global_weight[index, :-1])
+                local2global_weight[:, index, :-1] = local2global_weight[:, index, :-1] / np.max(local2global_weight[:, index, :-1])
         elif "sum" == normalizing_type:
             for index in range(avg_local2global_weight.shape[0]):
-                avg_local2global_weight[index, :]  = avg_local2global_weight[index, :] / np.linalg.norm(avg_local2global_weight[index, :])
-                local2global_weight[:, index, :] = local2global_weight[:, index, :] / np.linalg.norm(local2global_weight[:, index, :])
+                avg_local2global_weight[index, :-1]  = avg_local2global_weight[index, :-1] / np.linalg.norm(avg_local2global_weight[index, :-1])
+                local2global_weight[:, index, :-1] = local2global_weight[:, index, :-1] / np.linalg.norm(local2global_weight[:, index, :-1])
         elif "all" == normalizing_type:
             avg_local2global_weight = avg_local2global_weight / np.max(avg_local2global_weight)
             local2global_weight = local2global_weight / np.max(local2global_weight)
@@ -1572,12 +1635,12 @@ def plotWeightVariation(config, plot_sem = False, contribution = True, need_norm
             raise ValueError("The type of normalizing should be specified!")
         elif "step" == normalizing_type:
             for index in range(avg_global2local_weight.shape[0]):
-                avg_global2local_weight[index, :]  = avg_global2local_weight[index, :] / np.max(avg_global2local_weight[index, :])
-                global2local_weight[:, index, :] = global2local_weight[:, index, :] / np.max(global2local_weight[:, index, :])
+                avg_global2local_weight[index, :-1]  = avg_global2local_weight[index, :-1] / np.max(avg_global2local_weight[index, :-1])
+                global2local_weight[:, index, :-1] = global2local_weight[:, index, :-1] / np.max(global2local_weight[:, index, :-1])
         elif "sum" == normalizing_type:
             for index in range(avg_global2local_weight.shape[0]):
-                avg_global2local_weight[index, :]  = avg_global2local_weight[index, :] / np.linalg.norm(avg_global2local_weight[index, :])
-                global2local_weight[:, index, :] = global2local_weight[:, index, :] / np.linalg.norm(global2local_weight[:, index, :])
+                avg_global2local_weight[index, :-1]  = avg_global2local_weight[index, :-1] / np.linalg.norm(avg_global2local_weight[index, :-1])
+                global2local_weight[:, index, :-1] = global2local_weight[:, index, :-1] / np.linalg.norm(global2local_weight[:, index, :-1])
         elif "all" == normalizing_type:
             avg_global2local_weight = avg_global2local_weight / np.max(avg_global2local_weight)
             global2local_weight = global2local_weight / np.max(global2local_weight)
@@ -1631,16 +1694,16 @@ def plotWeightVariation(config, plot_sem = False, contribution = True, need_norm
             raise ValueError("The type of normalizing should be specified!")
         elif "step" == normalizing_type:
             for index in range(avg_local2evade_weight.shape[0]):
-                avg_local2evade_weight[index, :] = avg_local2evade_weight[index, :] / np.max(
-                    avg_local2evade_weight[index, :])
-                local2evade_weight[:, index, :] = local2evade_weight[:, index, :] / np.max(
-                    local2evade_weight[:, index, :])
+                avg_local2evade_weight[index, :-1] = avg_local2evade_weight[index, :-1] / np.max(
+                    avg_local2evade_weight[index, :-1])
+                local2evade_weight[:, index, :-1] = local2evade_weight[:, index, :-1] / np.max(
+                    local2evade_weight[:, index, :-1])
         elif "sum" == normalizing_type:
             for index in range(avg_local2evade_weight.shape[0]):
-                avg_local2evade_weight[index, :] = avg_local2evade_weight[index, :] / np.linalg.norm(
-                    avg_local2evade_weight[index, :])
-                local2evade_weight[:, index, :] = local2evade_weight[:, index, :] / np.linalg.norm(
-                    local2evade_weight[:, index, :])
+                avg_local2evade_weight[index, :-1] = avg_local2evade_weight[index, :-1] / np.linalg.norm(
+                    avg_local2evade_weight[index, :-1])
+                local2evade_weight[:, index, :-1] = local2evade_weight[:, index, :-1] / np.linalg.norm(
+                    local2evade_weight[:, index, :-1])
         elif "all" == normalizing_type:
             avg_local2evade_weight = avg_local2evade_weight / np.max(avg_local2evade_weight)
             local2evade_weight = local2evade_weight / np.max(local2global_weight)
@@ -1686,16 +1749,16 @@ def plotWeightVariation(config, plot_sem = False, contribution = True, need_norm
             raise ValueError("The type of normalizing should be specified!")
         elif "step" == normalizing_type:
             for index in range(avg_evade2local_weight.shape[0]):
-                avg_evade2local_weight[index, :] = avg_evade2local_weight[index, :] / np.max(
-                    avg_evade2local_weight[index, :])
-                evade2local_weight[:, index, :] = evade2local_weight[:, index, :] / np.max(
-                    evade2local_weight[:, index, :])
+                avg_evade2local_weight[index, :-1] = avg_evade2local_weight[index, :-1] / np.max(
+                    avg_evade2local_weight[index, :-1])
+                evade2local_weight[:, index, :-1] = evade2local_weight[:, index, :-1] / np.max(
+                    evade2local_weight[:, index, :-1])
         elif "sum" == normalizing_type:
             for index in range(avg_evade2local_weight.shape[0]):
-                avg_evade2local_weight[index, :] = avg_evade2local_weight[index, :] / np.linalg.norm(
-                    avg_evade2local_weight[index, :])
-                evade2local_weight[:, index, :] = evade2local_weight[:, index, :] / np.linalg.norm(
-                    evade2local_weight[:, index, :])
+                avg_evade2local_weight[index, :-1] = avg_evade2local_weight[index, :-1] / np.linalg.norm(
+                    avg_evade2local_weight[index, :-1])
+                evade2local_weight[:, index, :-1] = evade2local_weight[:, index, :-1] / np.linalg.norm(
+                    evade2local_weight[:, index, :-1])
         elif "all" == normalizing_type:
             avg_evade2local_weight = avg_evade2local_weight / np.max(avg_evade2local_weight)
             evade2local_weight = evade2local_weight / np.max(evade2local_weight)
@@ -1739,53 +1802,56 @@ def plotCorrelation(config, contribution = True):
     # Read data
     # trial_weight : (num of trials, num of windows, num of agents + 1)
     # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    # estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True) #TODO: do not use this as estimated labels
+    estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True)
     handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
-    trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
-    trial_weight = np.load(config["trial_weight_filename"], allow_pickle=True)
-    trial_weight = [trial_weight[index][:, :5] for index in range(len(trial_weight))] #TODO: what about wo_intercept
-    trial_Q = np.load(config["trial_Q_filename"], allow_pickle=True)
-    # TODO: W*Q, normalization
-    if contribution:
-        for i in range(len(trial_weight)):
-            for j in range(len(trial_weight[i])):
-                trial_weight[i][j, :] = trial_weight[i][j, :] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i][j]), axis = (0, 2))]
-                # trial_weight[i][j, :] = trial_weight[i][j, :] * [each for each in
-                #                                                  np.nanmax(np.abs(trial_Q[i][j]), axis=(0, 2))]
-    estimated_labels = []
-    for index in range(len(trial_weight)):
-        temp_estimated_labels = [_estimationLabeling(each, config["correlation_agents"]) for each in trial_weight[index]]
-        estimated_labels.append(temp_estimated_labels)
+    trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
 
-    trial_num = len(estimated_labels)
-    trial_matching_rate = []
-    # trial_correlation = []
-    is_matched = []
-    for index in range(trial_num):
-        # estimated = np.array(_label2Index(estimated_labels[index]))
-        # handcrafted = np.array(_label2Index(handcrafted_labels[index]))
-        estimated = np.array(estimated_labels[index])
-        handcrafted = np.array(handcrafted_labels[index])
-        handcrafted = handcrafted[window:len(handcrafted) - window]
-        # if len(estimated) != len(handcrafted):
-        if len(estimated) != len(handcrafted):
-            raise IndexError("len(estimated labels) != len(hand-crafted labels)")
-        # what about None value
-        not_none_index = np.where(handcrafted != None)
-        if isinstance(not_none_index, tuple):
-            not_none_index = not_none_index[0]
-        if len(not_none_index) != 0:
-            estimated = np.array(estimated)[not_none_index]
-            handcrafted = np.array(handcrafted)[not_none_index]
-            for i in range(len(estimated)):
-                if len(np.intersect1d(estimated[i], handcrafted[i])) > 0:
-                    is_matched.append(1)
-                else:
-                    is_matched.append(0)
-            # matching_rate = np.sum(estimated == handcrafted) / len(estimated)
-            matching_rate = np.sum(is_matched) / len(is_matched)
-            # trial_correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
-            trial_matching_rate.append(matching_rate)
+    # # trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
+    # trial_weight = np.load(config["trial_weight_filename"], allow_pickle=True)
+    # trial_weight = [trial_weight[index][:, :5] for index in range(len(trial_weight))] #TODO: what about wo_intercept
+    # trial_Q = np.load(config["trial_Q_filename"], allow_pickle=True)
+    # # TODO: W*Q, normalization
+    # if contribution:
+    #     for i in range(len(trial_weight)):
+    #         for j in range(len(trial_weight[i])):
+    #             trial_weight[i][j, :] = trial_weight[i][j, :] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i][j]), axis = (0, 2))]
+    #             # trial_weight[i][j, :] = trial_weight[i][j, :] * [each for each in
+    #             #                                                  np.nanmax(np.abs(trial_Q[i][j]), axis=(0, 2))]
+    # estimated_labels = []
+    # for index in range(len(trial_weight)):
+    #     temp_estimated_labels = [_estimationLabeling(each, config["correlation_agents"]) for each in trial_weight[index]]
+    #     estimated_labels.append(temp_estimated_labels)
+    #
+    # trial_num = len(estimated_labels)
+    # trial_matching_rate = []
+    # # trial_correlation = []
+    # is_matched = []
+    # for index in range(trial_num):
+    #     # estimated = np.array(_label2Index(estimated_labels[index]))
+    #     # handcrafted = np.array(_label2Index(handcrafted_labels[index]))
+    #     estimated = np.array(estimated_labels[index])
+    #     handcrafted = np.array(handcrafted_labels[index])
+    #     handcrafted = handcrafted[window:len(handcrafted) - window]
+    #     # if len(estimated) != len(handcrafted):
+    #     if len(estimated) != len(handcrafted):
+    #         raise IndexError("len(estimated labels) != len(hand-crafted labels)")
+    #     # what about None value
+    #     not_none_index = np.where(handcrafted != None)
+    #     if isinstance(not_none_index, tuple):
+    #         not_none_index = not_none_index[0]
+    #     if len(not_none_index) != 0:
+    #         estimated = np.array(estimated)[not_none_index]
+    #         handcrafted = np.array(handcrafted)[not_none_index]
+    #         for i in range(len(estimated)):
+    #             if len(np.intersect1d(estimated[i], handcrafted[i])) > 0:
+    #                 is_matched.append(1)
+    #             else:
+    #                 is_matched.append(0)
+    #         # matching_rate = np.sum(estimated == handcrafted) / len(estimated)
+    #         matching_rate = np.sum(is_matched) / len(is_matched)
+    #         # trial_correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
+    #         trial_matching_rate.append(matching_rate)
+
     print("-"*15)
     print("Matching rate : ")
     print("Max : ", np.nanmax(trial_matching_rate))
@@ -1799,17 +1865,15 @@ def plotCorrelation(config, contribution = True):
     # print("Median : ", np.nanmedian(trial_correlation))
     # print("Average : ", np.nanmean(trial_correlation))
     # histogram
-    plt.title("Label Matching on 500 Trials (avg cr = {cr:.4f})".format(cr=np.mean([np.mean(each) for each in trial_cr])), fontsize = 20)
+    # plt.title("Label Matching on 500 Trials (avg cr = {cr:.4f})".format(cr=np.mean([np.mean(each) for each in trial_cr])), fontsize = 20)
+
+    plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
     plt.hist(trial_matching_rate)
     plt.xlabel("Correct Rate (estimated label = hand-crafted label)", fontsize = 20)
     plt.xlim(0, 1.0)
     plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
     plt.ylabel("# of Trials", fontsize=20)
     plt.yticks(fontsize=20)
-
-    # plt.subplot(1, 2, 2)
-    # plt.hist([each[0] for each in trial_correlation])
-
     plt.show()
 
 
@@ -1970,7 +2034,11 @@ if __name__ == '__main__':
         agents = ["local", "pessimistic"]
 
     config = {
+        # TODO: ===================================
+        # TODO:       Always set to True
+        # TODO: ===================================
         "need_intercept" : True,
+
         # ==================================================================================
         #                       For Sliding Window Analysis
         # Filename
@@ -1985,13 +2053,13 @@ if __name__ == '__main__':
         # ==================================================================================
 
         # ==================================================================================
-        #                       For Correlation Analysis
+        #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
         "trial_data_filename": "../common_data/trial/500_trial_data-with_Q.pkl",
         # The number of trials used for analysis
-        "trial_num" : None,
+        "trial_num" :100,
         # Window size for correlation analysis
-        "trial_window" : 3,
+        "trial_window" : 1,
         "correlation_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
 
@@ -2000,7 +2068,7 @@ if __name__ == '__main__':
         # Filename
         "single_trial_data_filename": "../common_data/trial/500_trial_data-with_Q.pkl",
         # Window size for correlation analysis
-        "single_trial_window": 5,
+        "single_trial_window": 1,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
 
@@ -2024,11 +2092,14 @@ if __name__ == '__main__':
 
         # ==================================================================================
         #                       For Experimental Results Visualization
-        "estimated_label_filename" : "../common_data/trial/500_trial_data-with_Q-window3-w_intercept-estimated_labels.npy",
-        "handcrafted_label_filename": "../common_data/trial/500_trial_data-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_cr_filename": "../common_data/trial/500_trial_data-with_Q-window3-w_intercept-trial_cr.npy",
-        "trial_weight_filename": "../common_data/trial/500_trial_data-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "../common_data/trial/500_trial_data-with_Q-window3-w_intercept-Q.npy",
+        # this multi-label data is the true estimated label
+        "estimated_label_filename" : "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        # "trial_cr_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-trial_cr.npy",
+        "trial_weight_main_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-trial_weight_main.npy",
+        "trial_weight_rest_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-trial_weight_rest.npy",
+        "trial_Q_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-matching_rate.npy",
 
         # ------------------------------------------------------------------------------------
 
@@ -2060,12 +2131,15 @@ if __name__ == '__main__':
     # ============ MOVING WINDOW =============
     # movingWindowAnalysis(config)
 
-    singleTrialFitting(config)
+    # singleTrialFitting(config)
 
     # simpleMLE(config)
 
+    integrationAnalysis(config)
+
     # ============ Correlation =============
     # correlationAnalysis(config)
+    # multipleLabelAnalysis(config)
 
     # incrementalAnalysis(config)
 
