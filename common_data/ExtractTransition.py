@@ -22,7 +22,7 @@ def _extractAllData(trial_num = 20000):
     # with open(data_filename, "rb") as file:
     #     all_data_with_label = pickle.load(file)
 
-    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data_new.pkl"
     with open(data_filename, "rb") as file:
         data = pickle.load(file)
     all_data_with_label = data["df_total"]
@@ -46,7 +46,8 @@ def _extractAllData(trial_num = 20000):
         "label_evade",
         "label_suicide",
         "label_true_accidental_hunting",
-        "label_true_planned_hunting"
+        "label_true_planned_hunting",
+        "label_global_ending"
     ]
     all_data_with_label[label_list] = all_data_with_label[label_list].fillna(0)
     print("All data shape : ", all_data_with_label.shape)
@@ -149,9 +150,11 @@ def _findTransitionPoint(state1_indication, state2_indication, length):
 
 
 def _local2Global(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
-        axis = 1
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending"]].apply(
+        lambda
+            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
+        axis=1
     )
     is_global = trial_data[["label_global_optimal", "label_global_notoptimal", "label_global"]].apply(
         lambda x: x.label_global_optimal == 1,
@@ -172,8 +175,10 @@ def _local2Global(trial_data):
 
 
 def _local2Evade(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending"]].apply(
+        lambda
+            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
         axis=1
     )
     is_evade = trial_data[["label_evade"]].apply(
@@ -195,8 +200,10 @@ def _local2Evade(trial_data):
 
 
 def _evade2Local(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending"]].apply(
+        lambda
+            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
         axis=1
     )
     is_evade = trial_data[["label_evade"]].apply(
@@ -218,15 +225,16 @@ def _evade2Local(trial_data):
 
 
 def _global2Local(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
+    # label_global_ending 只对于 global -- local 有影响。
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting", "label_global_ending"]].apply(
+        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
         axis=1
     )
-    is_global = trial_data[["label_global_optimal", "label_global_notoptimal", "label_global"]].apply(
-        lambda x: x.label_global_optimal,
+    is_global = trial_data[["label_global_optimal", "label_global_notoptimal", "label_global", "label_global_ending"]].apply(
+        lambda x: x.label_global_optimal and x.label_global_ending != 1,
         axis=1
     )
-    length = 15
+    length = 10
     print("Global_to_local length : ", length)
     trajectory_point = _findTransitionPoint(is_global, is_local, length)
     if len(trajectory_point) == 0:
@@ -241,8 +249,8 @@ def _global2Local(trial_data):
 
 
 def _local2Planned(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting", "label_global_ending"]].apply(
+        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
         axis = 1
     )
     is_planned = trial_data[["label_true_planned_hunting"]].apply(
@@ -264,8 +272,8 @@ def _local2Planned(trial_data):
 
 
 def _local2Suicide(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1,
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_global_ending"]].apply(
+        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_global_ending == 1,
         axis=1
     )
 
@@ -343,14 +351,23 @@ def extractTransitionData(transition_type):
         (trial_local_to_global, trial_local_to_evade, trial_global_to_local,
          trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local) = _extractTrialData(trial_data, transition_type)
         if trial_local_to_global is not None:
-            local_to_global.extend(copy.deepcopy(trial_local_to_global))
-            local2global_trial_num += 1
+            if local2global_trial_num > 1000: #TODO:
+                pass
+            else:
+                local_to_global.extend(copy.deepcopy(trial_local_to_global))
+                local2global_trial_num += 1
         if trial_local_to_evade is not None:
-            local_to_evade.extend(copy.deepcopy(trial_local_to_evade))
-            local2evade_trial_num += 1
+            if local2evade_trial_num > 1500: #TODO:
+                pass
+            else:
+                local_to_evade.extend(copy.deepcopy(trial_local_to_evade))
+                local2evade_trial_num += 1
         if trial_global_to_local is not None:
-            global_to_local.extend(copy.deepcopy(trial_global_to_local))
-            global2local_trial_num += 1
+            if global2local_trial_num > 1000: #TODO:
+                pass
+            else:
+                global_to_local.extend(copy.deepcopy(trial_global_to_local))
+                global2local_trial_num += 1
         if trial_local_to_planned is not None:
             local_to_planned.extend(copy.deepcopy(trial_local_to_planned))
             local2planned_trial_num += 1
@@ -358,8 +375,11 @@ def extractTransitionData(transition_type):
             local_to_suicide.extend(copy.deepcopy(trial_local_to_suicide))
             local2suicide_trial_num += 1
         if trial_evade_to_local is not None:
-            evade_to_local.extend(copy.deepcopy(trial_evade_to_local))
-            evade2local_trial_num += 1
+            if evade2local_trial_num > 1500: #TODO:
+                pass
+            else:
+                evade_to_local.extend(copy.deepcopy(trial_evade_to_local))
+                evade2local_trial_num += 1
         print("-"*25)
     print("Finished extracting!")
     # Write data
@@ -417,5 +437,5 @@ def extractTransitionData(transition_type):
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["evade_to_local"]
+    transition_type = ["global_to_local"]
     extractTransitionData(transition_type)

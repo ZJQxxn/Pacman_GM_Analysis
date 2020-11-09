@@ -18,7 +18,7 @@ import copy
 
 def extractTrialData(trial_num = 10):
     # Read data
-    data_filename = "/home/qlyang/Documents/pacman/constants/all_data.pkl"
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data_new.pkl" #TODO: new data
     with open(data_filename, "rb") as file:
         data = pickle.load(file)
     all_data_with_label = data["df_total"]
@@ -57,3 +57,10 @@ def extractTrialData(trial_num = 10):
 if __name__ == '__main__':
     # Extract transition data
     extractTrialData(trial_num = 500)
+
+    # data_filename = "/home/qlyang/Documents/pacman/constants/all_data_new.pkl" #TODO: new data
+    # with open(data_filename, "rb") as file:
+    #     data = pickle.load(file)
+    # all_data_with_label = data["df_total"]
+    # print(all_data_with_label.shape)
+    # print(all_data_with_label.columns.values)
