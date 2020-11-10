@@ -113,13 +113,32 @@ def readTrialData(filename):
             if index == all_data.shape[0] - 1:
                 if isinstance(all_data.global_Q[index - 1], list):
                     all_data.global_Q[index] = all_data.global_Q[index - 2]
+                    all_data.local_Q[index] = all_data.local_Q[index - 2]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 2]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index - 2]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 2]
                 else:
                     all_data.global_Q[index] = all_data.global_Q[index - 1]
+                    all_data.local_Q[index] = all_data.local_Q[index - 1]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 1]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index - 1]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 1]
             else:
                 if isinstance(all_data.global_Q[index + 1], list):
                     all_data.global_Q[index] = all_data.global_Q[index + 2]
+                    all_data.local_Q[index] = all_data.local_Q[index + 2]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 2]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index + 2]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 2]
                 else:
                     all_data.global_Q[index] = all_data.global_Q[index + 1]
+                    all_data.local_Q[index] = all_data.local_Q[index + 1]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 1]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index + 1]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 1]
+    # Pre-processng pessimistic Q
+    # TODO: check this
+    all_data.global_Q, all_data.local_Q, all_data.pessimistic_Q = _pessimisticProcesing(all_data.global_Q, all_data.local_Q, all_data.pessimistic_Q)
     # Split into trials
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -533,6 +552,22 @@ def _handcraftLabeling(labels):
 #         return"planned_hunting"
 #     else:
 #         return None
+
+def _pessimisticProcesing(global_Q, local_Q, pess_Q):
+    offset = np.max(np.abs(np.concatenate(pess_Q)))
+    temp_global_Q = copy.deepcopy(global_Q)
+    temp_local_Q = copy.deepcopy(local_Q)
+    temp_pess_Q = copy.deepcopy(pess_Q)
+    # for index in range(len(temp_pess_Q)):
+    #     if np.any(temp_pess_Q[index] < -5):
+    #         non_zero = np.where(temp_pess_Q[index] != 0)
+    #         temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
+    for index in range(len(temp_pess_Q)):
+        non_zero = np.where(temp_pess_Q[index] != 0)
+        temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
+        temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
+        temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
+    return temp_global_Q, temp_local_Q, temp_pess_Q
 
 
 def _label2Index(labels):
@@ -1093,6 +1128,7 @@ def multipleLabelAnalysis(config):
 
 def threeAgentAnalysis(config):
     print("== Multi Label Aaalysis with Three Agents ==")
+    print(config["trial_data_filename"])
     # Read trial data
     agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
     window = config["trial_window"]
@@ -1654,7 +1690,7 @@ def singleTrialFitting(config):
 
         all_Q.append(temp_trial_Q)
     # # Save data
-    np.save("../common_data/single_trial/records.npy", record)
+    np.save("../common_data/single_trial/non_negative_records.npy", record)
     # np.save("../common_data/single_trial/estimated_labels.npy", all_estimated)
     # np.save("../common_data/single_trial/agent_weights.npy", all_weight)
     # np.save("../common_data/single_trial/agent_contributions.npy", all_Q)
@@ -1682,7 +1718,8 @@ def singleTrialThreeFitting(config):
     trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
                        "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv", "12-2-Patamon-13-Aug-2019-1.csv"]
 
-
+    # trial_name_list = ["13-5-Patamon-21-Aug-2019-1.csv",
+    #                    "12-2-Patamon-13-Aug-2019-1.csv"]
 
     record = []
     # trial_name_list = None
@@ -1712,7 +1749,7 @@ def singleTrialThreeFitting(config):
     agent_name = ["global", "local", "pessimistic"]
     # Construct optimizer
     params = [1 for _ in range(len(agent_name))]
-    bounds = [[0, 1000] for _ in range(len(agent_name))]
+    bounds = [[0, 1] for _ in range(len(agent_name))]
     if config["need_intercept"]:
         params.append(1)
         bounds.append([-1000, 1000])
@@ -1886,7 +1923,7 @@ def singleTrialThreeFitting(config):
         plt.yticks(fontsize=15)
         plt.ylim(-0.1, 1.1)
         plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name))
-        # plt.show()
+        plt.show()
 
         # plt.subplot(2, 1, 2)
         # for index in range(len(multi_agent_list[1])):
@@ -3223,7 +3260,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/100_trial_data_new-two_ghosts-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/100_trial_data_new-one_ghost-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -3270,11 +3307,11 @@ if __name__ == '__main__':
         # "trial_Q_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-Q.npy",
         # "trial_matching_rate_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-matching_rate.npy",
 
-        "estimated_label_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_weight_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-matching_rate.npy",
+        "estimated_label_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        "trial_weight_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
+        "trial_Q_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
 
         # ------------------------------------------------------------------------------------
         # "estimated_label_filename": "../common_data/multi_label/100_trial_data-with_Q-window3-w_intercept-multi_labels.npy",
@@ -3322,7 +3359,7 @@ if __name__ == '__main__':
 
         # ------------------------------------------------------------------------------------
 
-        "bean_vs_cr_filename" : "../common_data/incremental/100trial-window3-incremental_cr-w_intercept.npy",
+        "bean_vs_cr_filename" : "../common_data/incremental/500trial-window3-incremental_cr-w_intercept.npy",
         "bin_size" : 10,
     }
     print("Window size for moving window analysis : ", config["window"])
@@ -3335,6 +3372,8 @@ if __name__ == '__main__':
 
     # simpleMLE(config)
 
+    # data = np.load("../common_data/single_trial/all_agent_records.npy", allow_pickle=True)
+    # print()
 
     # integrationAnalysis(config)
 
@@ -3348,7 +3387,7 @@ if __name__ == '__main__':
     # ============ VISUALIZATION =============
     # plotMultiLabelMatching(config)
     # plotAllAgentMatching(config, contribution = True)
-    plotThreeAgentMatching(config)
+    # plotThreeAgentMatching(config)
 
     # plotWeightVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum") # step / sum / all
     # plotIntegrationVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum")
