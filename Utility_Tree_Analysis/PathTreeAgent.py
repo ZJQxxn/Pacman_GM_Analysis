@@ -359,6 +359,9 @@ class PathTree:
                 if cur_position == self.ghost_data[1]:
                     exact_risk = -self.reward_amount[9]
                     self.is_eaten = True
+
+                    # exact_risk = 0.0 #TODO: for testing single ghost pessimistic
+
                     return exact_risk, potential_risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
             elif 3 == ifscared2:
@@ -373,6 +376,10 @@ class PathTree:
                 if cur_position == self.ghost_data[0] or cur_position == self.ghost_data[1]:
                     exact_risk = -self.reward_amount[9]
                     self.is_eaten = True
+
+                    # if cur_position == self.ghost_data[1]:
+                    #     exact_risk = 0.0  # TODO: for testing single ghost pessimistic
+
                     return exact_risk, potential_risk
                 # Potential risk
                 else:
@@ -454,7 +461,7 @@ if __name__ == '__main__':
     # last_dir = "right"
 
     cur_pos = (14, 27)
-    ghost_data = [(14, 17), (14, 19)]
+    ghost_data = [(13, 27), (15, 27)]
     ghost_status = [1, 1]
     energizer_data = [(7, 5), (17, 5), (7, 26), (24, 30)]
     bean_data = [(2, 5), (4, 5), (5, 5), (16, 5), (18, 5), (20, 5), (24, 5), (25, 5), (16, 6), (7, 7), (13, 7), (27, 7),
@@ -467,7 +474,7 @@ if __name__ == '__main__':
                  (20, 33), (24, 33), (25, 33), (26, 33)]
     reward_type = 5
     fruit_pos = (3,30)
-    last_dir = "left"
+    last_dir = None
 
     # Global agent
     agent = PathTree(

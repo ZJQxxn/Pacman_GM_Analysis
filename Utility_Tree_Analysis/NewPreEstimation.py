@@ -44,7 +44,7 @@ def _readData(filename):
     '''
     with open(filename, "rb") as file:
         all_data = pickle.load(file)
-    all_data = all_data.reset_index()
+    all_data = all_data.reset_index(drop=True)
     print()
     return all_data
 
@@ -289,13 +289,16 @@ def preEstimation():
     print("Finished reading auxiliary data.")
     filename_list = [
         # "../common_data/trial/5_trial_data.pkl",
-        "../common_data/transition/global_to_local.pkl",
+        # "../common_data/transition/global_to_local.pkl",
         # "../common_data/transition/local_to_global.pkl",
         # "../common_data/transition/local_to_evade.pkl",
         # "../common_data/transition/evade_to_local.pkl",
         # "../common_data/transition/local_to_planned.pkl",
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
+        # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
+        "../common_data/trial/100_trial_data_new.pkl",
+        # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -304,10 +307,11 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}/{}-with_Q.pkl".format(
-                "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
-                filename.split("/")[-1].split(".")[0]
-        ), "wb") as file:
+        # with open("{}/{}-with_Q.pkl".format(
+        #         "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
+        #         filename.split("/")[-1].split(".")[0]
+        # ), "wb") as file:
+        with open("../common_data/trial/{}-one_ghost-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
             pickle.dump(all_data, file)
         print("{}-with_Q.pkl saved!".format(filename.split("/")[-1].split(".")[0]))
     pd.options.mode.chained_assignment = "warn"
@@ -316,5 +320,24 @@ def preEstimation():
 
 
 if __name__ == '__main__':
+
+    # trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
+    #                    "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv",
+    #                    "12-2-Patamon-13-Aug-2019-1.csv"]
+    #
+    # with open("../common_data/trial/100_trial_data_new.pkl", "rb") as file:
+    #     data = pickle.load(file)
+    #     data = data.reset_index(drop=True)
+    #
+    # is_need = data.file.apply(lambda x: x in trial_name_list)
+    # index = np.where(is_need == 1)
+    # data = data.iloc[index].reset_index(drop=True)
+    #
+    # print(data.shape)
+    #
+    # with open("../common_data/single_trial/5_trial-data_for_comparison.pkl", "wb") as file:
+    #     pickle.dump(data, file)
+
     # Pre-estimation
     preEstimation()
+

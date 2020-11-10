@@ -444,7 +444,7 @@ def preEstimation():
     print("Finished reading auxiliary data.")
     filename_list = [
         # "../common_data/trial/5_trial_data.pkl",
-        "../common_data/transition/global_to_local.pkl",
+        # "../common_data/transition/global_to_local.pkl",
         # "../common_data/transition/local_to_global.pkl",
         # "../common_data/transition/local_to_evade.pkl",
         # "../common_data/transition/evade_to_local.pkl",
@@ -1091,6 +1091,145 @@ def multipleLabelAnalysis(config):
     print("Max matching rate : ", np.max(trial_matching_rate))
 
 
+def threeAgentAnalysis(config):
+    print("== Multi Label Aaalysis with Three Agents ==")
+    # Read trial data
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    window = config["trial_window"]
+    temp_trial_data = readTrialData(config["trial_data_filename"])
+    trial_num = len(temp_trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = range(trial_num)
+    if config["trial_num"] is not None:
+        if config["trial_num"] < trial_num:
+            trial_index = np.random.choice(range(trial_num), config["trial_num"], replace = False)
+    trial_data = [temp_trial_data[each] for each in trial_index]
+    label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+                  "label_global_optimal", "label_global_notoptimal", "label_global",
+                  "label_evade",
+                  "label_suicide",
+                  "label_true_accidental_hunting",
+                  "label_true_planned_hunting"]
+
+    trial_weight = []
+    trial_Q = []
+    trial_contribution = []
+    handcrafted_labels = []
+    trial_matching_rate = []
+    all_estimated_label = []
+    for trial_index, each in enumerate(trial_data):
+        print("-"*15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print(trial_index, " : ", trial_name)
+        # Hand-crafted label
+        temp_handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
+        temp_handcrafted_label = temp_handcrafted_label[window:-window]
+        handcrafted_labels.append(temp_handcrafted_label)
+        # Estimating label through moving window analysis
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        # (num of windows, num of agents)
+        temp_weight = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
+        # (num of windows, window size, num of agents, num pf directions)
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        trial_estimated_label = []
+        temp_contribution = []
+        # For each trial, estimate agent weights through sliding windows
+        agent_name = ["global", "local", "pessimistic"]
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            Q_value = sub_X[agents_list].values
+            for i in range(window * 2 + 1):  # num of samples in a window
+                for j in range(5):  # number of agents
+                    temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
+            # estimation in the window
+            window_estimated_label = []
+            # Construct optimizer
+            params = [1 for _ in range(len(agent_name))]
+            bounds = [[0, 1000] for _ in range(len(agent_name))]
+            if config["need_intercept"]:
+                params.append(1)
+                bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                sub_X,
+                sub_Y,
+                agent_name,
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+
+            temp_weight[centering_index, :] = res.x
+            contribution = temp_weight[centering_index, :-1] * [scaleOfNumber(each) for each in
+                                np.max(np.abs(temp_trial_Q[centering_index, :, [0, 1, 2], :]), axis=(1, 2))]
+            temp_contribution.append(copy.deepcopy(contribution))
+            window_estimated_label.append(_estimationLabeling(contribution, agent_name))
+            trial_estimated_label.append(copy.deepcopy(window_estimated_label))
+        trial_contribution.append(copy.deepcopy(temp_contribution))
+        matched_num = 0
+        not_nan_num = 0
+        for i in range(len(temp_handcrafted_label)):
+            if temp_handcrafted_label[i] is not None:
+                not_nan_num += 1
+                if len(np.intersect1d(temp_handcrafted_label[i], trial_estimated_label[i])) > 0:
+                    matched_num += 1
+        print(" Trial label matching rate : ", matched_num / not_nan_num if not_nan_num != 0 else "Nan trial")
+        trial_matching_rate.append(matched_num / not_nan_num if not_nan_num != 0 else "Nan trial")
+        trial_weight.append(copy.deepcopy(temp_weight))
+        trial_Q.append(copy.deepcopy(temp_trial_Q))
+        all_estimated_label.append(copy.deepcopy(trial_estimated_label))
+
+    # Save data
+    print()
+    if "diff_pessimistic" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/diff_pessimistic")
+    save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
+    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-multi_labels.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
+    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
+    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-matching_rate.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
+    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-trial_weight.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
+    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-Q.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
+    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-contribution.npy".format(
+        save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
+    # Report
+    print("Average matching rate : ", np.mean(trial_matching_rate))
+    print("Min matching rate : ", np.min(trial_matching_rate))
+    print("Max matching rate : ", np.max(trial_matching_rate))
+
+
 def incrementalAnalysis(config):
     # Read trial data
     # agent_name = config["incremental_data_filename"]
@@ -1213,8 +1352,8 @@ def singleTrialFitting(config):
 
     # Best trials
     # "12-2-Patamon-13-Aug-2019-1.csv",
-    trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
-                       "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv"]
+    # trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
+    #                    "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv"]
 
 
 
@@ -1539,9 +1678,9 @@ def singleTrialThreeFitting(config):
     # "10-7-Patamon-10-Aug-2019-1.csv", "11-1-Patamon-11-Jun-2019-1.csv", "13-2-Patamon-10-Sep-2019-1.csv"]
 
     # Best trials
-    # "12-2-Patamon-13-Aug-2019-1.csv",
+    # ,
     trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
-                       "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv"]
+                       "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv", "12-2-Patamon-13-Aug-2019-1.csv"]
 
 
 
@@ -1820,7 +1959,7 @@ def singleTrialThreeFitting(config):
         # plt.ylim(-0.1, 1.1)
         # plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name))
 
-        plt.show()
+        # plt.show()
 
         all_Q.append(temp_trial_Q)
     # # Save data
@@ -2667,6 +2806,112 @@ def plotMultiLabelMatching(config):
     plt.show()
 
 
+def plotThreeAgentMatching(config):
+    window = config["trial_window"]
+    # Read data
+    # trial_weight : (num of trials, num of windows, num of agents + 1)
+    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
+    estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True)
+    handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
+    trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
+    not_nan_trial_matching_rate = []
+    for each in trial_matching_rate:
+        if "Nan trial" != each:
+            not_nan_trial_matching_rate.append(float(each))
+    trial_matching_rate = not_nan_trial_matching_rate
+
+    print("-"*15)
+    print("Matching rate : ")
+    print("Max : ", np.nanmax(trial_matching_rate))
+    print("Min : ", np.nanmin(trial_matching_rate))
+    print("Median : ", np.nanmedian(trial_matching_rate))
+    print("Average : ", np.nanmean(trial_matching_rate))
+
+    plt.subplot(1, 2, 1)
+    plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
+    plt.hist(trial_matching_rate)
+    plt.xlabel("Correct Rate (estimated label = hand-crafted label)", fontsize = 20)
+    plt.xlim(0, 1.0)
+    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
+    plt.ylabel("# of Trials", fontsize=20)
+    plt.yticks(fontsize=20)
+    # plt.show()
+
+    # Plot confusion matrix
+    # _________________________
+    # |______|_local_|_global_| evade
+    # | local|       |        |
+    # |global|       |        |
+    # | evade|
+    # |-----------------------
+    temp_handcrafted = []
+    temp_estimated = []
+    for i in handcrafted_labels:
+        for j in i:
+            temp_handcrafted.append(j)
+    for i in estimated_labels:
+        for j in i:
+            temp_estimated.append(j)
+    handcrafted_labels = temp_handcrafted
+    estimated_labels = temp_estimated
+    confusion_matrix = np.zeros((3, 3), dtype = np.int)
+    used_index = []
+    for index in range(len(handcrafted_labels)):
+        if handcrafted_labels[index] is not None and \
+                ("local" in handcrafted_labels[index] or
+                 "global" in handcrafted_labels[index] or
+                 "pessimistic" in handcrafted_labels[index]):
+            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
+                continue
+            used_index.append(index)
+    estimated_labels = np.array(estimated_labels)[used_index]
+    handcrafted_labels = np.array(handcrafted_labels)[used_index]
+
+    weird_index = []
+    for index in range(len(used_index)):
+        est = [each for each in estimated_labels[index]]
+        hand = [each for each in handcrafted_labels[index]]
+
+
+        if "local" in est and "local" in hand:
+            confusion_matrix[0, 0] += 1
+        if "local" in est and "global" in hand:
+            confusion_matrix[0, 1] += 1
+        if "local" in est and "pessimistic" in hand:
+            confusion_matrix[0, 2] += 1
+
+        if "global" in est and "local" in hand:
+            confusion_matrix[1, 0] += 1
+        if "global" in est and "global" in hand:
+            confusion_matrix[1, 1] += 1
+        if "global" in est and "pessimistic" in hand:
+            confusion_matrix[1, 2] += 1
+
+        if "pessimistic" in est and "local" in hand:
+            confusion_matrix[2, 0] += 1
+        if "pessimistic" in est and "global" in hand:
+            confusion_matrix[2, 1] += 1
+        if "pessimistic" in est and "pessimistic" in hand:
+            confusion_matrix[2, 2] += 1
+
+
+    plt.subplot(1, 2, 2)
+    # plt.title("F1 Score = {a:.3f}".format(a = F1_score), fontsize = 15)
+    seaborn.heatmap(confusion_matrix,
+                    annot = True, cmap='Blues',
+                    # xticklabels = ["local", "global", "local + evade", "global + evade"],
+                    # yticklabels = ["local", "global", "local + evade", "global + evade"],
+                    xticklabels=["local", "global", "evade"],
+                    yticklabels=["local", "global", "evade"],
+                    cbar = False, square = True, annot_kws = {"fontsize" : 15})
+    plt.xlabel("Hand-Crafted Label", fontsize = 15)
+    plt.ylabel("Estimated Label", fontsize = 15)
+    plt.xticks(fontsize = 15)
+    plt.yticks(fontsize = 15)
+    plt.show()
+
+
+
 def plotAllAgentMatching(config, contribution = True):
     window = config["all_agent_window"]
     # Read data
@@ -2978,9 +3223,9 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/global15-local5-100_trial_data_new-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/100_trial_data_new-two_ghosts-with_Q.pkl",
         # The number of trials used for analysis
-        "trial_num" :None,
+        "trial_num" : None,
         # Window size for correlation analysis
         "trial_window" : 3,
         "correlation_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
@@ -2989,7 +3234,8 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Single Trial Analysis
         # Filename
-        "single_trial_data_filename": "../common_data/trial/global15-local10-100_trial_data_new-with_Q.pkl",
+        # "single_trial_data_filename": "../common_data/trial/global15-local10-100_trial_data_new-with_Q.pkl",
+        "single_trial_data_filename": "../common_data/single_trial/5_trial-data_for_comparison-one_ghost-with_Q.pkl",
         # Window size for correlation analysis
         "single_trial_window": 3,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
@@ -3016,13 +3262,19 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Experimental Results Visualization
         # this multi-label data is the true estimated label
-        "estimated_label_filename" : "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        # "trial_cr_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-trial_cr.npy",
-        "trial_weight_main_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-trial_weight_main.npy",
-        "trial_weight_rest_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-trial_weight_rest.npy",
-        "trial_Q_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-matching_rate.npy",
+        # "estimated_label_filename" : "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-multi_labels.npy",
+        # "handcrafted_label_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        # # "trial_cr_filename": "../common_data/multi_label/500_trial_data-with_Q-window3-w_intercept-trial_cr.npy",
+        # "trial_weight_main_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-trial_weight_main.npy",
+        # "trial_weight_rest_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-trial_weight_rest.npy",
+        # "trial_Q_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-Q.npy",
+        # "trial_matching_rate_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-matching_rate.npy",
+
+        "estimated_label_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        "trial_weight_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-trial_weight.npy",
+        "trial_Q_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "../common_data/diff_pessimistic/100_trial_data_new-two_ghosts-with_Q-window3-w_intercept-matching_rate.npy",
 
         # ------------------------------------------------------------------------------------
         # "estimated_label_filename": "../common_data/multi_label/100_trial_data-with_Q-window3-w_intercept-multi_labels.npy",
@@ -3089,12 +3341,14 @@ if __name__ == '__main__':
     # ============ Correlation =============
     # correlationAnalysis(config)
     # multipleLabelAnalysis(config)
+    # threeAgentAnalysis(config)
 
     # incrementalAnalysis(config)
 
     # ============ VISUALIZATION =============
     # plotMultiLabelMatching(config)
     # plotAllAgentMatching(config, contribution = True)
+    plotThreeAgentMatching(config)
 
     # plotWeightVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum") # step / sum / all
     # plotIntegrationVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum")
