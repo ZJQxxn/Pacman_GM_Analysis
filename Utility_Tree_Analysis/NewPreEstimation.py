@@ -291,13 +291,13 @@ def preEstimation():
         # "../common_data/trial/5_trial_data.pkl",
         # "../common_data/transition/global_to_local.pkl",
         # "../common_data/transition/local_to_global.pkl",
-        # "../common_data/transition/local_to_evade.pkl",
-        # "../common_data/transition/evade_to_local.pkl",
+        "../common_data/transition/local_to_evade.pkl",
+        "../common_data/transition/evade_to_local.pkl",
         # "../common_data/transition/local_to_planned.pkl",
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
         # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
-        "../common_data/trial/100_trial_data_new.pkl",
+        # "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
     ]
     for filename in filename_list:
@@ -307,11 +307,11 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        # with open("{}/{}-with_Q.pkl".format(
-        #         "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
-        #         filename.split("/")[-1].split(".")[0]
-        # ), "wb") as file:
-        with open("../common_data/trial/{}-one_ghost-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
+        with open("{}/{}-with_Q.pkl".format(
+                "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
+                filename.split("/")[-1].split(".")[0]
+        ), "wb") as file:
+        # with open("../common_data/trial/{}-one_ghost-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
             pickle.dump(all_data, file)
         print("{}-with_Q.pkl saved!".format(filename.split("/")[-1].split(".")[0]))
     pd.options.mode.chained_assignment = "warn"

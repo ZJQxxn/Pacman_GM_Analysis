@@ -15,6 +15,34 @@ import numpy as np
 import pickle
 import copy
 
+import sys
+
+sys.path.append("../Utility_Tree_Analysis")
+from TreeAnalysisUtils import readLocDistance
+
+# Global variable
+locs_df = readLocDistance("dij_distance_map.csv")
+print("Finished reading distance file!")
+
+
+def _PG(x):
+    PG = [0, 0]
+    if x.ifscared1 < 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost1Pos):
+            PG[0] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost1Pos)]
+        else:
+            pass
+    else:
+        PG[0] = 100
+    if x.ifscared2 < 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost2Pos):
+            PG[1] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost2Pos)]
+        else:
+            pass
+    else:
+        PG[1] = 100
+    return PG
+
 
 def _extractAllData(trial_num = 20000):
     # Read data
@@ -149,6 +177,37 @@ def _findTransitionPoint(state1_indication, state2_indication, length):
     return trajectories
 
 
+def _findTransitionWOBreak(state1_indication, state2_indication, length):
+    state1_indication = [int(each) for each in state1_indication.values]
+    state2_indication = [int(each) for each in state2_indication.values]
+    nums = len(state1_indication)
+    state1_diff = np.diff(state1_indication)
+    state2_diff = np.diff(state2_indication)
+    transition_point = np.intersect1d(np.where(state1_diff == -1), np.where(state2_diff == 1))
+    if len(transition_point) == 0:
+        return []
+    else:
+        trajectories = []
+        for index, each in enumerate(transition_point):
+            cur = each
+            # trajectory is not long nough
+            if cur-length < 0 or  cur + 1 + length >= len(state1_indication):
+                continue
+            first_phase = state1_indication[cur-length:cur]
+            second_phase = state2_indication[cur+1:cur + 1 + length]
+            first_max_discontinue_period = _findDiscontinuePeriod(first_phase)
+            second_max_discontinue_period = _findDiscontinuePeriod(second_phase)
+            first_max_discontinue_period = [0] if len(first_max_discontinue_period) == 0 else first_max_discontinue_period
+            second_max_discontinue_period = [0] if len(second_max_discontinue_period) == 0 else second_max_discontinue_period
+            if max(first_max_discontinue_period) <= 0 and max(second_max_discontinue_period) <= 0:
+                trajectories.append([
+                    each - length, # starting index
+                    each, # centering index
+                    each + length + 1 # ending index
+                ])
+    return trajectories
+
+
 def _local2Global(trial_data):
     is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
                            "label_global_ending"]].apply(
@@ -178,16 +237,24 @@ def _local2Evade(trial_data):
     is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
                            "label_global_ending"]].apply(
         lambda
-            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
+            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
         axis=1
     )
-    is_evade = trial_data[["label_evade"]].apply(
-        lambda x: x.label_evade == 1,
+    PG = trial_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x),
         axis=1
     )
-    length = 5
+    trial_data["PG"] = PG
+    is_evade = trial_data[["label_evade","PG"]].apply(
+        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10),
+        axis=1
+    )
+    trial_data = trial_data.drop(columns = ["PG"])
+    length = 10
     print("Local_to_evade length : ", length)
+    # trajectory_point = _findTransitionWOBreak(is_local, is_evade, length)
     trajectory_point = _findTransitionPoint(is_local, is_evade, length)
+
     if len(trajectory_point) == 0:
         return None
     else:
@@ -203,15 +270,22 @@ def _evade2Local(trial_data):
     is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
                            "label_global_ending"]].apply(
         lambda
-            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
+            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
         axis=1
     )
-    is_evade = trial_data[["label_evade"]].apply(
-        lambda x: x.label_evade == 1,
+    PG = trial_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x),
         axis=1
     )
-    length = 5
+    trial_data["PG"] = PG
+    is_evade = trial_data[["label_evade", "PG"]].apply(
+        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10),
+        axis=1
+    )
+    trial_data = trial_data.drop(columns = ["PG"])
+    length = 10
     print("Local_to_evade length : ", length)
+    # trajectory_point = _findTransitionWOBreak(is_evade, is_local, length)
     trajectory_point = _findTransitionPoint(is_evade, is_local, length)
     if len(trajectory_point) == 0:
         return None
@@ -324,7 +398,7 @@ def _extractTrialData(trial_data, transition_type):
     return trial_local_to_global, trial_local_to_evade, trial_global_to_local, trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local
 
 
-def extractTransitionData(transition_type):
+def extractTransitionData(transition_type, need_save = True):
     # Initialization
     local_to_global = []
     local_to_evade = []
@@ -357,7 +431,7 @@ def extractTransitionData(transition_type):
                 local_to_global.extend(copy.deepcopy(trial_local_to_global))
                 local2global_trial_num += 1
         if trial_local_to_evade is not None:
-            if local2evade_trial_num > 1500: #TODO:
+            if local2evade_trial_num > 1000: #TODO:
                 pass
             else:
                 local_to_evade.extend(copy.deepcopy(trial_local_to_evade))
@@ -375,7 +449,7 @@ def extractTransitionData(transition_type):
             local_to_suicide.extend(copy.deepcopy(trial_local_to_suicide))
             local2suicide_trial_num += 1
         if trial_evade_to_local is not None:
-            if evade2local_trial_num > 1500: #TODO:
+            if evade2local_trial_num > 1000: #TODO:
                 pass
             else:
                 evade_to_local.extend(copy.deepcopy(trial_evade_to_local))
@@ -383,59 +457,60 @@ def extractTransitionData(transition_type):
         print("-"*25)
     print("Finished extracting!")
     # Write data
-    if "transition" not in os.listdir():
-        os.mkdir("transition")
-    if len(local_to_global) > 0:
-        local_to_global = pd.DataFrame(data = local_to_global, columns = columns_values)
-        with open("transition/local_to_global.pkl", "wb") as file:
-            pickle.dump(local_to_global, file)
-        print("Local_to_global trial num : ", local2global_trial_num)
-        print("Finished writing local_to_global {}.".format(local_to_global.shape[0]))
-    else:
-        print("No local_to_global data!")
-    if len(local_to_evade) > 0:
-        local_to_evade = pd.DataFrame(data = local_to_evade, columns = columns_values)
-        with open("transition/local_to_evade.pkl", "wb") as file:
-            pickle.dump(local_to_evade, file)
-        print("Local_to_evade trial num : ", local2evade_trial_num)
-        print("Finished writing local_to_evade {}.".format(local_to_evade.shape[0]))
-    else:
-        print("No local_to_evade data!")
-    if len(global_to_local) > 0:
-        global_to_local = pd.DataFrame(data = global_to_local, columns = columns_values)
-        with open("transition/global_to_local.pkl", "wb") as file:
-            pickle.dump(global_to_local, file)
-        print("Global_to_local trial num : ", global2local_trial_num)
-        print("Finished writing global_to_local {}.".format(global_to_local.shape[0]))
-    else:
-        print("No global_to_local data!")
-    if len(local_to_planned) > 0:
-        local_to_planned = pd.DataFrame(data = local_to_planned, columns = columns_values)
-        with open("transition/local_to_planned.pkl", "wb") as file:
-            pickle.dump(local_to_planned, file)
-        print("Local_to_planned trial num : ", local2planned_trial_num)
-        print("Finished writing local_to_planned {}.".format(local_to_planned.shape[0]))
-    else:
-        print("No local_to_planned data!")
-    if len(local_to_suicide) > 0:
-        local_to_suicide = pd.DataFrame(data = local_to_suicide, columns = columns_values)
-        with open("transition/local_to_suicide.pkl", "wb") as file:
-            pickle.dump(local_to_suicide, file)
-        print("Local_to_suicide trial num : ", local2suicide_trial_num)
-        print("Finished writing local_to_suicide {}.".format(local_to_suicide.shape[0]))
-    else:
-        print("No local_to_suicide data!")
-    if len(evade_to_local) > 0:
-        evade_to_local = pd.DataFrame(data = evade_to_local, columns = columns_values)
-        with open("transition/evade_to_local.pkl", "wb") as file:
-            pickle.dump(evade_to_local, file)
-        print("Evade_to_local trial num : ", evade2local_trial_num)
-        print("Finished writing evade_to_local {}.".format(evade_to_local.shape[0]))
-    else:
-        print("No evade_to_local data!")
+    print("Local_to_global trial num : ", local2global_trial_num)
+    print("Global_to_local trial num : ", global2local_trial_num)
+    print("Local_to_evade trial num : ", local2evade_trial_num)
+    print("Evade_to_local trial num : ", evade2local_trial_num)
+    print("Local_to_planned trial num : ", local2planned_trial_num)
+    print("Local_to_suicide trial num : ", local2suicide_trial_num)
+    if need_save:
+        if "transition" not in os.listdir():
+            os.mkdir("transition")
+        if len(local_to_global) > 0:
+            local_to_global = pd.DataFrame(data=local_to_global, columns=columns_values)
+            with open("transition/local_to_global.pkl", "wb") as file:
+                pickle.dump(local_to_global, file)
+            print("Finished writing local_to_global {}.".format(local_to_global.shape[0]))
+        else:
+            print("No local_to_global data!")
+        if len(local_to_evade) > 0:
+            local_to_evade = pd.DataFrame(data=local_to_evade, columns=columns_values)
+            with open("transition/local_to_evade.pkl", "wb") as file:
+                pickle.dump(local_to_evade, file)
+            print("Finished writing local_to_evade {}.".format(local_to_evade.shape[0]))
+        else:
+            print("No local_to_evade data!")
+        if len(global_to_local) > 0:
+            global_to_local = pd.DataFrame(data=global_to_local, columns=columns_values)
+            with open("transition/global_to_local.pkl", "wb") as file:
+                pickle.dump(global_to_local, file)
+            print("Finished writing global_to_local {}.".format(global_to_local.shape[0]))
+        else:
+            print("No global_to_local data!")
+        if len(local_to_planned) > 0:
+            local_to_planned = pd.DataFrame(data=local_to_planned, columns=columns_values)
+            with open("transition/local_to_planned.pkl", "wb") as file:
+                pickle.dump(local_to_planned, file)
+            print("Finished writing local_to_planned {}.".format(local_to_planned.shape[0]))
+        else:
+            print("No local_to_planned data!")
+        if len(local_to_suicide) > 0:
+            local_to_suicide = pd.DataFrame(data=local_to_suicide, columns=columns_values)
+            with open("transition/local_to_suicide.pkl", "wb") as file:
+                pickle.dump(local_to_suicide, file)
+            print("Finished writing local_to_suicide {}.".format(local_to_suicide.shape[0]))
+        else:
+            print("No local_to_suicide data!")
+        if len(evade_to_local) > 0:
+            evade_to_local = pd.DataFrame(data=evade_to_local, columns=columns_values)
+            with open("transition/evade_to_local.pkl", "wb") as file:
+                pickle.dump(evade_to_local, file)
+            print("Finished writing evade_to_local {}.".format(evade_to_local.shape[0]))
+        else:
+            print("No evade_to_local data!")
 
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["global_to_local"]
-    extractTransitionData(transition_type)
+    transition_type = ["local_to_evade", "evade_to_local"]
+    extractTransitionData(transition_type, need_save = True)

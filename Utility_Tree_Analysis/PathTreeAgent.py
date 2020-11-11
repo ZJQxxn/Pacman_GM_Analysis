@@ -360,7 +360,7 @@ class PathTree:
                     exact_risk = -self.reward_amount[9]
                     self.is_eaten = True
 
-                    # exact_risk = 0.0 #TODO: for testing single ghost pessimistic
+                    exact_risk = 0.0 #TODO: for testing single ghost pessimistic
 
                     return exact_risk, potential_risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
@@ -377,8 +377,8 @@ class PathTree:
                     exact_risk = -self.reward_amount[9]
                     self.is_eaten = True
 
-                    # if cur_position == self.ghost_data[1]:
-                    #     exact_risk = 0.0  # TODO: for testing single ghost pessimistic
+                    if cur_position == self.ghost_data[1]:
+                        exact_risk = 0.0  # TODO: for testing single ghost pessimistic
 
                     return exact_risk, potential_risk
                 # Potential risk

@@ -17,16 +17,22 @@ import scipy.stats
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
+plt.rc('font', family='CMU Serif', weight="roman")
+from matplotlib import rcParams
+rcParams['mathtext.default'] = 'regular'
+
 import copy
 import seaborn
 import os
 import sys
 
-from palettable.colorbrewer.qualitative import Dark2_7
-from palettable.colorbrewer.diverging import RdBu_8
+from palettable.cmocean.diverging import Balance_6
+from palettable.colorbrewer.diverging import RdBu_8, RdYlBu_5
 from palettable.scientific.sequential import Davos_5
+from palettable.scientific.diverging import Roma_5, Vik_5, Roma_3
 from palettable.tableau import BlueRed_6
 from palettable.cartocolors.qualitative import Vivid_5
+from palettable.lightbartlein.diverging import BlueDarkRed18_18, BlueOrange12_5, BlueDarkRed18_4
 
 
 sys.path.append("./Utility_Tree_Analysis")
@@ -56,21 +62,41 @@ def oneHot(val):
     return onehot_vec
 
 
-def _pessimisticProcesing(global_Q, local_Q, pess_Q):
+def _PG(x, locs_df):
+    PG = [0, 0]
+    if x.ifscared1 < 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost1Pos):
+            PG[0] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost1Pos)]
+        else:
+            pass
+    else:
+        PG[0] = 100
+    if x.ifscared2 < 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost2Pos):
+            PG[1] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost2Pos)]
+        else:
+            pass
+    else:
+        PG[1] = 100
+    return PG
+
+
+def _pessimisticProcesing(pess_Q, PG):
     offset = np.max(np.abs(np.concatenate(pess_Q)))
-    temp_global_Q = copy.deepcopy(global_Q)
-    temp_local_Q = copy.deepcopy(local_Q)
     temp_pess_Q = copy.deepcopy(pess_Q)
     for index in range(len(temp_pess_Q)):
-        if np.any(temp_pess_Q[index] < -5):
-            non_zero = np.where(temp_pess_Q[index] != 0)
+        non_zero = np.where(temp_pess_Q[index] != 0)
+        # if np.any(temp_pess_Q[index] < -5):
+        if np.any(np.array(PG[index]) <= 10):
             temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
+        else:
+            temp_pess_Q[index][non_zero] = 0.0
     # for index in range(len(temp_pess_Q)):
     #     non_zero = np.where(temp_pess_Q[index] != 0)
     #     temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
     #     temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
     #     temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
-    return temp_global_Q, temp_local_Q, temp_pess_Q
+    return temp_pess_Q
 
 
 def _makeChoice(prob):
@@ -121,7 +147,12 @@ def readTrialData(filename):
                     all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 1]
     # Pre-processng pessimistic Q
     # TODO: check this
-    all_data.global_Q, all_data.local_Q, all_data.pessimistic_Q = _pessimisticProcesing(all_data.global_Q, all_data.local_Q, all_data.pessimistic_Q)
+    locs_df = readLocDistance("./Utility_Tree_Analysis/extracted_data/dij_distance_map.csv")
+    PG = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x, locs_df),
+        axis = 1
+    )
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
     # Split into trials
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -181,6 +212,7 @@ def _handcraftLabeling(labels):
     if len(hand_crafted_label) == 0:
         hand_crafted_label = None
     return hand_crafted_label
+
 
 def _label2Index(labels):
     label_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
@@ -245,7 +277,7 @@ def singleTrialThreeFitting(config):
     window = config["single_trial_window"]
     trial_data = readTrialData(config["single_trial_data_filename"])
     trial_num = len(trial_data)
-    print("Num of trials : ", trial_num)
+    # print("Num of trials : ", trial_num)
 
     trial_name_list = None
     # Old data
@@ -256,9 +288,9 @@ def singleTrialThreeFitting(config):
     # "10-7-Patamon-10-Aug-2019-1.csv", "11-1-Patamon-11-Jun-2019-1.csv", "13-2-Patamon-10-Sep-2019-1.csv"]
 
     # Best trials
-    # ,
-    trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
-                       "13-3-Patamon-28-Jun-2019-1.csv", "14-1-Patamon-14-Jun-2019-1.csv", "12-2-Patamon-13-Aug-2019-1.csv"]
+    # , "12-2-Patamon-13-Aug-2019-1.csv"
+
+    trial_name_list = ["13-2-Patamon-10-Sep-2019-1.csv"]
 
     # trial_name_list = ["13-5-Patamon-21-Aug-2019-1.csv",
     #                    "12-2-Patamon-13-Aug-2019-1.csv"]
@@ -271,7 +303,7 @@ def singleTrialThreeFitting(config):
             if each[0] in trial_name_list:
                 temp_trial_Data.append(each)
         trial_data = temp_trial_Data
-
+    print("Num of trials : ", len(trial_data))
     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
                   "label_global_optimal", "label_global_notoptimal", "label_global",
                   "label_evade",
@@ -287,17 +319,6 @@ def singleTrialThreeFitting(config):
 
     agent_name = ["global", "local", "pessimistic"]
     # Construct optimizer
-    params = [1 for _ in range(len(agent_name))]
-    bounds = [[0, 1] for _ in range(len(agent_name))]
-    if config["need_intercept"]:
-        params.append(1)
-        bounds.append([-1000, 1000])
-    cons = []  # construct the bounds in the form of constraints
-    for par in range(len(bounds)):
-        l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-        u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-        cons.append(l)
-        cons.append(u)
     for trial_index, each in enumerate(trial_data):
         temp_record = []
         print("-"*15)
@@ -306,7 +327,7 @@ def singleTrialThreeFitting(config):
         X = each[1]
         Y = each[2]
         trial_length = X.shape[0]
-        print("Trial name : ", trial_name)
+        print("Index ", trial_index, " Trial name : ", trial_name)
         # Hand-crafted label
         handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
         handcrafted_label = handcrafted_label[window : -window]
@@ -342,8 +363,8 @@ def singleTrialThreeFitting(config):
             # estimation in the window
             window_estimated_label = []
             # Construct optimizer
-            params = [1 for _ in range(len(agent_name))]
-            bounds = [[0, 1000] for _ in range(len(agent_name))]
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
             if config["need_intercept"]:
                 params.append(1)
                 bounds.append([-1000, 1000])
@@ -383,7 +404,7 @@ def singleTrialThreeFitting(config):
                            [scaleOfNumber(each) for each in
                             np.max(np.abs(temp_trial_Q[centering_index, :, [0, 1, 2], :]), axis=(1, 2))]
             temp_contribution[centering_index, :] = contribution
-            window_estimated_label.append(_estimationLabeling(contribution, agent_name))
+            window_estimated_label.append(_estimationThreeLabeling(contribution))
             trial_estimated_label.append(window_estimated_label)
 
         matched_num = 0
@@ -415,21 +436,21 @@ def singleTrialThreeFitting(config):
         ]
 
         # Plot weight variation of this trial
-        colors = RdBu_8.mpl_colors
-        agent_color = {
-            "local": colors[0],
-            "pessimistic": colors[1],
-            "global": colors[-3],
-            "suicide": colors[-2],
-            "planned_hunting": colors[-1]
-        }
-        label_name = {
-            "local": "local",
-            "pessimistic": "evade",
-            "global": "global",
-            "suicide": "suicide",
-            "planned_hunting": "attack"
-        }
+        colors = RdYlBu_5.mpl_colors
+        agent_color = {                                            
+            "local" : colors[0],                                   
+            "pessimistic" : Balance_6.mpl_colors[2],               
+            "global" : colors[1],                                  
+            "suicide" : "white",
+            "planned_hunting" : "white"
+        }                                                          
+        label_name = {                                             
+            "local": "local",                                      
+            "pessimistic": "evade",                                
+            "global": "global",                                    
+            "suicide": "suicide",                                  
+            "planned_hunting": "attack"                            
+        }                                                          
         # normalization
         for index in range(temp_weight.shape[0]):
             if config["need_intercept"]:
@@ -437,27 +458,59 @@ def singleTrialThreeFitting(config):
             else:
                 temp_weight[index, :] = temp_weight[index, :] / np.linalg.norm(temp_weight[index, :])
 
-        plt.title(trial_name, fontsize = 15)
+        plt.figure(figsize=(18,13))
+        plt.subplot(2, 1, 1)
+        # plt.title(trial_name, fontsize = 15)
         for index in range(len(agent_name)):
             plt.plot(temp_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                      label=label_name[agent_name[index]])
-
-        for i in range(len(handcrafted_label)):
-            if handcrafted_label[i] is not None:
-                if len(handcrafted_label[i]) == 2:
-                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.05, color=agent_color[handcrafted_label[i][0]])
-                    plt.fill_between(x=[i, i + 1], y1=-0.05, y2=-0.1, color=agent_color[handcrafted_label[i][1]])
-                else:
-                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
-
         # for pessimistic agent
         plt.ylabel("Normalized Agent Weight", fontsize=20)
         plt.xlim(0, temp_weight.shape[0] - 1)
-        plt.xlabel("Time Step", fontsize=15)
-        plt.xticks(fontsize=15)
-        plt.yticks(fontsize=15)
-        plt.ylim(-0.1, 1.1)
-        plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name), frameon = False)
+        plt.xlabel("Time Step", fontsize = 20)
+        x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
+        x_ticks = [window + int(each) for each in x_ticks_index]
+        plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+        plt.yticks(fontsize=20)
+        plt.ylim(-0.01, 1.02)
+        plt.legend(loc="upper center", fontsize=20, ncol = len(agent_name), frameon = False, bbox_to_anchor = (0.5, 1.2))
+        # plt.show()
+
+        # plt.figure(figsize=(13,5))
+        plt.subplot(2, 1, 2)
+        for i in range(len(handcrafted_label)):
+            if handcrafted_label[i] is not None and (
+                    "pessimistic" in handcrafted_label[i] or
+                    "local" in handcrafted_label[i] or
+                    "global" in handcrafted_label[i]
+            ):
+                # Hand-crafted labels
+                if len(handcrafted_label[i]) > 2:
+                    handcrafted_label[i] = handcrafted_label[i][:2]
+                if len(handcrafted_label[i]) == 2:
+                    if "pessimistic" in handcrafted_label[i]:
+                        plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color["pessimistic"])
+                    else:
+                        plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.25, facecolor=agent_color[handcrafted_label[i][0]])
+                        plt.fill_between(x=[i, i + 1], y1=0.25, y2=0.3, facecolor=agent_color[handcrafted_label[i][1]])
+                else:
+                    plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color[handcrafted_label[i][0]])
+                # Estimated labels
+                if len(estimated_label[i]) == 2:
+                    if "pessimistic" in estimated_label[i]:
+                        plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.1, facecolor=agent_color["pessimistic"])
+                    else:
+                        plt.fill_between(x=[i, i + 1], y1=0.0, y2= 0.05, facecolor=agent_color[estimated_label[i][0]])
+                        plt.fill_between(x=[i, i + 1], y1=0.05, y2 = 0.1, facecolor=agent_color[estimated_label[i][1]])
+                else:
+                    plt.fill_between(x=[i, i + 1], y1=0.0, y2= 0.1, facecolor=agent_color[estimated_label[i][0]])
+        plt.xlim(0, temp_weight.shape[0] - 1)
+        # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
+        # x_ticks = [window + int(each) for each in x_ticks_index]
+        # plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+        # plt.yticks([0.25, 0.05], ["Fitted Label", "Rule-Based Label"], fontsize=20)
+        plt.ylim(-0.05, 0.35)
+        plt.axis('off')
         plt.show()
 
     print()
@@ -471,17 +524,28 @@ def singleTrialThreeFitting(config):
 # ===================================
 #         VISUALIZATION
 # ===================================
+def _estimationThreeLabeling(contributions):
+    # global, local, pessimistic
+    labels = []
+    agent_name = ["global", "local"]
+    if np.any(contributions[:2] > 0):
+        labels.append(agent_name[np.argmax(contributions[:2])])
+    if contributions[-1] > 0.5:
+        labels.append("pessimistic")
+    return labels
+
+
 def plotWeightVariation(config):
     # Determine agent names
     agent_list = config["agent_list"]
     all_agent_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
-    colors = RdBu_8.mpl_colors
+    colors = RdYlBu_5.mpl_colors
     agent_color = {
         "local" : colors[0],
-        "pessimistic" : colors[1],
-        "global" : colors[-3],
-        "suicide" : colors[-2],
-        "planned_hunting" : colors[-1]
+        "pessimistic" : Balance_6.mpl_colors[2],
+        "global" : colors[1],
+        "suicide" : colors[3],
+        "planned_hunting" : colors[4]
     }
     label_name = {
         "local": "local",
@@ -542,6 +606,7 @@ def plotWeightVariation(config):
     x_ticks.extend([str(int(each)) for each in np.arange(1, 5, 1)])
     x_ticks_index = np.arange(len(x_ticks))
 
+    plt.figure(figsize=(18, 10))
     # Plot weight variation
     plt.subplot(1 ,4, 1)
     agent_name = agent_list[0]
@@ -569,7 +634,7 @@ def plotWeightVariation(config):
     plt.xlabel("Time Step", fontsize = 15)
     plt.yticks(fontsize=15)
     plt.ylim(0.0, 1.1)
-    plt.legend(loc = "lower center", fontsize=13, ncol=2, frameon = False)
+    plt.legend(loc = "lower center", fontsize=15, ncol=2, frameon = False)
     # plt.show()
 
     plt.subplot(1, 4, 2)
@@ -597,9 +662,9 @@ def plotWeightVariation(config):
     plt.xlim(0, 8)
     plt.xticks(x_ticks_index, x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize=15)
-    plt.yticks(fontsize=15)
+    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [], fontsize=15)
     plt.ylim(0.0, 1.1)
-    plt.legend(loc = "lower center", fontsize=13, ncol=2, frameon = False)
+    plt.legend(loc = "lower center", fontsize=15, ncol=2, frameon = False)
 
     plt.subplot(1, 4, 3)
     agent_name = agent_list[1]
@@ -626,9 +691,9 @@ def plotWeightVariation(config):
     plt.xlim(0, 8)
     plt.xticks(x_ticks_index, x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize=15)
-    plt.yticks(fontsize=15)
+    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [],fontsize=15)
     plt.ylim(0.0, 1.1)
-    plt.legend(loc="lower center", fontsize=13, ncol=2, frameon = False)
+    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon = False)
 
     plt.subplot(1, 4, 4)
     agent_name = agent_list[1]
@@ -655,226 +720,9 @@ def plotWeightVariation(config):
     plt.xlim(0, 8)
     plt.xticks(x_ticks_index, x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize=15)
-    plt.yticks(fontsize=15)
+    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [],fontsize=20)
     plt.ylim(0.0, 1.1)
-    plt.legend(loc="lower center", fontsize=13, ncol=2, frameon = False)
-    plt.show()
-
-
-def plotMultiLabelMatching(config):
-    window = config["trial_window"]
-    # Read data
-    # trial_weight : (num of trials, num of windows, num of agents + 1)
-    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True)
-    handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
-    trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
-    not_nan_trial_matching_rate = []
-    for each in trial_matching_rate:
-        if "Nan trial" != each:
-            not_nan_trial_matching_rate.append(float(each))
-    trial_matching_rate = not_nan_trial_matching_rate
-    # # trial_cr = np.load(config["trial_cr_filename"], allow_pickle=True)
-    # trial_weight = np.load(config["trial_weight_filename"], allow_pickle=True)
-    # trial_weight = [trial_weight[index][:, :5] for index in range(len(trial_weight))] #TODO: what about wo_intercept
-    # trial_Q = np.load(config["trial_Q_filename"], allow_pickle=True)
-    # # TODO: W*Q, normalization
-    # if contribution:
-    #     for i in range(len(trial_weight)):
-    #         for j in range(len(trial_weight[i])):
-    #             trial_weight[i][j, :] = trial_weight[i][j, :] * [scaleOfNumber(each) for each in np.nanmax(np.abs(trial_Q[i][j]), axis = (0, 2))]
-    #             # trial_weight[i][j, :] = trial_weight[i][j, :] * [each for each in
-    #             #                                                  np.nanmax(np.abs(trial_Q[i][j]), axis=(0, 2))]
-    # estimated_labels = []
-    # for index in range(len(trial_weight)):
-    #     temp_estimated_labels = [_estimationLabeling(each, config["correlation_agents"]) for each in trial_weight[index]]
-    #     estimated_labels.append(temp_estimated_labels)
-    #
-    # trial_num = len(estimated_labels)
-    # trial_matching_rate = []
-    # # trial_correlation = []
-    # is_matched = []
-    # for index in range(trial_num):
-    #     # estimated = np.array(_label2Index(estimated_labels[index]))
-    #     # handcrafted = np.array(_label2Index(handcrafted_labels[index]))
-    #     estimated = np.array(estimated_labels[index])
-    #     handcrafted = np.array(handcrafted_labels[index])
-    #     handcrafted = handcrafted[window:len(handcrafted) - window]
-    #     # if len(estimated) != len(handcrafted):
-    #     if len(estimated) != len(handcrafted):
-    #         raise IndexError("len(estimated labels) != len(hand-crafted labels)")
-    #     # what about None value
-    #     not_none_index = np.where(handcrafted != None)
-    #     if isinstance(not_none_index, tuple):
-    #         not_none_index = not_none_index[0]
-    #     if len(not_none_index) != 0:
-    #         estimated = np.array(estimated)[not_none_index]
-    #         handcrafted = np.array(handcrafted)[not_none_index]
-    #         for i in range(len(estimated)):
-    #             if len(np.intersect1d(estimated[i], handcrafted[i])) > 0:
-    #                 is_matched.append(1)
-    #             else:
-    #                 is_matched.append(0)
-    #         # matching_rate = np.sum(estimated == handcrafted) / len(estimated)
-    #         matching_rate = np.sum(is_matched) / len(is_matched)
-    #         # trial_correlation.append(scipy.stats.pearsonr(estimated, handcrafted))
-    #         trial_matching_rate.append(matching_rate)
-
-    print("-"*15)
-    print("Matching rate : ")
-    print("Max : ", np.nanmax(trial_matching_rate))
-    print("Min : ", np.nanmin(trial_matching_rate))
-    print("Median : ", np.nanmedian(trial_matching_rate))
-    print("Average : ", np.nanmean(trial_matching_rate))
-    # print("-" * 15)
-    # print("Correlation : ")
-    # print("Max : ", np.nanmax(trial_correlation))
-    # print("Min : ", np.nanmin(trial_correlation))
-    # print("Median : ", np.nanmedian(trial_correlation))
-    # print("Average : ", np.nanmean(trial_correlation))
-    # histogram
-    # plt.title("Label Matching on 500 Trials (avg cr = {cr:.4f})".format(cr=np.mean([np.mean(each) for each in trial_cr])), fontsize = 20)
-
-    plt.subplot(1, 2, 1)
-    plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
-    plt.hist(trial_matching_rate)
-    plt.xlabel("Correct Rate (estimated label = hand-crafted label)", fontsize = 20)
-    plt.xlim(0, 1.0)
-    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
-    plt.ylabel("# of Trials", fontsize=20)
-    plt.yticks(fontsize=20)
-    # plt.show()
-
-    # Plot confusion matrix
-    # _________________________
-    # |______|_local_|_global_| loca + evade | global + evade
-    # | local|       |        |
-    # |global|       |        |
-    # | evade|
-    # |-----------------------
-    temp_handcrafted = []
-    temp_estimated = []
-    for i in handcrafted_labels:
-        for j in i:
-            temp_handcrafted.append(j)
-    for i in estimated_labels:
-        for j in i:
-            temp_estimated.append(j)
-    handcrafted_labels = temp_handcrafted
-    estimated_labels = temp_estimated
-    confusion_matrix = np.zeros((2, 2), dtype = np.int)
-    used_index = []
-    # for index in range(len(handcrafted_labels)):
-    #     if handcrafted_labels[index] is not None and ("local" in handcrafted_labels[index] or "global" in handcrafted_labels[index] or "pessimistic" in handcrafted_labels[index]):
-    #         if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-    #             continue
-    #         used_index.append(index)
-    for index in range(len(handcrafted_labels)):
-        if handcrafted_labels[index] is not None and ("local" in handcrafted_labels[index] or "pessimistic" in handcrafted_labels[index]):
-            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-                continue
-            used_index.append(index)
-    estimated_labels = np.array(estimated_labels)[used_index]
-    handcrafted_labels = np.array(handcrafted_labels)[used_index]
-    weird_index = []
-    local_num = 0
-    local_evade_num = 0
-    for index in range(len(used_index)):
-        est = [each for each in estimated_labels[index]]
-        hand = [each for each in handcrafted_labels[index]]
-
-        if "local" in hand and "pessimistic" not in hand:
-            local_num += 1
-        if "local" in hand and "pessimistic" in hand:
-            local_evade_num += 1
-
-        if ("local" in est and "pessimistic" not in est) and ("local" in hand and "pessimistic" not in hand):
-            confusion_matrix[0, 0] += 1
-        if ("local" in est and "pessimistic" not in est) and ("local" in hand and "pessimistic" in hand):
-            confusion_matrix[0, 1] += 1
-
-        if ("local" in est and "pessimistic" in est)and ("local" in hand and "pessimistic" not in hand):
-            confusion_matrix[1, 0] += 1
-        if ("local" in est and "pessimistic" in est) and ("local" in hand and "pessimistic" in hand):
-            confusion_matrix[1, 1] += 1
-
-        # if ["local"] == est and ["local"] == hand:
-        #     confusion_matrix[0, 0] += 1
-        # elif ["local"] == est and ["global"] == hand:
-        #     confusion_matrix[0, 1] += 1
-        # elif ["local"] == est and ["local", "pessimistic"] == hand:
-        #     confusion_matrix[0, 2] += 1
-        # elif ["local"] == est and ["global", "pessimistic"] == hand:
-        #     confusion_matrix[0, 3] += 1
-        #
-        # elif ["global"] == est and ["local"] == hand:
-        #     confusion_matrix[1, 0] += 1
-        # elif ["global"] == est and ["global"] == hand:
-        #     confusion_matrix[1, 1] += 1
-        # elif ["global"] == est and ["local", "pessimistic"] == hand:
-        #     confusion_matrix[1, 2] += 1
-        # elif["global"] == est and ["global", "pessimistic"] == hand:
-        #     confusion_matrix[1, 3] += 1
-        #
-        # elif ["local", "pessimistic"] == est and ["local"] == hand:
-        #     confusion_matrix[2, 0] += 1
-        # elif ["local", "pessimistic"] == est and ["global"] == hand:
-        #     confusion_matrix[2, 1] += 1
-        # elif ["local", "pessimistic"] == est and ["local", "pessimistic"] == hand:
-        #     confusion_matrix[2, 2] += 1
-        # elif ["local", "pessimistic"] == est and ["global", "pessimistic"] == hand:
-        #     confusion_matrix[2, 3] += 1
-        #
-        # elif ["global", "pessimistic"] == est and ["local"] == hand:
-        #     confusion_matrix[3, 0] += 1
-        # elif ["global", "pessimistic"] == est and ["global"] == hand:
-        #     confusion_matrix[3, 1] += 1
-        # elif ["global", "pessimistic"] == est and ["local", "pessimistic"] == hand:
-        #     confusion_matrix[3, 2] += 1
-        # elif ["global", "pessimistic"] == est and ["global", "pessimistic"] == hand:
-        #     confusion_matrix[3, 3] += 1
-        #
-        # else:
-        #     weird_index.append(index)
-
-        # if "local" in est and "local" in hand:
-        #     confusion_matrix[0, 0] += 1
-        # if "local" in est and "global" in hand:
-        #     confusion_matrix[0, 1] += 1
-        # if "local" in est and "pessimistic" in hand:
-        #     confusion_matrix[0, 2] += 1
-        #
-        # if "global" in est and "local" in hand:
-        #     confusion_matrix[1, 0] += 1
-        # if "global" in est and "global" in hand:
-        #     confusion_matrix[1, 1] += 1
-        # if "global" in est and "pessimistic" in hand:
-        #     confusion_matrix[1, 2] += 1
-        #
-        # if "pessimistic" in est and "local" in hand:
-        #     confusion_matrix[2, 0] += 1
-        # if "pessimistic" in est and "global" in hand:
-        #     confusion_matrix[2, 1] += 1
-        # if "pessimistic" in est and "pessimistic" in hand:
-        #     confusion_matrix[2, 2] += 1
-
-    # F1 = 2TP / (2TP + FP + FN)
-    # F1_score = 2 * confusion_matrix[0, 0] / (2 * confusion_matrix[0, 0] + confusion_matrix[0, 1] + confusion_matrix[1, 0])
-
-    plt.subplot(1, 2, 2)
-    # plt.title("F1 Score = {a:.3f}".format(a = F1_score), fontsize = 15)
-    seaborn.heatmap(confusion_matrix,
-                    annot = True, cmap='Blues',
-                    # xticklabels = ["local", "global", "local + evade", "global + evade"],
-                    # yticklabels = ["local", "global", "local + evade", "global + evade"],
-                    xticklabels=["local \n ({a:.2%})".format(a = np.sum(confusion_matrix[:,0]) / local_num),
-                                 "local + evade \n ({a:.2%})".format(a = np.sum(confusion_matrix[:,1]) / local_evade_num)],
-                    yticklabels=["local", "local + evade"],
-                    cbar = False, square = True, annot_kws = {"fontsize" : 15})
-    plt.xlabel("Hand-Crafted Label", fontsize = 15)
-    plt.ylabel("Estimated Label", fontsize = 15)
-    plt.xticks(fontsize = 15)
-    plt.yticks(fontsize = 15)
+    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon = False)
     plt.show()
 
 
@@ -882,12 +730,41 @@ def plotThreeAgentMatching(config):
     # Read data
     # trial_weight : (num of trials, num of windows, num of agents + 1)
     # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    estimated_labels = np.load(config["estimated_label_filename"], allow_pickle=True)
     handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
-    trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
+    trial_weight = np.load(config["trial_weight_filename"], allow_pickle = True)
+    trial_Q = np.load(config["trial_Q_filename"], allow_pickle = True)
+    trial_contributions = []
+    trial_matching_rate = []
+    estimated_labels = []
+    for trial_index in range(len(trial_weight)):
+        temp_contribution = []
+        temp_labels = []
+        is_same = []
+        for centering_index in range(len(trial_weight[trial_index])):
+            contribution = trial_weight[trial_index][centering_index, :-1] * \
+                           [scaleOfNumber(each) for each in np.max(
+                               np.abs(trial_Q[trial_index][centering_index, :, [0, 1, 2], :]),axis=(1, 2)
+                           )]
+            # normalization
+            contribution = contribution / np.linalg.norm(contribution)
+            temp_contribution.append(copy.deepcopy(contribution))
+            # Labeling
+            est = _estimationThreeLabeling(contribution)
+            temp_labels.append(copy.deepcopy(est))
+            # Matching
+            if handcrafted_labels[trial_index][centering_index] is not None:
+                if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
+                    is_same.append(1)
+                else:
+                    is_same.append(0)
+        trial_contributions.append(copy.deepcopy(temp_contribution))
+        estimated_labels.append(copy.deepcopy(temp_labels))
+        trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
+
+    # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
     not_nan_trial_matching_rate = []
     for each in trial_matching_rate:
-        if "Nan trial" != each:
+        if each is not None:
             not_nan_trial_matching_rate.append(float(each))
     trial_matching_rate = not_nan_trial_matching_rate
 
@@ -899,8 +776,9 @@ def plotThreeAgentMatching(config):
     print("Average : ", np.nanmean(trial_matching_rate))
 
     colors = Davos_5.mpl_colors[1]
+    plt.figure(figsize=(18, 8))
     plt.subplot(1, 2, 1)
-    plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
+    # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
     plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
     plt.xlabel("Label Matching Rate", fontsize = 20)
     plt.xlim(0, 1.0)
@@ -944,25 +822,25 @@ def plotThreeAgentMatching(config):
         est = [each for each in estimated_labels[index]]
         hand = [each for each in handcrafted_labels[index]]
 
-        if "local" in est and "local" in hand:
+        if "local" in est and ["local"] == hand:
             confusion_matrix[0, 0] += 1
-        if "local" in est and "global" in hand:
+        if "local" in est and ["global"] == hand:
             confusion_matrix[0, 1] += 1
-        if "local" in est and "pessimistic" in hand:
+        if "local" in est and ["pessimistic"] == hand:
             confusion_matrix[0, 2] += 1
 
-        if "global" in est and "local" in hand:
+        if "global" in est and ["local" ]== hand:
             confusion_matrix[1, 0] += 1
-        if "global" in est and "global" in hand:
+        if "global" in est and ["global"] == hand:
             confusion_matrix[1, 1] += 1
-        if "global" in est and "pessimistic" in hand:
+        if "global" in est and ["pessimistic"] == hand:
             confusion_matrix[1, 2] += 1
 
-        if "pessimistic" in est and "local" in hand:
+        if "pessimistic" in est and ["local"] == hand:
             confusion_matrix[2, 0] += 1
-        if "pessimistic" in est and "global" in hand:
+        if "pessimistic" in est and ["global"] == hand:
             confusion_matrix[2, 1] += 1
-        if "pessimistic" in est and "pessimistic" in hand:
+        if "pessimistic" in est and ["pessimistic"] == hand:
             confusion_matrix[2, 2] += 1
 
     confusion_matrix = np.array(confusion_matrix, dtype = np.float)
@@ -971,16 +849,16 @@ def plotThreeAgentMatching(config):
 
 
     plt.subplot(1, 2, 2)
-    plt.title("Confusion Matrix", fontsize = 20)
+    # plt.title("Confusion Matrix", fontsize = 20)
     seaborn.heatmap(confusion_matrix,
-                    annot = True, cmap = "Blues", fmt = ".1%",
+                    annot = True, cmap = "binary", fmt = ".1%",
                     # xticklabels = ["local", "global", "local + evade", "global + evade"],
                     # yticklabels = ["local", "global", "local + evade", "global + evade"],
                     xticklabels=["local", "global", "evade"],
                     yticklabels=["local", "global", "evade"],
                     cbar = False, square = True, annot_kws = {"fontsize" : 20})
-    plt.xlabel("Hand-Crafted Label", fontsize = 20)
-    plt.ylabel("Estimated Label", fontsize = 20)
+    plt.xlabel("Rule-Based Label", fontsize = 20)
+    plt.ylabel("Fitted Label", fontsize = 20)
     plt.xticks(fontsize = 20)
     plt.yticks(fontsize = 20)
     plt.show()
@@ -1016,29 +894,29 @@ def plotBeanNumVSCr(config):
             third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
 
     # plotting
-    x_ticks = ["local", "+ global", "+ pessi.", "+ plan.", "+suicide"]
+    x_ticks = ["local", "+global", "+evade", "+attack", "+suicide"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
-
-    colors = Vivid_5.mpl_colors
+    colors = RdYlBu_5.mpl_colors
+    colors[2] = Balance_6.mpl_colors[2]
+    plt.figure(figsize=(18, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
-    plt.title("# of Beans $\leqslant$ 10", fontsize  =20)
-    avg_cr = np.mean(first_phase_agent_cr, axis = 0)
-    var_cr = np.var(first_phase_agent_cr, axis = 0)
-    # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
+    plt.title("Early Stage (Pellets $\geqslant$ 80)", fontsize=20)
+    avg_cr = np.mean(third_phase_agent_cr, axis=0)
+    var_cr = np.var(third_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
-                     mfc=colors[index], mec = colors[index], marker="o")
+                     mfc=colors[index], mec=colors[index], marker="o")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.ylabel("Direction Correct Rate", fontsize = 20)
-    plt.yticks([0.8, 0.85, 0.9, 0.95, 1.0], [0.8, 0.85, 0.9, 0.95, 1.0], fontsize=15)
+    plt.yticks([0.8, 0.85, 0.9, 0.95, 1.0], [0.8, 0.85, 0.9, 0.95, 1.0], fontsize = 15)
+    plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
     plt.ylim(0.8, 1.0)
 
     plt.subplot(1, 3, 2)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
-    plt.title("10 < # of Beans < 80", fontsize=20)
+    plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
     avg_cr = np.mean(second_phase_agent_cr, axis=0)
     var_cr = np.var(second_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
@@ -1046,20 +924,21 @@ def plotBeanNumVSCr(config):
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.8, 0.85, 0.9, 0.95, 1.0], [], fontsize=15)
+    plt.yticks([0.80, 0.85, 0.90, 0.95, 1.00], [], fontsize=15)
     plt.ylim(0.8, 1.0)
 
     plt.subplot(1, 3, 3)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
-    plt.title("80 $\leqslant$ # of Beans", fontsize=20)
-    avg_cr = np.mean(third_phase_agent_cr, axis=0)
-    var_cr = np.var(third_phase_agent_cr, axis=0)
+    plt.title("Ending Stage (Pellets $\leqslant$ 80)", fontsize=20)
+    avg_cr = np.mean(first_phase_agent_cr, axis=0)
+    var_cr = np.var(first_phase_agent_cr, axis=0)
+    # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
-                     mfc=colors[index], mec = colors[index], marker="o")
+                     mfc=colors[index], mec=colors[index], marker="o")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([])
+    plt.yticks([0.8, 0.85, 0.9, 0.95, 1.0], [], fontsize=15)
     plt.ylim(0.8, 1.0)
     plt.show()
 
@@ -1080,16 +959,16 @@ if __name__ == '__main__':
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
-        "single_trial_window": 10,
+        "single_trial_window": 5,
         "single_trial_agents": ["global", "local", "pessimistic"],
 
         # ==================================================================================
         #                       For Experimental Results Visualization
-        "estimated_label_filename": "./common_data/diff_pessimistic/non_negative_pess/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "./common_data/diff_pessimistic/non_negative_pess/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_weight_filename": "./common_data/diff_pessimistic/non_negative_pess/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "./common_data/diff_pessimistic/1non_negative_pess/00_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "./common_data/diff_pessimistic/non_negative_pess/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
+        "estimated_label_filename": "./common_data/diff_pessimistic/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "./common_data/diff_pessimistic/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        "trial_weight_filename": "./common_data/diff_pessimistic/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
+        "trial_Q_filename": "./common_data/diff_pessimistic/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "./common_data/diff_pessimistic/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
         "trial_window": 3,
 
         # ------------------------------------------------------------------------------------
@@ -1098,23 +977,23 @@ if __name__ == '__main__':
         "local_to_global_cr": "./common_data/transition/local_to_global-window1-cr-w_intercept.npy",
         "local_to_global_Q": "./common_data/transition/local_to_global-window1-Q-w_intercept.npy",
 
-        "local_to_evade_agent_weight": "./common_data/transition/local_to_evade-window1-agent_weight-w_intercept.npy",
-        "local_to_evade_cr": "./common_data/transition/local_to_evade-window1-cr-w_intercept.npy",
-        "local_to_evade_Q": "./common_data/transition/local_to_evade-window1-Q-w_intercept.npy",
+        "local_to_evade_agent_weight": "./common_data/transition/depth5_wo_break/local_to_evade-window1-agent_weight-w_intercept.npy",
+        "local_to_evade_cr": "./common_data/transition/depth5_wo_break/local_to_evade-window1-cr-w_intercept.npy",
+        "local_to_evade_Q": "./common_data/transition/depth5_wo_break/local_to_evade-window1-Q-w_intercept.npy",
 
         "global_to_local_agent_weight": "./common_data/transition/global_to_local-window1-agent_weight-w_intercept.npy",
         "global_to_local_cr": "./common_data/transition/global_to_local-window1-cr-w_intercept.npy",
         "global_to_local_Q": "./common_data/transition/global_to_local-window1-Q-w_intercept.npy",
 
-        "evade_to_local_agent_weight": "./common_data/transition/evade_to_local-window1-agent_weight-w_intercept.npy",
-        "evade_to_local_cr": "./common_data/transition/evade_to_local-window1-cr-w_intercept.npy",
-        "evade_to_local_Q": "./common_data/transition/evade_to_local-window1-Q-w_intercept.npy",
+        "evade_to_local_agent_weight": "./common_data/transition/depth5_wo_break/evade_to_local-window1-agent_weight-w_intercept.npy",
+        "evade_to_local_cr": "./common_data/transition/depth5_wo_break/evade_to_local-window1-cr-w_intercept.npy",
+        "evade_to_local_Q": "./common_data/transition/depth5_wo_break/evade_to_local-window1-Q-w_intercept.npy",
 
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"], ["local", "pessimistic"]],
 
         # ------------------------------------------------------------------------------------
 
-        "bean_vs_cr_filename" : "./common_data/incremental/500trial-window3-incremental_cr-w_intercept.npy",
+        "bean_vs_cr_filename" : "./common_data/incremental/100trial-window3-incremental_cr-w_intercept.npy",
     }
 
     # ============ VISUALIZATION =============
@@ -1127,3 +1006,8 @@ if __name__ == '__main__':
     # plotBeanNumVSCr(config)
 
     singleTrialThreeFitting(config)
+
+    # Best trials:
+    # "13-2-Patamon-10-Sep-2019-1.csv", "10-3-Omega-09-Jul-2019-1.csv", "10-2-Patamon-07-Jul-2019-1.csv",
+    # "10-7-Patamon-10-Aug-2019-1.csv", "11-1-Patamon-11-Jun-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
+    # "14-1-Patamon-14-Jun-2019-1.csv", "14-2-Patamon-10-Jul-2019-1.csv"
