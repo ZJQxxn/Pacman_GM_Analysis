@@ -597,15 +597,15 @@ def _handcraftLabeling(labels):
     # local
     if labels.label_local_graze or labels.label_local_graze_noghost or labels.label_true_accidental_hunting or labels.label_global_ending:
         hand_crafted_label.append("local")
-    # evade (pessmistic)
-    if labels.label_evade:
-        hand_crafted_label.append("pessimistic")
     # global
     if labels.label_global_optimal or labels.label_global_notoptimal or labels.label_global:
         if labels.label_global_ending:
             pass
         else:
             hand_crafted_label.append("global")
+    # evade (pessmistic)
+    if labels.label_evade:
+        hand_crafted_label.append("pessimistic")
     # suicide
     if labels.label_suicide:
         hand_crafted_label.append("suicide")

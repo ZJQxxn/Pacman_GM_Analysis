@@ -17,9 +17,19 @@ import scipy.stats
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-plt.rc('font', family='CMU Serif', weight="roman")
-from matplotlib import rcParams
-rcParams['mathtext.default'] = 'regular'
+# plt.rc('font', family='CMU Serif', weight="roman")
+# plt.rc('font', family='Myriad Pro')
+#
+# from matplotlib import rcParams
+# rcParams['mathtext.default'] = 'regular'
+
+params = {
+    "pdf.fonttype": 42,
+    "font.sans-serif": "CMU Serif",
+    "font.family": "sans-serif",
+}
+plt.rcParams.update(params)
+
 
 import copy
 import seaborn
@@ -288,13 +298,19 @@ def singleTrialThreeFitting(config):
     # "10-7-Patamon-10-Aug-2019-1.csv", "11-1-Patamon-11-Jun-2019-1.csv", "13-2-Patamon-10-Sep-2019-1.csv"]
 
     # Best trials
-    # , "12-2-Patamon-13-Aug-2019-1.csv"
+    # "13-2-Patamon-10-Sep-2019-1.csv", "10-3-Omega-09-Jul-2019-1.csv", "10-2-Patamon-07-Jul-2019-1.csv",
+    # "10-7-Patamon-10-Aug-2019-1.csv", "11-1-Patamon-11-Jun-2019-1.csv", "13-5-Patamon-21-Aug-2019-1.csv",
+    # "14-1-Patamon-14-Jun-2019-1.csv", "14-2-Patamon-10-Jul-2019-1.csv"
 
-    trial_name_list = ["13-2-Patamon-10-Sep-2019-1.csv"]
+    # trial_name_list = ["14-2-Patamon-10-Jul-2019-1.csv"] # 111
 
     # trial_name_list = ["13-5-Patamon-21-Aug-2019-1.csv",
     #                    "12-2-Patamon-13-Aug-2019-1.csv"]
+    all_trial_names = np.array([each[0] for each in trial_data])
+    trial_name_list = np.random.choice(all_trial_names, 10, replace = True)
+    trial_name_list = all_trial_names[np.where(np.array([each[1].shape[0] for each in trial_data]) == 80)]
 
+    # trial_name_list = ["26-6-Omega-21-Aug-2019-1.csv"]
     record = []
     # trial_name_list = None
     if trial_name_list is not None and len(trial_name_list) > 0:
@@ -332,10 +348,10 @@ def singleTrialThreeFitting(config):
         handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
         handcrafted_label = handcrafted_label[window : -window]
         all_hand_crafted.append(handcrafted_label)
-        label_not_nan_index = []
-        for i, each in enumerate(handcrafted_label):
-            if each is not None:
-                label_not_nan_index.append(i)
+        # label_not_nan_index = []
+        # for i, each in enumerate(handcrafted_label):
+        #     if each is not None:
+        #         label_not_nan_index.append(i)
         # Estimating label through moving window analysis
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
@@ -429,21 +445,19 @@ def singleTrialThreeFitting(config):
 
 
         estimated_label = [
-            [
-                _estimationLabeling(temp_contribution[index], ["global", "local", "pessimistic"])
-            ]
+            _estimationThreeLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]))
             for index in range(len(temp_contribution))
         ]
 
         # Plot weight variation of this trial
         colors = RdYlBu_5.mpl_colors
-        agent_color = {                                            
-            "local" : colors[0],                                   
-            "pessimistic" : Balance_6.mpl_colors[2],               
-            "global" : colors[1],                                  
-            "suicide" : "white",
-            "planned_hunting" : "white"
-        }                                                          
+        agent_color = {
+            "local": colors[0],
+            "pessimistic": colors[1],
+            "global": colors[-1],
+            "suicide": Balance_6.mpl_colors[2],
+            "planned_hunting": colors[3]
+        }
         label_name = {                                             
             "local": "local",                                      
             "pessimistic": "evade",                                
@@ -458,7 +472,7 @@ def singleTrialThreeFitting(config):
             else:
                 temp_weight[index, :] = temp_weight[index, :] / np.linalg.norm(temp_weight[index, :])
 
-        plt.figure(figsize=(18,13))
+        plt.figure(figsize = (18,13))
         plt.subplot(2, 1, 1)
         # plt.title(trial_name, fontsize = 15)
         for index in range(len(agent_name)):
@@ -484,26 +498,28 @@ def singleTrialThreeFitting(config):
                     "local" in handcrafted_label[i] or
                     "global" in handcrafted_label[i]
             ):
+                handcrafted_label[i] = sorted(handcrafted_label[i])
+                estimated_label[i] = sorted(estimated_label[i])
+
                 # Hand-crafted labels
                 if len(handcrafted_label[i]) > 2:
                     handcrafted_label[i] = handcrafted_label[i][:2]
                 if len(handcrafted_label[i]) == 2:
-                    if "pessimistic" in handcrafted_label[i]:
-                        plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color["pessimistic"])
-                    else:
-                        plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.25, facecolor=agent_color[handcrafted_label[i][0]])
-                        plt.fill_between(x=[i, i + 1], y1=0.25, y2=0.3, facecolor=agent_color[handcrafted_label[i][1]])
+                    if "local" in handcrafted_label[i] and "global" in handcrafted_label[i]:
+                        handcrafted_label[i] = ["global", "global"]
+                    # if "pessimistic" in handcrafted_label[i]:
+                    #     plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color["pessimistic"])
+                    # else:
+                    plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.25, facecolor=agent_color[handcrafted_label[i][0]])
+                    plt.fill_between(x=[i, i + 1], y1=0.25, y2=0.3, facecolor=agent_color[handcrafted_label[i][1]])
                 else:
                     plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color[handcrafted_label[i][0]])
                 # Estimated labels
-                if len(estimated_label[i]) == 2:
-                    if "pessimistic" in estimated_label[i]:
-                        plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.1, facecolor=agent_color["pessimistic"])
-                    else:
-                        plt.fill_between(x=[i, i + 1], y1=0.0, y2= 0.05, facecolor=agent_color[estimated_label[i][0]])
-                        plt.fill_between(x=[i, i + 1], y1=0.05, y2 = 0.1, facecolor=agent_color[estimated_label[i][1]])
+                if len(estimated_label[i]) == 1:
+                    plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.1, facecolor=agent_color[estimated_label[i][0]])
                 else:
-                    plt.fill_between(x=[i, i + 1], y1=0.0, y2= 0.1, facecolor=agent_color[estimated_label[i][0]])
+                    plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.05, facecolor=agent_color[estimated_label[i][0]])
+                    plt.fill_between(x=[i, i + 1], y1=0.05, y2=0.1, facecolor=agent_color[estimated_label[i][1]])
         plt.xlim(0, temp_weight.shape[0] - 1)
         # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
         # x_ticks = [window + int(each) for each in x_ticks_index]
@@ -530,7 +546,7 @@ def _estimationThreeLabeling(contributions):
     agent_name = ["global", "local"]
     if np.any(contributions[:2] > 0):
         labels.append(agent_name[np.argmax(contributions[:2])])
-    if contributions[-1] > 0.5:
+    if contributions[-1] > 0.3:
         labels.append("pessimistic")
     return labels
 
@@ -542,10 +558,10 @@ def plotWeightVariation(config):
     colors = RdYlBu_5.mpl_colors
     agent_color = {
         "local" : colors[0],
-        "pessimistic" : Balance_6.mpl_colors[2],
-        "global" : colors[1],
-        "suicide" : colors[3],
-        "planned_hunting" : colors[4]
+        "pessimistic" : colors[1],
+        "global" : colors[-1],
+        "suicide" : Balance_6.mpl_colors[2],
+        "planned_hunting" : colors[3]
     }
     label_name = {
         "local": "local",
@@ -822,18 +838,18 @@ def plotThreeAgentMatching(config):
         est = [each for each in estimated_labels[index]]
         hand = [each for each in handcrafted_labels[index]]
 
-        if "local" in est and ["local"] == hand:
+        if ["local"] == est and ["local"] == hand:
             confusion_matrix[0, 0] += 1
-        if "local" in est and ["global"] == hand:
+        if ["local"] == est and ["global"] == hand:
             confusion_matrix[0, 1] += 1
-        if "local" in est and ["pessimistic"] == hand:
+        if ["local"] == est and ["pessimistic"] == hand:
             confusion_matrix[0, 2] += 1
 
-        if "global" in est and ["local" ]== hand:
+        if ["global"] == est and ["local" ]== hand:
             confusion_matrix[1, 0] += 1
-        if "global" in est and ["global"] == hand:
+        if ["global"] == est and ["global"] == hand:
             confusion_matrix[1, 1] += 1
-        if "global" in est and ["pessimistic"] == hand:
+        if ["global"] == est and ["pessimistic"] == hand:
             confusion_matrix[1, 2] += 1
 
         if "pessimistic" in est and ["local"] == hand:
@@ -898,11 +914,13 @@ def plotBeanNumVSCr(config):
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     colors = RdYlBu_5.mpl_colors
     colors[2] = Balance_6.mpl_colors[2]
+    colors = [colors[0], colors[-1], colors[1], colors[3], colors[2]]
+
     plt.figure(figsize=(18, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
-    plt.title("Early Stage (Pellets $\geqslant$ 80)", fontsize=20)
+    plt.title("Early Stage (Pellets >= 80)", fontsize=20)
     avg_cr = np.mean(third_phase_agent_cr, axis=0)
     var_cr = np.var(third_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
@@ -929,7 +947,7 @@ def plotBeanNumVSCr(config):
 
     plt.subplot(1, 3, 3)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
-    plt.title("Ending Stage (Pellets $\leqslant$ 80)", fontsize=20)
+    plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
     avg_cr = np.mean(first_phase_agent_cr, axis=0)
     var_cr = np.var(first_phase_agent_cr, axis=0)
     # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
@@ -959,7 +977,7 @@ if __name__ == '__main__':
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
-        "single_trial_window": 5,
+        "single_trial_window": 2,
         "single_trial_agents": ["global", "local", "pessimistic"],
 
         # ==================================================================================
@@ -977,17 +995,17 @@ if __name__ == '__main__':
         "local_to_global_cr": "./common_data/transition/local_to_global-window1-cr-w_intercept.npy",
         "local_to_global_Q": "./common_data/transition/local_to_global-window1-Q-w_intercept.npy",
 
-        "local_to_evade_agent_weight": "./common_data/transition/depth5_wo_break/local_to_evade-window1-agent_weight-w_intercept.npy",
-        "local_to_evade_cr": "./common_data/transition/depth5_wo_break/local_to_evade-window1-cr-w_intercept.npy",
-        "local_to_evade_Q": "./common_data/transition/depth5_wo_break/local_to_evade-window1-Q-w_intercept.npy",
+        "local_to_evade_agent_weight": "./common_data/transition/old_fitting/local_to_evade-window1-agent_weight-w_intercept.npy",
+        "local_to_evade_cr": "./common_data/transition/old_fitting/local_to_evade-window1-cr-w_intercept.npy",
+        "local_to_evade_Q": "./common_data/transition/old_fitting/local_to_evade-window1-Q-w_intercept.npy",
 
         "global_to_local_agent_weight": "./common_data/transition/global_to_local-window1-agent_weight-w_intercept.npy",
         "global_to_local_cr": "./common_data/transition/global_to_local-window1-cr-w_intercept.npy",
         "global_to_local_Q": "./common_data/transition/global_to_local-window1-Q-w_intercept.npy",
 
-        "evade_to_local_agent_weight": "./common_data/transition/depth5_wo_break/evade_to_local-window1-agent_weight-w_intercept.npy",
-        "evade_to_local_cr": "./common_data/transition/depth5_wo_break/evade_to_local-window1-cr-w_intercept.npy",
-        "evade_to_local_Q": "./common_data/transition/depth5_wo_break/evade_to_local-window1-Q-w_intercept.npy",
+        "evade_to_local_agent_weight": "./common_data/transition/old_fitting/evade_to_local-window1-agent_weight-w_intercept.npy",
+        "evade_to_local_cr": "./common_data/transition/old_fitting/evade_to_local-window1-cr-w_intercept.npy",
+        "evade_to_local_Q": "./common_data/transition/old_fitting/evade_to_local-window1-Q-w_intercept.npy",
 
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"], ["local", "pessimistic"]],
 
@@ -1000,9 +1018,9 @@ if __name__ == '__main__':
     # plotMultiLabelMatching(config)
 
     # plotThreeAgentMatching(config)
-
+    #
     # plotWeightVariation(config)
-
+    #
     # plotBeanNumVSCr(config)
 
     singleTrialThreeFitting(config)
