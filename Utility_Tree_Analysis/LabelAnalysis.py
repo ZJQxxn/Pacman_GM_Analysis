@@ -213,6 +213,81 @@ def readTrialData(filename):
     return trial_data
 
 
+def readTrajectoryData(filename):
+    '''
+        Read data for MLE analysis.
+        :param filename: Filename.
+        '''
+    # Read data and pre-processing
+    with open(filename, "rb") as file:
+        all_data = pickle.load(file)
+    if "level_0" not in all_data.columns.values:
+        all_data = all_data.reset_index(drop=True)
+    for index in range(all_data.shape[0]):
+        if isinstance(all_data.global_Q[index], list):  # what if no normal Q?
+            if index == all_data.shape[0] - 1:
+                if isinstance(all_data.global_Q[index - 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index - 2]
+                    all_data.local_Q[index] = all_data.local_Q[index - 2]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 2]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index - 2]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index - 1]
+                    all_data.local_Q[index] = all_data.local_Q[index - 1]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 1]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index - 1]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 1]
+            else:
+                if isinstance(all_data.global_Q[index + 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index + 2]
+                    all_data.local_Q[index] = all_data.local_Q[index + 2]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 2]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index + 2]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index + 1]
+                    all_data.local_Q[index] = all_data.local_Q[index + 1]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 1]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index + 1]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 1]
+    # Pre-processng pessimistic Q
+    # TODO: check this
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    PG = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x, locs_df),
+        axis = 1
+    )
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    # Split into trajectories
+    trial_data = []
+    trial_name_list = np.unique(all_data.file.values)
+    for each in trial_name_list:
+        each_trial = all_data[all_data.file == each].reset_index(drop = True)
+        trajectory_list = np.unique(each_trial.trajectory_index.values)
+        for trajectory in trajectory_list:
+            each_trajectory = each_trial[each_trial.trajectory_index == trajectory].reset_index(drop=True)
+            # True moving directions
+            true_prob = each_trial.next_pacman_dir_fill
+            # Fill nan direction for optimization use
+            start_index = 0
+            while pd.isna(true_prob[start_index]):
+                start_index += 1
+                if start_index == len(true_prob):
+                    break
+            if start_index == len(true_prob):
+                print("Moving direciton of trial {} is all nan.".format(each))
+                continue
+            if start_index > 0:
+                true_prob[:start_index + 1] = true_prob[start_index + 1]
+            for index in range(1, true_prob.shape[0]):
+                if pd.isna(true_prob[index]):
+                    true_prob[index] = true_prob[index - 1]
+            true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+            trial_data.append(["{}-{}".format(each,trajectory), each_trajectory, true_prob])
+    return trial_data
+
+
 def readAllData(filename, trial_num):
     with open(filename, "rb") as file:
         all_data = pickle.load(file)
@@ -800,7 +875,6 @@ def movingWindowAnalysis(config):
         transition_type, window, "w" if config["need_intercept"] else "wo"), trajectory_Q)
 
 
-
 def threeAgentAnalysis(config):
     print("== Multi Label Aaalysis with Three Agents ==")
     print(config["trial_data_filename"])
@@ -1044,7 +1118,6 @@ def incrementalAnalysis(config):
         os.mkdir("../common_data/incremental")
     np.save("../common_data/incremental/{}trial-window{}-incremental_cr-{}_intercept.npy".format(
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
-
 
 
 def singleTrialThreeFitting(config):
@@ -1353,6 +1426,217 @@ def singleTrialThreeFitting(config):
         all_Q.append(temp_trial_Q)
     # # Save data
     np.save("../common_data/single_trial/records.npy", record)
+    print()
+    # np.save("../common_data/single_trial/estimated_labels.npy", all_estimated)
+    # np.save("../common_data/single_trial/agent_weights.npy", all_weight)
+    # np.save("../common_data/single_trial/agent_contributions.npy", all_Q)
+
+
+def trajectoryTransitionFitting(config):
+    print("="*15, " Trajectory Transition Analysis ", "="*15)
+    print(config["trajectory_transition_data_filename"])
+    all_agent_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    # Read trial data
+    agents_list = ["{}_Q".format(each) for each in all_agent_list]
+    agent_name = config["trajectory_transition_agents"]
+    agent_index = [all_agent_list.index(each) for each in agent_name]
+    window = config["trajectory_transition_window"]
+    trial_data = readTrajectoryData(config["trajectory_transition_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+
+    trial_name_list = None
+    record = []
+    # trial_name_list = None
+    if trial_name_list is not None and len(trial_name_list) > 0:
+        temp_trial_Data = []
+        for each in trial_data:
+            if each[0] in trial_name_list:
+                temp_trial_Data.append(each)
+        trial_data = temp_trial_Data
+
+    if config["trajectory_num"] is not None:
+        trajectory_index = np.random.choice(np.arange(trial_num), config["trajectory_num"], replace = False)
+        temp_trial_data = []
+        for index in range(trial_num):
+            if index in trajectory_index:
+                temp_trial_data.append(trial_data[index])
+        trial_data = temp_trial_data
+
+    print("Num of used trials : ", len(trial_data))
+    # with open("../common_data/single_trial/trial_data.pkl", "wb") as file:
+    #     pickle.dump(trial_data, file)
+
+    label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+                  "label_global_optimal", "label_global_notoptimal", "label_global",
+                  "label_evade",
+                  "label_suicide",
+                  "label_true_accidental_hunting",
+                  "label_true_planned_hunting"]
+
+    all_hand_crafted = []
+    all_estimated = []
+    all_weight_main = []
+    all_weight_rest = []
+    all_Q = []
+
+    for trial_index, each in enumerate(trial_data):
+        temp_record = []
+        print("-"*15)
+        trial_name = each[0]
+        temp_record.append(trial_name)
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("Trial name : ", trial_name)
+        # Hand-crafted label
+        handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
+        handcrafted_label = handcrafted_label[window : -window]
+        all_hand_crafted.append(handcrafted_label)
+        label_not_nan_index = []
+        for i, each in enumerate(handcrafted_label):
+            if each is not None:
+                label_not_nan_index.append(i)
+        # Estimating label through moving window analysis
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        # (num of windows, num of agents)
+        temp_weight = np.zeros((len(window_index), len(agent_name) if not config["need_intercept"] else len(agent_name)+1))
+        # temp_weight_rest = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
+        # temp_Q = []
+        temp_contribution = np.zeros((len(window_index), len(agent_name)))
+        # temp_contribution_rest = np.zeros((len(window_index), 3))
+        cr = np.zeros((len(window_index), ))
+        # (num of windows, window size, num of agents, num pf directions)
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        # For each trial, estimate agent weights through sliding windows
+
+        trial_estimated_label = []
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            Q_value = sub_X[agents_list].values
+            for i in range(window * 2 + 1):  # num of samples in a window
+                for j in range(5):  # number of agents
+                    temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
+            # estimation in the window
+            window_estimated_label = []
+            # Construct optimizer
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
+            if config["need_intercept"]:
+                params.append(1)
+                bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                sub_X,
+                sub_Y,
+                agent_name,
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+
+            temp_weight[centering_index, :] = res.x
+            contribution = temp_weight[centering_index, :-1] * \
+                           [scaleOfNumber(each) for each in
+                            np.max(np.abs(temp_trial_Q[centering_index, :, agent_index, :]), axis=(1, 2))]
+            temp_contribution[centering_index, :] = contribution
+            window_estimated_label.append(_estimationLabeling(contribution, agent_name))
+            trial_estimated_label.append(window_estimated_label)
+
+        matched_num = 0
+        not_nan_num = 0
+        for i in range(len(handcrafted_label)):
+            if handcrafted_label[i] is not None:
+                not_nan_num += 1
+                if len(np.intersect1d(handcrafted_label[i], trial_estimated_label[i])) > 0:
+                    matched_num += 1
+        print(" Trial label matching rate : ", matched_num / not_nan_num if not_nan_num != 0 else "Nan trial")
+
+        temp_record.append(copy.deepcopy(temp_weight))
+        temp_record.append(copy.deepcopy(temp_contribution))
+        temp_record.append(copy.deepcopy(trial_estimated_label))
+        temp_record.append(copy.deepcopy(handcrafted_label))
+        temp_record.append(copy.deepcopy(temp_trial_Q[:,:,agent_index, :]))
+        record.append(copy.deepcopy(temp_record))
+
+        all_weight_main.append(temp_weight)
+        all_estimated.append(trial_estimated_label)
+
+        estimated_label = [
+            [
+                _estimationLabeling(temp_contribution[index], agent_name)
+            ]
+            for index in range(len(temp_contribution))
+        ]
+
+        # Plot weight variation of this trial
+        agent_color = {
+            "local": "red",
+            "global": "blue",
+            "pessimistic": "green",
+            "suicide": "cyan",
+            "planned_hunting": "magenta"
+        }
+        # normalization
+        for index in range(temp_weight.shape[0]):
+            if config["need_intercept"]:
+                temp_weight[index, :-1] = temp_weight[index, :-1] / np.linalg.norm(temp_weight[index, :-1])
+            else:
+                temp_weight[index, :] = temp_weight[index, :] / np.linalg.norm(temp_weight[index, :])
+
+        plt.title(trial_name, fontsize = 15)
+        for index in range(len(agent_name)):
+            plt.plot(temp_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                     label=agent_name[index])
+
+        for i in range(len(handcrafted_label)):
+            if handcrafted_label[i] is not None:
+                if len(handcrafted_label[i]) == 2:
+                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.05, color=agent_color[handcrafted_label[i][0]])
+                    plt.fill_between(x=[i, i + 1], y1=-0.05, y2=-0.1, color=agent_color[handcrafted_label[i][1]])
+                else:
+                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
+
+        # for pessimistic agent
+        plt.ylabel("Normalized Agent Weight", fontsize=20)
+        plt.xlim(0, temp_weight.shape[0] - 1)
+        plt.xlabel("Time Step", fontsize=15)
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-0.1, 1.1)
+        plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name))
+        # plt.show()
+        # print()
+
+        all_Q.append(temp_trial_Q)
+    # # Save data
+    np.save("../common_data/single_trajectory/{}-transition_records.npy".format(
+        config["trajectory_transition_data_filename"].split("/")[-1].split("-")[0]), record)
     print()
     # np.save("../common_data/single_trial/estimated_labels.npy", all_estimated)
     # np.save("../common_data/single_trial/agent_weights.npy", all_weight)
@@ -1961,6 +2245,17 @@ if __name__ == '__main__':
         # ==================================================================================
 
         # ==================================================================================
+        #                       For Trajectory Transtion Analysis
+        # Filename
+        # "single_trial_data_filename": "../common_data/trial/global15-local10-100_trial_data_new-with_Q.pkl",
+        "trajectory_transition_data_filename": "../common_data/transition/evade_to_local-with_Q.pkl",
+        # Window size for correlation analysis
+        "trajectory_transition_window": 1,
+        "trajectory_num": None,
+        "trajectory_transition_agents": ["local", "pessimistic"],
+        # ==================================================================================
+
+        # ==================================================================================
         #                       For Incremental Analysis
         # Filename
         "incremental_data_filename": "../common_data/trial/100_trial_data_new-one_ghost-with_Q.pkl",
@@ -2057,8 +2352,10 @@ if __name__ == '__main__':
 
     # incrementalAnalysis(config)
 
+    trajectoryTransitionFitting(config)
+
     # ============ VISUALIZATION =============
-    plotThreeAgentMatching(config)
+    # plotThreeAgentMatching(config)
 
     # plotWeightVariation(config, plot_sem = True, contribution = True, need_normalization = True, normalizing_type="sum") # step / sum / all
 
