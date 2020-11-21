@@ -49,6 +49,131 @@ def oneHot(val):
     return onehot_vec
 
 
+def _PG(x, locs_df):
+    PG = [0, 0]
+    if x.ifscared1 < 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost1Pos):
+            PG[0] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost1Pos)]
+        else:
+            pass
+    else:
+        PG[0] = 100
+    if x.ifscared2 < 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost2Pos):
+            PG[1] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost2Pos)]
+        else:
+            pass
+    else:
+        PG[1] = 100
+    return PG
+
+
+def _ghostStatus(x):
+    ghost_status =[int(x.ifscared1), int(x.ifscared2)]
+    return ghost_status
+
+
+def _energizerNum(x):
+    if x.energizers is None or isinstance(x.energizers, float):
+        num= 0
+    else:
+        num = len(x.energizers)
+    return num
+
+
+def _PR(x, locs_df):
+    # beans, energizers, fruits, scared ghosts
+    PR_dist = []
+    if x.beans is not None and x.beans != [] and not isinstance(x.beans, float):
+        PR_dist.extend(x.beans)
+    if x.energizers is not None and x.energizers != [] and not isinstance(x.energizers, float):
+        PR_dist.extend(x.energizers)
+    if x.fruitPos is not None and x.fruitPos != [] and not  isinstance(x.fruitPos, float):
+        PR_dist.append(x.fruitPos)
+    if x.ifscared1 > 3:
+        PR_dist.append(x.ghost1Pos)
+    if x.ifscared2 > 3:
+        PR_dist.append(x.ghost2Pos)
+    # Compute distance
+    PR_dist = [locs_df[x.pacmanPos][each] if each != x.pacmanPos else 0 for each in PR_dist]
+    if len(PR_dist) > 0:
+        return np.min(PR_dist)
+    else:
+        return 100
+
+
+def _RR(x, locs_df):
+    # beans, energizers, fruits, scared ghosts
+    RR_dist = []
+    if x.beans is not None and x.beans != [] and not  isinstance(x.beans, float):
+        RR_dist.extend(x.beans)
+    if x.energizers is not None and x.energizers != [] and not  isinstance(x.energizers, float):
+        RR_dist.extend(x.energizers)
+    if x.fruitPos is not None and x.fruitPos != [] and not  isinstance(x.fruitPos, float):
+        RR_dist.append(x.fruitPos)
+    if x.ifscared1 > 3:
+        RR_dist.append(x.ghost1Pos)
+    if x.ifscared2 > 3:
+        RR_dist.append(x.ghost2Pos)
+    # Compute distance
+    reborn_pos = (14, 27)
+    RR_dist = [locs_df[reborn_pos][each] if each != reborn_pos else 0 for each in RR_dist]
+    if len(RR_dist) > 0:
+        return np.min(RR_dist)
+    else:
+        return 100
+
+
+def _pessimisticProcesing(pess_Q, PG):
+    offset = np.max(np.abs(np.concatenate(pess_Q)))
+    temp_pess_Q = copy.deepcopy(pess_Q)
+    for index in range(len(temp_pess_Q)):
+        non_zero = np.where(temp_pess_Q[index] != 0)
+        # if np.any(temp_pess_Q[index] < -5):
+        if np.any(np.array(PG[index]) <= 10):
+            temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
+        else:
+            temp_pess_Q[index][non_zero] = 0.0
+    # for index in range(len(temp_pess_Q)):
+    #     non_zero = np.where(temp_pess_Q[index] != 0)
+    #     temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
+    #     temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
+    #     temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
+    return temp_pess_Q
+
+
+def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num):
+    if np.any(np.concatenate(planned_Q) < 0):
+        offset = np.max(np.abs(np.concatenate(planned_Q))) # TODO: max absolte value of negative values
+    else:
+        offset = 0.0
+    temp_planned_Q = copy.deepcopy(planned_Q)
+    for index in range(len(temp_planned_Q)):
+        non_zero = np.where(temp_planned_Q[index] != 0)
+        if np.all(np.array(ghost_status[index]) >= 3) or energizer_num[index] == 0:
+            temp_planned_Q[index][non_zero] = 0.0
+        else:
+            temp_planned_Q[index][non_zero] = temp_planned_Q[index][non_zero] + offset
+    return temp_planned_Q
+
+
+def _suicideProcesing(suicide_Q, PR, RR, ghost_status):
+    # PR: minimum distance between Pacman position and reward entities
+    # RR: minimum distance between reborn position and reward entities
+    if np.any(np.concatenate(suicide_Q) < 0):
+        offset = np.max(np.abs(np.concatenate(suicide_Q)))  # TODO: max absolte value of negative values
+    else:
+        offset = 0.0
+    temp_suicide_Q = copy.deepcopy(suicide_Q)
+    for index in range(len(temp_suicide_Q)):
+        non_zero = np.where(temp_suicide_Q[index] != 0)
+        if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
+            temp_suicide_Q[index][non_zero] = 0.0
+        else:
+            temp_suicide_Q[index][non_zero] = temp_suicide_Q[index][non_zero] + offset
+    return temp_suicide_Q
+
+
 def readTransitionData(filename):
     '''
     Read data for MLE analysis.
@@ -94,7 +219,28 @@ def readTransitionData(filename):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: _ghostStatus(x),
+        axis=1
+    )
+    energizer_num = all_data[["energizers"]].apply(
+        lambda x: _energizerNum(x),
+        axis=1
+    )
+    PR = all_data[["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = all_data[["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    print("Finished extracting features.")
+    # TODO: planned hunting and suicide Q value
     all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+    print("Finished Q-value pre-processing.")
     # Split into trajectories
     trajectory_data = []
     grouped_data = all_data.groupby(["file", "trajectory_index"])
@@ -120,25 +266,6 @@ def readTransitionData(filename):
         trajectory_data.append([name, group, true_prob, group.iloc[0]["trajectory_shape"]])
     # temp = trajectory_data[0]
     return trajectory_data
-
-
-def _PG(x, locs_df):
-    PG = [0, 0]
-    if x.ifscared1 < 3:
-        if tuple(x.pacmanPos) != tuple(x.ghost1Pos):
-            PG[0] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost1Pos)]
-        else:
-            pass
-    else:
-        PG[0] = 100
-    if x.ifscared2 < 3:
-        if tuple(x.pacmanPos) != tuple(x.ghost2Pos):
-            PG[1] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost2Pos)]
-        else:
-            pass
-    else:
-        PG[1] = 100
-    return PG
 
 
 def readTrialData(filename):
@@ -186,7 +313,27 @@ def readTrialData(filename):
         lambda x: _PG(x, locs_df),
         axis = 1
     )
+    ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: _ghostStatus(x),
+        axis=1
+    )
+    energizer_num = all_data[["energizers"]].apply(
+        lambda x: _energizerNum(x),
+        axis=1
+    )
+    PR = all_data[["pacmanPos", "energizers", "beans", "fruit_pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = all_data[["pacmanPos", "energizers", "beans", "fruit_pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    #TODO: planned hunting and suicide Q value
     all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q,  ghost_status, energizer_num)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+
     # Split into trials
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -256,9 +403,29 @@ def readTrajectoryData(filename):
     locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
     PG = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _PG(x, locs_df),
-        axis = 1
+        axis=1
     )
+    ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: _ghostStatus(x),
+        axis=1
+    )
+    energizer_num = all_data[["energizers"]].apply(
+        lambda x: _energizerNum(x),
+        axis=1
+    )
+    PR = all_data[["pacmanPos", "energizers", "beans", "fruit_pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = all_data[["pacmanPos", "energizers", "beans", "fruit_pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    # TODO: planned hunting and suicide Q value
     all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+
     # Split into trajectories
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -328,7 +495,27 @@ def readAllData(filename, trial_num):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: _ghostStatus(x),
+        axis=1
+    )
+    energizer_num = all_data[["energizers"]].apply(
+        lambda x: _energizerNum(x),
+        axis=1
+    )
+    PR = all_data[["pacmanPos", "energizers", "beans", "fruit_pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = all_data[["pacmanPos", "energizers", "beans", "fruit_pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    # TODO: planned hunting and suicide Q value
     all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+
     # Split into trials
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -385,15 +572,15 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     # laziness_coeff = 1.0
     # Configuration (for global agent)
     global_depth = 15
-    ignore_depth = 5
+    ignore_depth = 10
     global_ghost_attractive_thr = 34
     global_fruit_attractive_thr = 34
     global_ghost_repulsive_thr = 34
     # Configuration (for local agent)
-    local_depth = 5
-    local_ghost_attractive_thr = 5
-    local_fruit_attractive_thr = 5
-    local_ghost_repulsive_thr = 5
+    local_depth = 10
+    local_ghost_attractive_thr = 10
+    local_fruit_attractive_thr = 10
+    local_ghost_repulsive_thr = 10
     # Configuration (for optimistic agent)
     optimistic_depth = 5
     optimistic_ghost_attractive_thr = 5
@@ -665,7 +852,6 @@ def _estimationThreeLabeling(contributions):
     return labels
 
 
-
 def _handcraftLabeling(labels):
     hand_crafted_label = []
     labels = labels.fillna(0)
@@ -690,24 +876,6 @@ def _handcraftLabeling(labels):
     if len(hand_crafted_label) == 0:
         hand_crafted_label = None
     return hand_crafted_label
-
-
-def _pessimisticProcesing(pess_Q, PG):
-    offset = np.max(np.abs(np.concatenate(pess_Q)))
-    temp_pess_Q = copy.deepcopy(pess_Q)
-    for index in range(len(temp_pess_Q)):
-        non_zero = np.where(temp_pess_Q[index] != 0)
-        # if np.any(temp_pess_Q[index] < -5):
-        if np.any(np.array(PG[index]) <= 10):
-            temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
-        else:
-            temp_pess_Q[index][non_zero] = 0.0
-    # for index in range(len(temp_pess_Q)):
-    #     non_zero = np.where(temp_pess_Q[index] != 0)
-    #     temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
-    #     temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
-    #     temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
-    return temp_pess_Q
 
 
 def _label2Index(labels):
@@ -2196,8 +2364,12 @@ if __name__ == '__main__':
         type = sys.argv[1]
         if "local_to_global" == type or "global_to_local" == type:
             agents = ["local", "global"]
-        elif "local_to_evade" == type or "evade_to_local":
+        elif "local_to_evade" == type or "evade_to_local" == type:
             agents = ["local", "pessimistic"]
+        elif "local_to_planned" == type:
+            agents = ["local", "planned_hunting"]
+        elif "local_to_suicide" == type:
+            agents = ["local", "suicide"]
         else:
             raise ValueError("Undefined transition type {}!".format(type))
     else:
@@ -2342,7 +2514,7 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
 
@@ -2352,7 +2524,9 @@ if __name__ == '__main__':
 
     # incrementalAnalysis(config)
 
-    trajectoryTransitionFitting(config)
+    # data = np.load("../common_data/single_trajectory/local_to_evade-transition_records.npy", allow_pickle=True)
+    # print()
+    # trajectoryTransitionFitting(config)
 
     # ============ VISUALIZATION =============
     # plotThreeAgentMatching(config)

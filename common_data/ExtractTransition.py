@@ -324,16 +324,17 @@ def _global2Local(trial_data):
 
 def _local2Planned(trial_data):
     is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting", "label_global_ending"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_global_ending == 1,
+        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1,
         axis = 1
     )
     is_planned = trial_data[["label_true_planned_hunting"]].apply(
         lambda x: x.label_true_planned_hunting == 1,
         axis = 1
     )
-    length = 15
+    length = 20
     print("Local_to_planned length : ", length)
-    trajectory_point = _findTransitionPoint(is_local, is_planned, length)
+    # trajectory_point = _findTransitionPoint(is_local, is_planned, length)
+    trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
     if len(trajectory_point) == 0:
         return None
     else:
@@ -346,8 +347,8 @@ def _local2Planned(trial_data):
 
 
 def _local2Suicide(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_global_ending"]].apply(
-        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_global_ending == 1,
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_global_ending", "label_true_accidental_hunting",]].apply(
+        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1,
         axis=1
     )
 
@@ -443,8 +444,11 @@ def extractTransitionData(transition_type, need_save = True):
                 global_to_local.extend(copy.deepcopy(trial_global_to_local))
                 global2local_trial_num += 1
         if trial_local_to_planned is not None:
-            local_to_planned.extend(copy.deepcopy(trial_local_to_planned))
-            local2planned_trial_num += 1
+            if local2planned_trial_num > 1000: #TODO:
+                pass
+            else:
+                local_to_planned.extend(copy.deepcopy(trial_local_to_planned))
+                local2planned_trial_num += 1
         if trial_local_to_suicide is not None:
             local_to_suicide.extend(copy.deepcopy(trial_local_to_suicide))
             local2suicide_trial_num += 1
@@ -512,5 +516,5 @@ def extractTransitionData(transition_type, need_save = True):
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["local_to_evade", "evade_to_local"]
+    transition_type = ["local_to_planned"]
     extractTransitionData(transition_type, need_save = True)
