@@ -21,7 +21,7 @@ from PathTreeAgent import PathTree
 class PlannedHuntingAgent:
 
     def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, ghost_data, ghost_status, last_dir,
-                 randomness_coeff = 1.0, laziness_coeff = 1.0):
+                 ghost_attractive_thr = 15, energizer_attractive_thr = 15, randomness_coeff = 1.0, laziness_coeff = 1.0):
         # Game status (energizer)
         self.cur_pos = cur_pos
         self.energizer_data = energizer_data
@@ -49,6 +49,8 @@ class PlannedHuntingAgent:
         # For randomness and laziness
         self.randomness_coeff = randomness_coeff
         self.laziness_coeff = laziness_coeff
+        self.ghost_attractive_thr = ghost_attractive_thr
+        self.energizer_attractive_thr = energizer_attractive_thr
 
     def _descendantUtility(self, node):
         leaves_utility = []
@@ -182,7 +184,7 @@ class PlannedHuntingAgent:
 
                 temp_utility = 0.0
                 # Energizer reward
-                energizer_attractive_thr = 15
+                energizer_attractive_thr = self.energizer_attractive_thr
                 if P_E < energizer_attractive_thr:
                     R = self.reward_amount[2] + self.reward_amount[8]
                     T = energizer_attractive_thr
@@ -195,7 +197,7 @@ class PlannedHuntingAgent:
                 # )
 
                 # Ghost risk
-                ghost_repulsive_thr = 15
+                ghost_repulsive_thr = self.ghost_attractive_thr
                 if P_G < ghost_repulsive_thr:
                     R = self.reward_amount[8]
                     T = ghost_repulsive_thr
@@ -257,6 +259,8 @@ if __name__ == '__main__':
         ghost_data,
         ghost_status,
         last_dir,
+        ghost_attractive_thr=12,
+        energizer_attractive_thr=12,
         randomness_coeff = 0.0,
         laziness_coeff = 0.0
     )

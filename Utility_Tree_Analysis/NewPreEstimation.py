@@ -83,6 +83,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_ghost_attractive_thr = 10
     pessimistic_fruit_attractive_thr = 10
     pessimistic_ghost_repulsive_thr = 10
+    # Configuration (fpr planne hunting agent)
+    ghost_attractive_thr = 20
+    energizer_attractive_thr = 20
     # Configuration (for suicide agent)
     suicide_depth = 10
     suicide_ghost_attractive_thr = 10
@@ -249,6 +252,8 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             ghost_data,
             ghost_status,
             last_dir[index],
+            ghost_attractive_thr=ghost_attractive_thr,
+            energizer_attractive_thr = energizer_attractive_thr,
             randomness_coeff = randomness_coeff,
             laziness_coeff = laziness_coeff
         )

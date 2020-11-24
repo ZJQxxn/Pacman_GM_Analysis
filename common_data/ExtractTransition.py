@@ -249,11 +249,28 @@ def _local2Evade(trial_data):
         lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10),
         axis=1
     )
+
+    # Only evade and only local
+    is_pure_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending", "label_evade"]].apply(
+        lambda
+            x: (x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1) and
+               (x.label_evade == 0),
+        axis=1
+    )
+    is_pure_evade = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending", "label_evade", "PG"]].apply(
+        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10) and
+                  (x.label_local_graze == 0 and x.label_local_graze_noghost == 0 and x.label_true_accidental_hunting == 0),
+        axis=1
+    )
+
+
     trial_data = trial_data.drop(columns = ["PG"])
     length = 10
     print("Local_to_evade length : ", length)
     # trajectory_point = _findTransitionWOBreak(is_local, is_evade, length)
-    trajectory_point = _findTransitionPoint(is_local, is_evade, length)
+    trajectory_point = _findTransitionPoint(is_pure_local, is_pure_evade, length) #TODO: pure local/evade
 
     if len(trajectory_point) == 0:
         return None
@@ -282,11 +299,28 @@ def _evade2Local(trial_data):
         lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10),
         axis=1
     )
+
+    # Only evade and only local
+    is_pure_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                                "label_global_ending", "label_evade"]].apply(
+        lambda
+            x: (
+                           x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1) and
+               (x.label_evade == 0),
+        axis=1
+    )
+    is_pure_evade = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                                "label_global_ending", "label_evade", "PG"]].apply(
+        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10) and
+                  (
+                              x.label_local_graze == 0 and x.label_local_graze_noghost == 0 and x.label_true_accidental_hunting == 0),
+        axis=1
+    )
     trial_data = trial_data.drop(columns = ["PG"])
     length = 10
     print("Local_to_evade length : ", length)
     # trajectory_point = _findTransitionWOBreak(is_evade, is_local, length)
-    trajectory_point = _findTransitionPoint(is_evade, is_local, length)
+    trajectory_point = _findTransitionPoint(is_pure_evade, is_pure_local, length)
     if len(trajectory_point) == 0:
         return None
     else:
@@ -331,7 +365,7 @@ def _local2Planned(trial_data):
         lambda x: x.label_true_planned_hunting == 1,
         axis = 1
     )
-    length = 20
+    length = 25
     print("Local_to_planned length : ", length)
     # trajectory_point = _findTransitionPoint(is_local, is_planned, length)
     trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
@@ -362,7 +396,10 @@ def _local2Suicide(trial_data):
     )
     length = 5
     print("Local_to_suicide length : ", length)
-    trajectory_point = _findTransitionPoint(is_local, is_suicide, length)
+    # trajectory_point = _findTransitionPoint(is_local, is_suicide, length)
+
+    trajectory_point = _findTransitionWOBreak(is_local, is_suicide, length)
+
     if len(trajectory_point) == 0:
         return None
     else:
@@ -516,5 +553,5 @@ def extractTransitionData(transition_type, need_save = True):
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["local_to_planned"]
+    transition_type = ["local_to_evade", "evade_to_local"]
     extractTransitionData(transition_type, need_save = True)

@@ -1318,20 +1318,20 @@ def threeAgentAnalysis(config):
 
     # Save data
     print()
-    if "diff_pessimistic" not in os.listdir("../common_data"):
-        os.mkdir("../common_data/diff_pessimistic")
+    if "global_local_pessimistic" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/global_local_pessimistic")
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-multi_labels.npy".format(
+    np.save("../common_data/global_local_pessimistic/{}-window{}-{}_intercept-multi_labels.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
-    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+    np.save("../common_data/global_local_pessimistic/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
-    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-matching_rate.npy".format(
+    np.save("../common_data/global_local_pessimistic/{}-window{}-{}_intercept-matching_rate.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
-    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-trial_weight.npy".format(
+    np.save("../common_data/global_local_pessimistic/{}-window{}-{}_intercept-trial_weight.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
-    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-Q.npy".format(
+    np.save("../common_data/global_local_pessimistic/{}-window{}-{}_intercept-Q.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
-    np.save("../common_data/diff_pessimistic/{}-window{}-{}_intercept-contribution.npy".format(
+    np.save("../common_data/global_local_pessimistic/{}-window{}-{}_intercept-contribution.npy".format(
         save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
     # Report
     # print("Average matching rate : ", np.mean(trial_matching_rate))
@@ -3383,11 +3383,11 @@ if __name__ == '__main__':
         # "trial_Q_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-Q.npy",
         # "trial_matching_rate_filename": "../common_data/multi_label/global15-local10-100_trial_data_new-with_Q-window3-w_intercept-matching_rate.npy",
 
-        "estimated_label_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_weight_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "../common_data/diff_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
+        "estimated_label_filename": "../common_data/global_local_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "../common_data/global_local_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        "trial_weight_filename": "../common_data/global_local_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
+        "trial_Q_filename": "../common_data/global_local_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "../common_data/global_local_pessimistic/all_agent/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
 
         # ------------------------------------------------------------------------------------
         # "estimated_label_filename": "../common_data/multi_label/100_trial_data-with_Q-window3-w_intercept-multi_labels.npy",
