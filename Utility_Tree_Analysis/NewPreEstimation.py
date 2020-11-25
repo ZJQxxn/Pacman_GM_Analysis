@@ -298,11 +298,11 @@ def preEstimation():
         # "../common_data/transition/local_to_global.pkl",
         # "../common_data/transition/local_to_evade.pkl",
         # "../common_data/transition/evade_to_local.pkl",
-        "../common_data/transition/local_to_planned.pkl",
+        # "../common_data/transition/local_to_planned.pkl",
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
         # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
-        # "../common_data/trial/100_trial_data_new.pkl",
+        "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
     ]
     for filename in filename_list:

@@ -560,18 +560,25 @@ def _estimationThreeLabeling(contributions, all_agent_name):
     return labels
 
 
-def _estimationFiveLabeling(contributions):
+def _estimationMultipleLabeling(contributions, all_agent_name):
     # global, local, pessimistic
     labels = []
     agent_name = ["global", "local"]
     if np.any(contributions[:2] > 0):
         labels.append(agent_name[np.argmax(contributions[:2])])
-    if contributions[2] > 0.3:
-        labels.append("pessimistic")
-    if contributions[3] > 0.3:
-        labels.append("suicide")
-    if contributions[4] > 0.3:
-        labels.append("planned_hunting")
+    # Threshold for different labels
+    pess_threshold = 0.0
+    planned_threshold = 0.0
+    suicide_threshold = 0.1
+    if "pessimistic" in all_agent_name:
+        if contributions[all_agent_name.index("pessimistic")] > pess_threshold:
+            labels.append("pessimistic")
+    if "suicide" in all_agent_name:
+        if contributions[all_agent_name.index("suicide")] > suicide_threshold:
+            labels.append("suicide")
+    if "planned_hunting" in all_agent_name:
+        if contributions[all_agent_name.index("planned_hunting")] > planned_threshold:
+            labels.append("planned_hunting")
     return labels
 
 
@@ -629,7 +636,12 @@ def plotWeightVariation(config):
     local2suicide_Q = np.load(config["local_to_suicide_Q"])
     local2suicide_Q = local2suicide_Q[:, :, :, [all_agent_list.index(each) for each in agent_list[5]], :]
 
-
+    print("Local - Global : ", local2global_weight.shape[0])
+    print("Global - Local : ", global2local_weight.shape[0])
+    print("Local - Evade : ", local2evade_weight.shape[0])
+    print("Evade - Local : ", evade2local_weight.shape[0])
+    print("Local - Attack : ", local2planned_weight.shape[0])
+    print("Local - Suicide : ", local2suicide_weight.shape[0])
 
     # Compute contributions: weight * Q value scale
     for i in range(local2global_weight.shape[0]):
@@ -865,8 +877,9 @@ def plotWeightVariation(config):
     #TODO: =========================================================================================
     # centering_index += 5 # TODO: shift the centering
     plt.clf()
+    agent_name = ["local", "pessimistic"]
     for index in range(len(agent_name)):
-        plt.plot(avg_local2planned_weight[:,index],
+        plt.plot(avg_evade2local_weight[:,index],
                  color=agent_color[agent_name[index]], ms=3, lw=5, label=label_name[agent_name[index]])
 
     plt.xlabel("Time Step", fontsize=15)
@@ -1142,173 +1155,161 @@ def plotThreeAgentMatching(config):
     plt.show()
 
 
-# def plotFiveAgentMatching(config):
-#     # Read data
-#     # trial_weight : (num of trials, num of windows, num of agents + 1)
-#     # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-#     handcrafted_labels = np.load(config["handcrafted_label_filename"], allow_pickle=True)
-#     trial_weight = np.load(config["trial_weight_filename"], allow_pickle = True)
-#     trial_Q = np.load(config["trial_Q_filename"], allow_pickle = True)
-#     trial_contributions = []
-#     trial_matching_rate = []
-#     estimated_labels = []
-#     for trial_index in range(len(trial_weight)):
-#         temp_contribution = []
-#         temp_labels = []
-#         is_same = []
-#         for centering_index in range(len(trial_weight[trial_index])):
-#             contribution = trial_weight[trial_index][centering_index, :-1] * \
-#                            [scaleOfNumber(each) for each in np.max(
-#                                np.abs(trial_Q[trial_index][centering_index, :, [0, 1, 2], :]),axis=(1, 2)
-#                            )]
-#             # normalization
-#             contribution = contribution / np.linalg.norm(contribution)
-#             temp_contribution.append(copy.deepcopy(contribution))
-#             # Labeling
-#             est = _estimationThreeLabeling(contribution)
-#             temp_labels.append(copy.deepcopy(est))
-#             # Matching
-#             if handcrafted_labels[trial_index][centering_index] is not None:
-#                 if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
-#                     is_same.append(1)
-#                 else:
-#                     is_same.append(0)
-#         trial_contributions.append(copy.deepcopy(temp_contribution))
-#         estimated_labels.append(copy.deepcopy(temp_labels))
-#         trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
-#
-#     # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
-#     not_nan_trial_matching_rate = []
-#     for each in trial_matching_rate:
-#         if each is not None:
-#             not_nan_trial_matching_rate.append(float(each))
-#     trial_matching_rate = not_nan_trial_matching_rate
-#
-#     print("-"*15)
-#     print("Matching rate : ")
-#     print("Max : ", np.nanmax(trial_matching_rate))
-#     print("Min : ", np.nanmin(trial_matching_rate))
-#     print("Median : ", np.nanmedian(trial_matching_rate))
-#     print("Average : ", np.nanmean(trial_matching_rate))
-#
-#     colors = Davos_5.mpl_colors[1]
-#     plt.figure(figsize=(18, 8))
-#     plt.subplot(1, 2, 1)
-#     # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
-#     plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
-#     plt.xlabel("Label Matching Rate", fontsize = 20)
-#     plt.xlim(0, 1.0)
-#     plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
-#     plt.ylabel("# of Trials", fontsize=20)
-#     plt.yticks([], fontsize=20)
-#     # plt.show()
-#
-#     # Plot confusion matrix
-#     # _________________________
-#     # |______|_local_|_global_| evade
-#     # | local|       |        |
-#     # |global|       |        |
-#     # | evade|
-#     # |-----------------------
-#     temp_handcrafted = []
-#     temp_estimated = []
-#     for i in handcrafted_labels:
-#         for j in i:
-#             temp_handcrafted.append(j)
-#     for i in estimated_labels:
-#         for j in i:
-#             temp_estimated.append(j)
-#     handcrafted_labels = temp_handcrafted
-#     estimated_labels = temp_estimated
-#     confusion_matrix = np.zeros((5, 5), dtype = np.int)
-#     used_index = []
-#     for index in range(len(handcrafted_labels)):
-#         if handcrafted_labels[index] is not None:
-#             if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-#                 continue
-#             used_index.append(index)
-#     estimated_labels = np.array(estimated_labels)[used_index]
-#     handcrafted_labels = np.array(handcrafted_labels)[used_index]
-#
-#     weird_index = []
-#     for index in range(len(used_index)):
-#         est = [each for each in estimated_labels[index]]
-#         hand = [each for each in handcrafted_labels[index]]
-#
-#         if ["local"] == est and ["local"] == hand:
-#             confusion_matrix[0, 0] += 1
-#         if ["local"] == est and ["global"] == hand:
-#             confusion_matrix[0, 1] += 1
-#         if ["local"] == est and ["pessimistic"] == hand:
-#             confusion_matrix[0, 2] += 1
-#         if ["local"] == est and ["suicide"] == hand:
-#             confusion_matrix[0, 3] += 1
-#         if ["local"] == est and ["planned_hunting"] == hand:
-#             confusion_matrix[0, 4] += 1
-#
-#         if ["global"] == est and ["local" ]== hand:
-#             confusion_matrix[1, 0] += 1
-#         if ["global"] == est and ["global"] == hand:
-#             confusion_matrix[1, 1] += 1
-#         if ["global"] == est and ["pessimistic"] == hand:
-#             confusion_matrix[1, 2] += 1
-#         if ["global"] == est and ["suicide"] == hand:
-#             confusion_matrix[1, 3] += 1
-#         if ["global"] == est and ["planned_hunting"] == hand:
-#             confusion_matrix[1, 4] += 1
-#
-#         if "pessimistic" in est and ["local"] == hand:
-#             confusion_matrix[2, 0] += 1
-#         if "pessimistic" in est and ["global"] == hand:
-#             confusion_matrix[2, 1] += 1
-#         if "pessimistic" in est and ["pessimistic"] == hand:
-#             confusion_matrix[2, 2] += 1
-#         if "pessimistic" in est and ["suicide"] == hand:
-#             confusion_matrix[2, 3] += 1
-#         if "pessimistic" in est and ["planned_hunting"] == hand:
-#             confusion_matrix[2, 4] += 1
-#
-#         if "suicide" in est and ["local"] == hand:
-#             confusion_matrix[3, 0] += 1
-#         if "suicide" in est and ["global"] == hand:
-#             confusion_matrix[3, 1] += 1
-#         if "suicide" in est and ["pessimistic"] == hand:
-#             confusion_matrix[3, 2] += 1
-#         if "suicide" in est and ["suicide"] == hand:
-#             confusion_matrix[3, 3] += 1
-#         if "suicide" in est and ["planned_hunting"] == hand:
-#             confusion_matrix[3, 4] += 1
-#
-#         if "planned_hunting" in est and ["local"] == hand:
-#             confusion_matrix[4, 0] += 1
-#         if "planned_hunting" in est and ["global"] == hand:
-#             confusion_matrix[4, 1] += 1
-#         if "planned_hunting" in est and ["pessimistic"] == hand:
-#             confusion_matrix[4, 2] += 1
-#         if "planned_hunting" in est and ["suicide"] == hand:
-#             confusion_matrix[4, 3] += 1
-#         if "planned_hunting" in est and ["planned_hunting"] == hand:
-#             confusion_matrix[4, 4] += 1
-#
-#     confusion_matrix = np.array(confusion_matrix, dtype = np.float)
-#     for col in range(5):
-#         confusion_matrix[:, col] = confusion_matrix[:, col] / np.sum(confusion_matrix[:, col])
-#
-#
-#     plt.subplot(1, 2, 2)
-#     # plt.title("Confusion Matrix", fontsize = 20)
-#     seaborn.heatmap(confusion_matrix,
-#                     annot = True, cmap = "binary", fmt = ".1%",
-#                     # xticklabels = ["local", "global", "local + evade", "global + evade"],
-#                     # yticklabels = ["local", "global", "local + evade", "global + evade"],
-#                     xticklabels=["local", "global", "evade", "suicide", "attack"],
-#                     yticklabels=["local", "global", "evade", "suicide", "attack"],
-#                     cbar = False, square = True, annot_kws = {"fontsize" : 20})
-#     plt.xlabel("Rule-Based Label", fontsize = 20)
-#     plt.ylabel("Fitted Label", fontsize = 20)
-#     plt.xticks(fontsize = 20)
-#     plt.yticks(fontsize = 20)
-#     plt.show()
+def plotFourAgentMatching(config):
+    agent_name = ["global", "local", "pessimistic", "suicide"]
+    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(each) for each in agent_name]
+    print("Agent name : ", agent_name)
+    # Read data
+    # trial_weight : (num of trials, num of windows, num of agents + 1)
+    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
+    handcrafted_labels = np.load(config["handcrafted_label_filename"].format("_".join(agent_name)), allow_pickle=True)
+    trial_weight = np.load(config["trial_weight_filename"].format("_".join(agent_name)), allow_pickle = True)
+    trial_Q = np.load(config["trial_Q_filename"].format("_".join(agent_name)), allow_pickle = True)
+    trial_contributions = []
+    trial_matching_rate = []
+    estimated_labels = []
+    for trial_index in range(len(trial_weight)):
+        temp_contribution = []
+        temp_labels = []
+        is_same = []
+        for centering_index in range(len(trial_weight[trial_index])):
+            contribution = trial_weight[trial_index][centering_index, :-1] * \
+                           [scaleOfNumber(each) for each in np.max(
+                               np.abs(trial_Q[trial_index][centering_index, :, agent_index, :]),axis=(1, 2)
+                           )]
+            # normalization
+            contribution = contribution / np.linalg.norm(contribution)
+            temp_contribution.append(copy.deepcopy(contribution))
+            # Labeling
+            est = _estimationMultipleLabeling(contribution, agent_name)
+            temp_labels.append(copy.deepcopy(est))
+            # Matching
+            if handcrafted_labels[trial_index][centering_index] is not None:
+                if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
+                    is_same.append(1)
+                else:
+                    is_same.append(0)
+        trial_contributions.append(copy.deepcopy(temp_contribution))
+        estimated_labels.append(copy.deepcopy(temp_labels))
+        trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
+
+    # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
+    not_nan_trial_matching_rate = []
+    for each in trial_matching_rate:
+        if each is not None:
+            not_nan_trial_matching_rate.append(float(each))
+    trial_matching_rate = not_nan_trial_matching_rate
+
+    print("-"*15)
+    print("Matching rate : ")
+    print("Max : ", np.nanmax(trial_matching_rate))
+    print("Min : ", np.nanmin(trial_matching_rate))
+    print("Median : ", np.nanmedian(trial_matching_rate))
+    print("Average : ", np.nanmean(trial_matching_rate))
+
+    colors = Davos_5.mpl_colors[1]
+    plt.figure(figsize=(18, 8))
+    plt.subplot(1, 2, 1)
+    # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
+    plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
+    plt.xlabel("Label Matching Rate", fontsize = 20)
+    plt.xlim(0, 1.0)
+    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
+    plt.ylabel("# of Trials", fontsize=20)
+    plt.yticks([], fontsize=20)
+    # plt.show()
+
+    # Plot confusion matrix
+    # _________________________
+    # |______|_local_|_global_| evade
+    # | local|       |        |
+    # |global|       |        |
+    # | evade|
+    # |-----------------------
+    temp_handcrafted = []
+    temp_estimated = []
+    for i in handcrafted_labels:
+        for j in i:
+            temp_handcrafted.append(j)
+    for i in estimated_labels:
+        for j in i:
+            temp_estimated.append(j)
+    handcrafted_labels = temp_handcrafted
+    estimated_labels = temp_estimated
+
+    confusion_matrix = np.zeros((len(agent_name), len(agent_name)), dtype = np.int)
+    used_index = []
+    for index in range(len(handcrafted_labels)):
+        if handcrafted_labels[index] is not None:
+            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
+                continue
+            used_index.append(index)
+    estimated_labels = np.array(estimated_labels)[used_index]
+    handcrafted_labels = np.array(handcrafted_labels)[used_index]
+
+    weird_index = []
+    for index in range(len(used_index)):
+        est = [each for each in estimated_labels[index]]
+        hand = [each for each in handcrafted_labels[index]]
+
+        if ["local"] == est and ["local"] == hand:
+            confusion_matrix[0, 0] += 1
+        if ["local"] == est and ["global"] == hand:
+            confusion_matrix[0, 1] += 1
+        if ["local"] == est and ["pessimistic"] == hand:
+            confusion_matrix[0, 2] += 1
+        if ["local"] == est and ["suicide"] == hand:
+            confusion_matrix[0, 3] += 1
+
+        if ["global"] == est and ["local" ]== hand:
+            confusion_matrix[1, 0] += 1
+        if ["global"] == est and ["global"] == hand:
+            confusion_matrix[1, 1] += 1
+        if ["global"] == est and ["pessimistic"] == hand:
+            confusion_matrix[1, 2] += 1
+        if ["global"] == est and ["suicide"] == hand:
+            confusion_matrix[1, 3] += 1
+
+        if ("pessimistic" in est and "local" not in est) and ["local"] == hand:
+            confusion_matrix[2, 0] += 1
+        if ("pessimistic" in est and "global" not in est) and ["global"] == hand:
+            confusion_matrix[2, 1] += 1
+        if ("pessimistic" in est and "suicide" not in est) and ["pessimistic"] == hand:
+            confusion_matrix[2, 2] += 1
+        if ("pessimistic" in est and "suicide" not in est) and ["suicide"] == hand:
+            confusion_matrix[2, 3] += 1
+
+        if ("suicide" in est and "local" not in est) and ["local"] == hand:
+            confusion_matrix[3, 0] += 1
+        if ("suicide" in est and "global" not in est) and ["global"] == hand:
+            confusion_matrix[3, 1] += 1
+        if ("suicide" in est and "pessimistic" not in est) and ["pessimistic"] == hand:
+            confusion_matrix[3, 2] += 1
+        if ("suicide" in est and "pessimistic" not in est) and ["suicide"] == hand:
+            confusion_matrix[3, 3] += 1
+
+    confusion_matrix = np.array(confusion_matrix, dtype = np.float)
+    for col in range(len(agent_name)):
+        confusion_matrix[:, col] = confusion_matrix[:, col] / np.sum(confusion_matrix[:, col])
+
+
+    plt.subplot(1, 2, 2)
+    if "planned_hunting" in agent_name:
+        agent_name[agent_name.index("planned_hunting")] = "attack"
+    if "pessimistic" in agent_name:
+        agent_name[agent_name.index("pessimistic")] = "evade"
+    ticks = ["local", "global"]
+    ticks.extend(agent_name[2:])
+    seaborn.heatmap(confusion_matrix,
+                    annot = True, cmap = "binary", fmt = ".1%",
+                    xticklabels = ticks,
+                    yticklabels = ticks,
+                    cbar = False, square = True, annot_kws = {"fontsize" : 20})
+    plt.xlabel("Rule-Based Label", fontsize = 20)
+    plt.ylabel("Fitted Label", fontsize = 20)
+    plt.xticks(fontsize = 20)
+    plt.yticks(fontsize = 20)
+    plt.show()
 
 
 def plotBeanNumVSCr(config):
@@ -1418,7 +1419,7 @@ if __name__ == '__main__':
         "trial_weight_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
         "trial_Q_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
         "trial_matching_rate_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
-        "trial_agent_name" : ["global", "local", "planned_hunting"],
+        "trial_agent_name" : ["global", "local", "pessimistic"],
         "trial_window": 3,
 
         # ------------------------------------------------------------------------------------
@@ -1427,7 +1428,7 @@ if __name__ == '__main__':
         "local_to_global_cr": "./common_data/transition/local_to_global-window1-cr-w_intercept.npy",
         "local_to_global_Q": "./common_data/transition/local_to_global-window1-Q-w_intercept.npy",
 
-        # TODO: old fitting !!!
+
         "local_to_evade_agent_weight": "./common_data/transition/local_to_evade-window1-agent_weight-w_intercept.npy",
         "local_to_evade_cr": "./common_data/transition/local_to_evade-window1-cr-w_intercept.npy",
         "local_to_evade_Q": "./common_data/transition/local_to_evade-window1-Q-w_intercept.npy",
@@ -1436,14 +1437,13 @@ if __name__ == '__main__':
         "global_to_local_cr": "./common_data/transition/global_to_local-window1-cr-w_intercept.npy",
         "global_to_local_Q": "./common_data/transition/global_to_local-window1-Q-w_intercept.npy",
 
-        # TODO: old fitting !!!
         "evade_to_local_agent_weight": "./common_data/transition/evade_to_local-window1-agent_weight-w_intercept.npy",
         "evade_to_local_cr": "./common_data/transition/evade_to_local-window1-cr-w_intercept.npy",
         "evade_to_local_Q": "./common_data/transition/evade_to_local-window1-Q-w_intercept.npy",
 
-        "local_to_planned_agent_weight": "./common_data/transition/25_planned_wo_break/local_to_planned-window1-agent_weight-w_intercept.npy",
-        "local_to_planned_cr": "./common_data/transition/25_planned_wo_break/local_to_planned-window1-cr-w_intercept.npy",
-        "local_to_planned_Q": "./common_data/transition/25_planned_wo_break/local_to_planned-window1-Q-w_intercept.npy",
+        "local_to_planned_agent_weight": "./common_data/transition/local_to_planned-window1-agent_weight-w_intercept.npy",
+        "local_to_planned_cr": "./common_data/transition/local_to_planned-window1-cr-w_intercept.npy",
+        "local_to_planned_Q": "./common_data/transition/local_to_planned-window1-Q-w_intercept.npy",
 
         "local_to_suicide_agent_weight": "./common_data/transition/5_suicide_wo_break/local_to_suicide-window1-agent_weight-w_intercept.npy",
         "local_to_suicide_cr": "./common_data/transition/5_suicide_wo_break/local_to_suicide-window1-cr-w_intercept.npy",
@@ -1460,11 +1460,13 @@ if __name__ == '__main__':
     # ============ VISUALIZATION =============
     # plotMultiLabelMatching(config)
 
-    plotThreeAgentMatching(config)
-    #
+    # plotThreeAgentMatching(config)
+    plotFourAgentMatching(config)
+
     # plotWeightVariation(config)
+
     # plotExtraWeightVariation(config)
-    #
+
     # plotBeanNumVSCr(config)
 
     # singleTrialThreeFitting(config)

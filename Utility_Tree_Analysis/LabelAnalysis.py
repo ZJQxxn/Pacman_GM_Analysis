@@ -2565,7 +2565,7 @@ if __name__ == '__main__':
         # Window size for correlation analysis
         "trial_window" : 3,
         "correlation_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
-        "multi_agent_list" : ["global", "local", "planned_hunting"],
+        "multi_agent_list" : ["local", "pessimistic", "suicide"],
         # ==================================================================================
 
         # ==================================================================================

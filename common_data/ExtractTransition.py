@@ -177,6 +177,52 @@ def _findTransitionPoint(state1_indication, state2_indication, length):
     return trajectories
 
 
+def _findEvadeTransitionPoint(state1_indication, state2_indication, length):
+    '''
+    Example:
+
+    state1_indication = [1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0]
+    state2_indication = [0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1]
+    res = _findEvadeTransitionPoint(state1_indication, state2_indication, 3)
+    print(res)
+    '''
+    if isinstance(state1_indication, list):
+        pass
+    else:
+        state1_indication = [int(each) for each in state1_indication.values]
+        state2_indication = [int(each) for each in state2_indication.values]
+    nums = len(state1_indication)
+    state1_diff = np.diff(state1_indication)
+    state2_diff = np.diff(state2_indication)
+    transition_point = np.intersect1d(np.where(state1_diff == -1), np.where(state2_diff == 1))
+    # Supplement transition point
+    for index in range(len(state1_diff)-2):
+        if (state1_diff[index] == -1 and state2_diff[index+1] == 1) or (state1_diff[index] == -1 and state2_diff[index+2] == 1):
+            transition_point = np.append(transition_point, index)
+    if len(transition_point) == 0:
+        return []
+    else:
+        trajectories = []
+        for index, each in enumerate(transition_point):
+            cur = each
+            # trajectory is not long enough
+            if cur-length < 0 or  cur + 1 + length >= len(state1_indication):
+                continue
+            first_phase = state1_indication[cur-length:cur]
+            second_phase = state2_indication[cur+1:cur + 1 + length]
+            first_max_discontinue_period = _findDiscontinuePeriod(first_phase)
+            second_max_discontinue_period = _findDiscontinuePeriod(second_phase)
+            first_max_discontinue_period = [0] if len(first_max_discontinue_period) == 0 else first_max_discontinue_period
+            second_max_discontinue_period = [0] if len(second_max_discontinue_period) == 0 else second_max_discontinue_period
+            if max(first_max_discontinue_period) <= 3 and max(second_max_discontinue_period) <= 3:
+                trajectories.append([
+                    each - length, # starting index
+                    each, # centering index
+                    each + length + 1 # ending index
+                ])
+    return trajectories
+
+
 def _findTransitionWOBreak(state1_indication, state2_indication, length):
     state1_indication = [int(each) for each in state1_indication.values]
     state2_indication = [int(each) for each in state2_indication.values]
@@ -267,10 +313,11 @@ def _local2Evade(trial_data):
 
 
     trial_data = trial_data.drop(columns = ["PG"])
-    length = 10
+    length = 5
     print("Local_to_evade length : ", length)
     # trajectory_point = _findTransitionWOBreak(is_local, is_evade, length)
-    trajectory_point = _findTransitionPoint(is_pure_local, is_pure_evade, length) #TODO: pure local/evade
+    # trajectory_point = _findTransitionPoint(is_pure_local, is_pure_evade, length) #TODO: pure local/evade
+    trajectory_point = _findEvadeTransitionPoint(is_pure_local, is_pure_evade, length)  # TODO: pure local/evade
 
     if len(trajectory_point) == 0:
         return None
@@ -317,10 +364,12 @@ def _evade2Local(trial_data):
         axis=1
     )
     trial_data = trial_data.drop(columns = ["PG"])
-    length = 10
+    length = 5
     print("Local_to_evade length : ", length)
     # trajectory_point = _findTransitionWOBreak(is_evade, is_local, length)
-    trajectory_point = _findTransitionPoint(is_pure_evade, is_pure_local, length)
+    # trajectory_point = _findTransitionPoint(is_pure_evade, is_pure_local, length)
+    trajectory_point = _findEvadeTransitionPoint(is_pure_evade, is_pure_local, length)
+
     if len(trajectory_point) == 0:
         return None
     else:
@@ -365,10 +414,10 @@ def _local2Planned(trial_data):
         lambda x: x.label_true_planned_hunting == 1,
         axis = 1
     )
-    length = 25
+    length = 15
     print("Local_to_planned length : ", length)
-    # trajectory_point = _findTransitionPoint(is_local, is_planned, length)
-    trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
+    trajectory_point = _findTransitionPoint(is_local, is_planned, length)
+    # trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
     if len(trajectory_point) == 0:
         return None
     else:
@@ -421,8 +470,6 @@ def _extractTrialData(trial_data, transition_type):
     trial_local_to_planned = None
     trial_local_to_suicide = None
     # For every transtion type
-    if "local_to_evade" in transition_type:
-        trial_local_to_evade = _local2Evade(trial_data)
     if "local_to_global" in transition_type:
         trial_local_to_global = _local2Global(trial_data)
     if "global_to_local" in transition_type:
@@ -431,6 +478,8 @@ def _extractTrialData(trial_data, transition_type):
         trial_local_to_planned = _local2Planned(trial_data)
     if "local_to_suicide" in transition_type:
         trial_local_to_suicide = _local2Suicide(trial_data)
+    if "local_to_evade" in transition_type:
+        trial_local_to_evade = _local2Evade(trial_data)
     if "evade_to_local" in transition_type:
         trial_evade_to_local = _evade2Local(trial_data)
     return trial_local_to_global, trial_local_to_evade, trial_global_to_local, trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local
