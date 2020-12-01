@@ -44,6 +44,22 @@ def _PG(x):
     return PG
 
 
+def _rewardNum(x):
+    num = 0
+    if not isinstance(x.beans, float):
+        num += len(x.beans)
+    if not isinstance(x.energizers, float):
+        num += len(x.energizers)
+    if not isinstance(x.fruitPos, float):
+        num += 1
+    return num
+
+
+def _isChanging(seq):
+    # TODO: whether reward enetities are eaten
+    pass
+
+
 def _extractAllData(trial_num = 20000):
     # Read data
     # data_filename = "partial_data_with_reward_label_cross.pkl"
@@ -177,14 +193,16 @@ def _findTransitionPoint(state1_indication, state2_indication, length):
     return trajectories
 
 
-def _findEvadeTransitionPoint(state1_indication, state2_indication, length):
+def _findEvadeTransitionPoint(state1_indication, state2_indication, length, reward_num):
     '''
     Example:
 
     state1_indication = [1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0]
     state2_indication = [0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1]
-    res = _findEvadeTransitionPoint(state1_indication, state2_indication, 3)
+    reward_num = [5, 5, 5, 5, 5, 5, 5, 4, 3, 2, 1, 1]
+    res = _findEvadeTransitionPoint(state1_indication, state2_indication, 3, reward_num)
     print(res)
+
     '''
     if isinstance(state1_indication, list):
         pass
@@ -215,11 +233,12 @@ def _findEvadeTransitionPoint(state1_indication, state2_indication, length):
             first_max_discontinue_period = [0] if len(first_max_discontinue_period) == 0 else first_max_discontinue_period
             second_max_discontinue_period = [0] if len(second_max_discontinue_period) == 0 else second_max_discontinue_period
             if max(first_max_discontinue_period) <= 3 and max(second_max_discontinue_period) <= 3:
-                trajectories.append([
-                    each - length, # starting index
-                    each, # centering index
-                    each + length + 1 # ending index
-                ])
+                if np.all(np.array(reward_num[each-length:each]) == reward_num[each-length]):
+                    trajectories.append([
+                        each - length,  # starting index
+                        each,  # centering index
+                        each + length + 1  # ending index
+                    ])
     return trajectories
 
 
@@ -291,34 +310,34 @@ def _local2Evade(trial_data):
         axis=1
     )
     trial_data["PG"] = PG
-    is_evade = trial_data[["label_evade","PG"]].apply(
-        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10),
+    is_evade = trial_data[["label_evade1","PG"]].apply(
+        lambda x: x.label_evade1 == 1,  # and np.any(np.array(x.PG) <= 10),
         axis=1
     )
 
     # Only evade and only local
     is_pure_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
-                           "label_global_ending", "label_evade"]].apply(
+                           "label_global_ending", "label_evade", "label_evade1"]].apply(
         lambda
             x: (x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1) and
-               (x.label_evade == 0),
+               (x.label_evade1 == 0),
         axis=1
     )
     is_pure_evade = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
-                           "label_global_ending", "label_evade", "PG"]].apply(
-        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10) and
+                           "label_global_ending", "label_evade", "label_evade1", "PG"]].apply(
+        lambda x: x.label_evade1 == 1 and
                   (x.label_local_graze == 0 and x.label_local_graze_noghost == 0 and x.label_true_accidental_hunting == 0),
         axis=1
     )
 
 
     trial_data = trial_data.drop(columns = ["PG"])
-    length = 5
+    length = 10
     print("Local_to_evade length : ", length)
     # trajectory_point = _findTransitionWOBreak(is_local, is_evade, length)
-    # trajectory_point = _findTransitionPoint(is_pure_local, is_pure_evade, length) #TODO: pure local/evade
-    trajectory_point = _findEvadeTransitionPoint(is_pure_local, is_pure_evade, length)  # TODO: pure local/evade
-
+    trajectory_point = _findTransitionWOBreak(is_local, is_pure_evade, length) #TODO: pure local/evade
+    # trajectory_point = _findEvadeTransitionPoint(is_pure_local, is_pure_evade, length)  # TODO: pure local/evade
+    # trajectory_point = _findTransitionWOBreak(is_local, is_evade, length)
     if len(trajectory_point) == 0:
         return None
     else:
@@ -341,34 +360,42 @@ def _evade2Local(trial_data):
         lambda x: _PG(x),
         axis=1
     )
+    reward_num = trial_data[["beans", "energizers", "fruitPos"]].apply(
+        lambda x: _rewardNum(x),
+        axis = 1
+    )
     trial_data["PG"] = PG
-    is_evade = trial_data[["label_evade", "PG"]].apply(
-        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10),
+    trial_data["reward_num"] = reward_num
+    is_evade = trial_data[["label_evade", "label_evade1", "PG", "reward_num"]].apply(
+        lambda x: x.label_evade1 == 1,  # and np.any(np.array(x.PG) <= 10),
         axis=1
     )
 
-    # Only evade and only local
-    is_pure_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
-                                "label_global_ending", "label_evade"]].apply(
-        lambda
-            x: (
-                           x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1) and
-               (x.label_evade == 0),
-        axis=1
-    )
-    is_pure_evade = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
-                                "label_global_ending", "label_evade", "PG"]].apply(
-        lambda x: x.label_evade == 1 and np.any(np.array(x.PG) <= 10) and
-                  (
-                              x.label_local_graze == 0 and x.label_local_graze_noghost == 0 and x.label_true_accidental_hunting == 0),
-        axis=1
-    )
+    # # Only evade and only local
+    # is_pure_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+    #                             "label_global_ending", "label_evade", "label_evade1"]].apply(
+    #     lambda
+    #         x: (
+    #                        x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1) and
+    #            (x.label_evade1 == 0 and x.label_evade2 == 0 and x.label_evade == 0),
+    #     axis=1
+    # )
+    # is_pure_evade = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+    #                             "label_global_ending", "label_evade", "label_evade1", "PG"]].apply(
+    #     lambda x: x.label_evade1 == 1 and
+    #               (
+    #                           x.label_local_graze == 0 and x.label_local_graze_noghost == 0 and x.label_true_accidental_hunting == 0),
+    #     axis=1
+    # )
     trial_data = trial_data.drop(columns = ["PG"])
-    length = 5
+    trial_data = trial_data.drop(columns = ["reward_num"])
+
+    length = 15
     print("Local_to_evade length : ", length)
     # trajectory_point = _findTransitionWOBreak(is_evade, is_local, length)
-    # trajectory_point = _findTransitionPoint(is_pure_evade, is_pure_local, length)
-    trajectory_point = _findEvadeTransitionPoint(is_pure_evade, is_pure_local, length)
+    trajectory_point = _findEvadeTransitionPoint(is_evade, is_local, length, reward_num)
+    # trajectory_point = _findEvadeTransitionPoint(is_pure_evade, is_pure_local, length)
+    # trajectory_point = _findTransitionWOBreak(is_evade, is_local, length)
 
     if len(trajectory_point) == 0:
         return None
@@ -602,5 +629,5 @@ def extractTransitionData(transition_type, need_save = True):
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["local_to_evade", "evade_to_local"]
+    transition_type = ["evade_to_local"]
     extractTransitionData(transition_type, need_save = True)

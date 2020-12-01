@@ -1601,9 +1601,9 @@ if __name__ == '__main__':
         "global_to_local_cr": "./common_data/transition/global_to_local-window1-cr-w_intercept.npy",
         "global_to_local_Q": "./common_data/transition/global_to_local-window1-Q-w_intercept.npy",
 
-        "evade_to_local_agent_weight": "./common_data/transition/evade_to_local-window1-agent_weight-w_intercept.npy",
-        "evade_to_local_cr": "./common_data/transition/evade_to_local-window1-cr-w_intercept.npy",
-        "evade_to_local_Q": "./common_data/transition/evade_to_local-window1-Q-w_intercept.npy",
+        "evade_to_local_agent_weight": "./common_data/transition/test_evade_to_local/evade_to_local-window1-agent_weight-w_intercept.npy",
+        "evade_to_local_cr": "./common_data/transition/test_evade_to_local/evade_to_local-window1-cr-w_intercept.npy",
+        "evade_to_local_Q": "./common_data/transition/test_evade_to_local/evade_to_local-window1-Q-w_intercept.npy",
 
         "local_to_planned_agent_weight": "./common_data/transition/local_to_planned-window1-agent_weight-w_intercept.npy",
         "local_to_planned_cr": "./common_data/transition/local_to_planned-window1-cr-w_intercept.npy",
@@ -1627,9 +1627,9 @@ if __name__ == '__main__':
     # plotThreeAgentMatching(config)
     # plotFourAgentMatching(config)
 
-    plotLocalEvadeSuicideMatching(config)
+    # plotLocalEvadeSuicideMatching(config)
 
-    # plotWeightVariation(config)
+    plotWeightVariation(config)
 
     # plotExtraWeightVariation(config)
 

@@ -45,7 +45,17 @@ def _readData(filename):
     with open(filename, "rb") as file:
         all_data = pickle.load(file)
     all_data = all_data.reset_index(drop=True)
-    print()
+    return all_data
+
+
+def _readSimulationData(filename):
+    #TODO: this one!
+    '''
+    Read data for pre-estimation.
+    '''
+    with open(filename, "rb") as file:
+        all_data = pickle.load(file)
+    all_data = all_data.reset_index(drop=True)
     return all_data
 
 
@@ -302,8 +312,10 @@ def preEstimation():
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
         # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
-        "../common_data/trial/100_trial_data_new.pkl",
+        # "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
+        # "../common_data/simulation/single_trial_record.pkl",
+        "../common_data/trial/500_trial_data_Omega.pkl"
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -316,8 +328,10 @@ def preEstimation():
                 "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
                 filename.split("/")[-1].split(".")[0]
         ), "wb") as file:
-        # with open("../common_data/trial/{}-one_ghost-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
             pickle.dump(all_data, file)
+        # with open("../common_data/simulation/single_trial-with_Q.pkl", "wb") as file:
+        # # with open("../common_data/trial/{}-one_ghost-with_Q.pkl".format(filename.split("/")[-1].split(".")[0]), "wb") as file:
+        #     pickle.dump(all_data, file)
         print("{}-with_Q.pkl saved!".format(filename.split("/")[-1].split(".")[0]))
     pd.options.mode.chained_assignment = "warn"
 
