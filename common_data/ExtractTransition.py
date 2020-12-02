@@ -55,9 +55,30 @@ def _rewardNum(x):
     return num
 
 
-def _isChanging(seq):
-    # TODO: whether reward enetities are eaten
-    pass
+def _PB(x):
+    # Minimum distance between Pacman and beans
+    PB = []
+    if not isinstance(x.beans, float):
+        for each in x.beans:
+            if tuple(x.pacmanPos) != tuple(each):
+                PB.append(locs_df[tuple(x.pacmanPos)][tuple(each)])
+            else:
+                PB.append(0)
+    if not isinstance(x.energizers, float):
+        for each in x.energizers:
+            if tuple(x.pacmanPos) != tuple(each):
+                PB.append(locs_df[tuple(x.pacmanPos)][tuple(each)])
+            else:
+                PB.append(0)
+    if not isinstance(x.fruitPos, float):
+        if tuple(x.pacmanPos) != tuple(x.fruitPos):
+            PB.append(locs_df[tuple(x.pacmanPos)][tuple(x.fruitPos)])
+        else:
+            PB.append(0)
+    # If no reward entities exist
+    if len(PB) == 0:
+        PB = [100]
+    return np.min(PB)
 
 
 def _extractAllData(trial_num = 20000):
@@ -232,7 +253,7 @@ def _findEvadeTransitionPoint(state1_indication, state2_indication, length, rewa
             second_max_discontinue_period = _findDiscontinuePeriod(second_phase)
             first_max_discontinue_period = [0] if len(first_max_discontinue_period) == 0 else first_max_discontinue_period
             second_max_discontinue_period = [0] if len(second_max_discontinue_period) == 0 else second_max_discontinue_period
-            if max(first_max_discontinue_period) <= 3 and max(second_max_discontinue_period) <= 3:
+            if max(first_max_discontinue_period) <= 0 and max(second_max_discontinue_period) <= 0:
                 if np.all(np.array(reward_num[each-length:each]) == reward_num[each-length]):
                     trajectories.append([
                         each - length,  # starting index
@@ -350,24 +371,32 @@ def _local2Evade(trial_data):
 
 
 def _evade2Local(trial_data):
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
-                           "label_global_ending"]].apply(
-        lambda
-            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
+    PB = trial_data[["pacmanPos", "beans", "energizers", "fruitPos"]].apply(
+        lambda x: _PB(x),
         axis=1
     )
+    is_evade_ending = PB.apply(lambda x: x <= 12)
+    trial_data["label_evade_ending"] = is_evade_ending
     PG = trial_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _PG(x),
         axis=1
     )
     reward_num = trial_data[["beans", "energizers", "fruitPos"]].apply(
         lambda x: _rewardNum(x),
-        axis = 1
+        axis=1
     )
     trial_data["PG"] = PG
     trial_data["reward_num"] = reward_num
-    is_evade = trial_data[["label_evade", "label_evade1", "PG", "reward_num"]].apply(
-        lambda x: x.label_evade1 == 1,  # and np.any(np.array(x.PG) <= 10),
+
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending", "label_evade_ending"]].apply(
+        lambda
+            x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1 or x.label_evade_ending == 1,
+        axis=1
+    )
+
+    is_evade = trial_data[["label_evade", "label_evade1", "PG", "reward_num", "label_evade_ending"]].apply(
+        lambda x: x.label_evade1 == 1 and x.label_evade_ending == 0,  # and np.any(np.array(x.PG) <= 10),
         axis=1
     )
 
@@ -387,8 +416,7 @@ def _evade2Local(trial_data):
     #                           x.label_local_graze == 0 and x.label_local_graze_noghost == 0 and x.label_true_accidental_hunting == 0),
     #     axis=1
     # )
-    trial_data = trial_data.drop(columns = ["PG"])
-    trial_data = trial_data.drop(columns = ["reward_num"])
+    trial_data = trial_data.drop(columns = ["PG", "reward_num", "label_evade_ending"])
 
     length = 15
     print("Local_to_evade length : ", length)

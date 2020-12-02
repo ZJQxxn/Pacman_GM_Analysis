@@ -28,7 +28,8 @@ from PlannedHuntingAgent import PlannedHuntingAgent
 
 
 dir_list = ['left', 'right', 'up', 'down']
-
+locs_df = readLocDistance("../common_data/dij_distance_map.csv")
+print("Finished reading distance file!")
 def oneHot(val):
     '''
     Convert the direction into a one-hot vector.
@@ -259,7 +260,8 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status):
     temp_suicide_Q = copy.deepcopy(suicide_Q)
     for index in range(len(temp_suicide_Q)):
         non_zero = np.where(temp_suicide_Q[index] != 0)
-        if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
+        # if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
+        if np.all(np.array(ghost_status[index]) >= 3) or RR[index] > 10:
             temp_suicide_Q[index][non_zero] = 0.0
         else:
             temp_suicide_Q[index][non_zero] = temp_suicide_Q[index][non_zero] + offset
@@ -340,8 +342,13 @@ def multiAgentAnalysis(trial_num = None):
     print(agent_name)
     # Read trial data
     agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
-    window = 1
+    window = 3
+    print("window size : ", window)
     temp_trial_data = readTrialData(trial_data_filename)
+
+    #TODO: !!!!!
+    # temp_trial_data = _readOneTrialData()
+
     all_trial_num = len(temp_trial_data)
     print("Num of trials : ", all_trial_num)
     trial_index = range(all_trial_num)
@@ -362,10 +369,18 @@ def multiAgentAnalysis(trial_num = None):
         trial_length = X.shape[0]
         print(trial_index, " : ", trial_name)
         print("Trial length : ", trial_length)
+        #TODO: !!!!!!
+        # Preprocess suicide Q in the beginning of a trial
+        cur_index = 0
+        while ((14,27)==X.pacmanPos[cur_index] or locs_df[(14, 27)][X.pacmanPos[cur_index]] < 10) and cur_index < trial_length:
+            non_zero = np.where(X.suicide_Q[cur_index] != 0)
+            X.suicide_Q[cur_index][non_zero] = 0.0
+            cur_index += 1
+            if cur_index >= trial_length:
+                break
+        #
         window_index = np.arange(window, trial_length - window)
-        # (num of windows, num of agents)
-        temp_weight = np.zeros((len(window_index), len(agent_name) + 1))
-        # (num of windows, window size, num of agents, num pf directions)
+        # (num of windows, window size, num of agents, num of directions)
         temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
@@ -430,13 +445,112 @@ def multiAgentAnalysis(trial_num = None):
 
     # # Save data
     processed_trial_data = pd.concat([each[1] for each in trial_data])
-    with open("../common_data/trial/{}-with_weight.pkl".format(trial_data_filename.split("/")[-1].split(".")[-2]), "wb") as file:
+    with open("../common_data/trial/{}-with_weight-window{}-new_suicide.pkl".format(trial_data_filename.split("/")[-1].split(".")[-2], window), "wb") as file:
         pickle.dump(processed_trial_data, file)
+    # with open("../common_data/trial/sample-window{}.pkl".format(window), "wb") as file:
+    #     pickle.dump(processed_trial_data, file)
+
+
+def _readOneTrialData():
+    '''
+           Read data for MLE analysis.
+           :param filename: Filename.
+           '''
+    # Read data and pre-processing
+    with open("../common_data/trial/500_trial_data_Omega-with_Q.pkl", "rb") as file:
+        all_data = pickle.load(file)
+    if "level_0" not in all_data.columns.values:
+        all_data = all_data.reset_index(drop=True)
+    for index in range(all_data.shape[0]):
+        if isinstance(all_data.global_Q[index], list):  # what if no normal Q?
+            if index == all_data.shape[0] - 1:
+                if isinstance(all_data.global_Q[index - 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index - 2]
+                    all_data.local_Q[index] = all_data.local_Q[index - 2]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 2]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index - 2]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index - 1]
+                    all_data.local_Q[index] = all_data.local_Q[index - 1]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 1]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index - 1]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 1]
+            else:
+                if isinstance(all_data.global_Q[index + 1], list):
+                    all_data.global_Q[index] = all_data.global_Q[index + 2]
+                    all_data.local_Q[index] = all_data.local_Q[index + 2]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 2]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index + 2]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 2]
+                else:
+                    all_data.global_Q[index] = all_data.global_Q[index + 1]
+                    all_data.local_Q[index] = all_data.local_Q[index + 1]
+                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 1]
+                    all_data.suicide_Q[index] = all_data.suicide_Q[index + 1]
+                    all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 1]
+    # Pre-processng pessimistic Q
+    # TODO: check this
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    PG = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x, locs_df),
+        axis=1
+    )
+    ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: _ghostStatus(x),
+        axis=1
+    )
+    energizer_num = all_data[["energizers"]].apply(
+        lambda x: _energizerNum(x),
+        axis=1
+    )
+    PR = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    print("Finished extracting features.")
+    # TODO: planned hunting and suicide Q value
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+    print("Finished Q-value pre-processing.")
+    # Split into trials
+    trial_data = []
+    trial_name_list = ["7-3-Omega-11-Jun-2019-1.csv", "9-3-Omega-19-Aug-2019-1.csv"]
+    for each in trial_name_list:
+        each_trial = all_data[all_data.file == each].reset_index(drop=True)
+        # True moving directions
+        true_prob = each_trial.next_pacman_dir_fill
+        # Fill nan direction for optimization use
+        start_index = 0
+        while pd.isna(true_prob[start_index]):
+            start_index += 1
+            if start_index == len(true_prob):
+                break
+        if start_index == len(true_prob):
+            print("Moving direciton of trial {} is all nan.".format(each))
+            continue
+        if start_index > 0:
+            true_prob[:start_index + 1] = true_prob[start_index + 1]
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+        trial_data.append([each, each_trial, true_prob])
+    return trial_data
 
 
 if __name__ == '__main__':
     multiAgentAnalysis(trial_num=None)
 
-    # with open("../common_data/trial/5_trial-data_for_comparison-one_ghost-with_Q-with_weight.pkl", "rb") as file:
+    # with open("../common_data/trial/sample-window3.pkl", "rb") as file:
     #     data = pickle.load(file)
-    # print()
+    print()
+
+    pass

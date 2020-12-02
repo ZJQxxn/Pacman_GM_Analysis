@@ -307,7 +307,7 @@ def preEstimation():
         # "../common_data/transition/global_to_local.pkl",
         # "../common_data/transition/local_to_global.pkl",
         # "../common_data/transition/local_to_evade.pkl",
-        # "../common_data/transition/evade_to_local.pkl",
+        "../common_data/transition/evade_to_local.pkl",
         # "../common_data/transition/local_to_planned.pkl",
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
@@ -315,7 +315,7 @@ def preEstimation():
         # "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
-        "../common_data/trial/500_trial_data_Omega.pkl"
+        # "../common_data/trial/500_trial_data_Omega.pkl"
     ]
     for filename in filename_list:
         print("-" * 50)

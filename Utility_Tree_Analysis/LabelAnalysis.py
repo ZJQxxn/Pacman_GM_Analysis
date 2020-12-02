@@ -2869,7 +2869,7 @@ if __name__ == '__main__':
         # Window size for correlation analysis
         "trial_window" : 3,
         "correlation_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
-        "multi_agent_list" : ["local", "pessimistic", "suicide"],
+        "multi_agent_list" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
 
         # ==================================================================================
@@ -2992,10 +2992,10 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
-    singleTrialAllFitting(config)
+    # singleTrialAllFitting(config)
 
     # simpleMLE(config)
 
