@@ -137,6 +137,23 @@ def extractMonkeyData(trial_num = 10):
     print("Finished writing {} trial data with the shape of {}.".format(trial_num, trial_data.shape))
 
 
+def _extractOneTrial():
+    # Read data
+    data_filename = "./trial/500_trial_data_Omega-with_Q-with_weight-window3-new_suicide.pkl"  # TODO: new data
+    with open(data_filename, "rb") as file:
+        data = pickle.load(file)
+    data = data.reset_index(drop = True)
+    trial_name = ["9-3-Omega-19-Aug-2019-1.csv"]
+    is_need = data.file.apply(lambda x : x in trial_name)
+    need_index = np.where(is_need.values == 1)
+    trial_data = data.iloc[need_index]
+    trial_data = trial_data.reset_index(drop = True)
+    print("Finished extracting trial data.")
+    with open("trial/9-3-Omega-19-Aug-2019-1.pkl", "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving trial data.")
+
+
 if __name__ == '__main__':
     # Extract transition data
     # extractTrialData(trial_num = 500)
@@ -149,4 +166,7 @@ if __name__ == '__main__':
     # print(all_data_with_label.columns.values)
 
     # Extract monkey data
-    extractMonkeyData(trial_num=500)
+    # extractMonkeyData(trial_num=500)
+
+    # _extractOneTrial()
+    pass

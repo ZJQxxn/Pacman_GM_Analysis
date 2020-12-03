@@ -375,7 +375,7 @@ def _evade2Local(trial_data):
         lambda x: _PB(x),
         axis=1
     )
-    is_evade_ending = PB.apply(lambda x: x <= 12)
+    is_evade_ending = PB.apply(lambda x: x <= 8)
     trial_data["label_evade_ending"] = is_evade_ending
     PG = trial_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _PG(x),

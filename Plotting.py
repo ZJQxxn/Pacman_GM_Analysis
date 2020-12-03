@@ -420,7 +420,7 @@ def singleTrialThreeFitting(config):
                            [scaleOfNumber(each) for each in
                             np.max(np.abs(temp_trial_Q[centering_index, :, [0, 1, 2], :]), axis=(1, 2))]
             temp_contribution[centering_index, :] = contribution
-            window_estimated_label.append(_estimationThreeLabeling(contribution))
+            window_estimated_label.append(_estimationThreeLabeling(contribution, agent_name))
             trial_estimated_label.append(window_estimated_label)
 
         matched_num = 0
@@ -445,7 +445,7 @@ def singleTrialThreeFitting(config):
 
 
         estimated_label = [
-            _estimationThreeLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]))
+            _estimationThreeLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
             for index in range(len(temp_contribution))
         ]
 
@@ -463,7 +463,7 @@ def singleTrialThreeFitting(config):
             "pessimistic": "evade",                                
             "global": "global",                                    
             "suicide": "suicide",                                  
-            "planned_hunting": "attack"                            
+            "planned_hunting": "attack"
         }                                                          
         # normalization
         for index in range(temp_weight.shape[0]):
@@ -520,7 +520,7 @@ def singleTrialThreeFitting(config):
                 else:
                     plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.05, facecolor=agent_color[estimated_label[i][0]])
                     plt.fill_between(x=[i, i + 1], y1=0.05, y2=0.1, facecolor=agent_color[estimated_label[i][1]])
-        plt.xlim(0, temp_weight.shape[0] - 1)
+        plt.xlim(0, temp_weight.shape[0])
         # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
         # x_ticks = [window + int(each) for each in x_ticks_index]
         # plt.xticks(x_ticks_index, x_ticks, fontsize=20)
@@ -1532,11 +1532,11 @@ if __name__ == '__main__':
 
     # plotAllAgentMatching(config)
 
-    plotWeightVariation(config)
+    # plotWeightVariation(config)
 
     # plotBeanNumVSCr(config)
 
-    # singleTrialThreeFitting(config)
+    singleTrialThreeFitting(config)
 
     # Best trials:
     # "13-2-Patamon-10-Sep-2019-1.csv", "10-3-Omega-09-Jul-2019-1.csv", "10-2-Patamon-07-Jul-2019-1.csv",
