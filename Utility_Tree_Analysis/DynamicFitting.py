@@ -261,7 +261,7 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status):
     for index in range(len(temp_suicide_Q)):
         non_zero = np.where(temp_suicide_Q[index] != 0)
         # if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
-        if np.all(np.array(ghost_status[index]) >= 3) or RR[index] > 10:
+        if np.all(np.array(ghost_status[index]) >= 3) or RR[index] > 10 or PR[index] <= 15:
             temp_suicide_Q[index][non_zero] = 0.0
         else:
             temp_suicide_Q[index][non_zero] = temp_suicide_Q[index][non_zero] + offset

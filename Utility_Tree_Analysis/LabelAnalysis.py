@@ -167,7 +167,8 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status):
     temp_suicide_Q = copy.deepcopy(suicide_Q)
     for index in range(len(temp_suicide_Q)):
         non_zero = np.where(temp_suicide_Q[index] != 0)
-        if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
+        # if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
+        if np.all(np.array(ghost_status[index]) >= 3) or RR[index] > 10 or PR[index] <= 10:
             temp_suicide_Q[index][non_zero] = 0.0
         else:
             temp_suicide_Q[index][non_zero] = temp_suicide_Q[index][non_zero] + offset
@@ -1761,6 +1762,7 @@ def singleTrialThreeFitting(config):
 
 
 def singleTrialAllFitting(config):
+    locs_df = readLocDistance("../common_data/dij_distance_map.csv")
     # Read trial data
     agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     agents_list = ["{}_Q".format(each) for each in agent_name]
@@ -1819,6 +1821,17 @@ def singleTrialAllFitting(config):
         Y = each[2]
         trial_length = X.shape[0]
         print("Trial name : ", trial_name)
+        # TODO: !!!!!!
+        # Preprocess suicide Q in the beginning of a trial
+        cur_index = 0
+        while ((14, 27) == X.pacmanPos[cur_index] or locs_df[(14, 27)][
+            X.pacmanPos[cur_index]] < 10) and cur_index < trial_length:
+            non_zero = np.where(X.suicide_Q[cur_index] != 0)
+            X.suicide_Q[cur_index][non_zero] = 0.0
+            cur_index += 1
+            if cur_index >= trial_length:
+                break
+        #
         # Hand-crafted label
         handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
         handcrafted_label = handcrafted_label[window : -window]
@@ -2876,9 +2889,9 @@ if __name__ == '__main__':
         #                       For Single Trial Analysis
         # Filename
         # "single_trial_data_filename": "../common_data/trial/global15-local10-100_trial_data_new-with_Q.pkl",
-        "single_trial_data_filename": "../common_data/trial/100_trial_data_all_new-with_Q.pkl",
+        "single_trial_data_filename": "../common_data/trial/100_trial_data_new-new_suicide-with_Q.pkl",
         # Window size for correlation analysis
-        "single_trial_window": 3,
+        "single_trial_window": 1,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
 
@@ -2992,10 +3005,10 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config)
+    # movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
-    # singleTrialAllFitting(config)
+    singleTrialAllFitting(config)
 
     # simpleMLE(config)
 

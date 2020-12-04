@@ -246,7 +246,8 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             ghost_repulsive_thr = suicide_fruit_attractive_thr,
             fruit_attractive_thr = suicide_ghost_repulsive_thr,
             randomness_coeff = randomness_coeff,
-            laziness_coeff = laziness_coeff
+            # laziness_coeff = laziness_coeff,
+            laziness_coeff=0.0
         )
         suicide_result = suicide_agent.nextDir(return_Q=True)
         suicide_estimation.append(suicide_result[0])
@@ -307,15 +308,17 @@ def preEstimation():
         # "../common_data/transition/global_to_local.pkl",
         # "../common_data/transition/local_to_global.pkl",
         # "../common_data/transition/local_to_evade.pkl",
-        "../common_data/transition/evade_to_local.pkl",
+        # "../common_data/transition/evade_to_local.pkl",
         # "../common_data/transition/local_to_planned.pkl",
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
         # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
-        # "../common_data/trial/100_trial_data_new.pkl",
+        "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
-        # "../common_data/trial/500_trial_data_Omega.pkl"
+        # "../common_data/trial/500_trial_data_Omega.pkl",
+        # "../common_data/trial/9-3-Omega-19-Aug-2019-1.pkl",
+        # "../common_data/trial/7-3-Omega-11-Jun-2019-1.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -324,7 +327,7 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}/{}-with_Q.pkl".format(
+        with open("{}/{}-new_suicide-with_Q.pkl".format(
                 "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
                 filename.split("/")[-1].split(".")[0]
         ), "wb") as file:

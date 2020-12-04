@@ -156,7 +156,38 @@ def extractFeature(trial_data):
     return trial_names, trial_features, trial_labels
 
 #TODO: for every adjacent positions
+
+def _adjacentDist(pacmanPos, ghostPos, type, adjacent_data):
+    # Pacman in tunnel
+    if pacmanPos == (29, 18):
+        pacmanPos = (28, 18)
+    if pacmanPos == (0, 18):
+        pacmanPos = (1, 18)
+    if isinstance(adjacent_data[pacmanPos][type], float):
+        return inf_val
+    # Find adjacent positions
+    if type == "left":
+        adjacent = (pacmanPos[0] - 1, pacmanPos[1])
+    elif type == "right":
+        adjacent = (pacmanPos[0] + 1, pacmanPos[1])
+    elif type == "up":
+        adjacent = (pacmanPos[0], pacmanPos[1] - 1)
+    elif type == "down":
+        adjacent = (pacmanPos[0], pacmanPos[1] + 1)
+    else:
+        raise ValueError("Undefined direction {}!".format(type))
+    # Adjacent positions in he tunnel
+    if adjacent == (29, 18):
+        adjacent = (28, 18)
+    elif adjacent == (0, 18):
+        adjacent = (1, 18)
+    else:
+        pass
+    return 0 if adjacent == ghostPos else locs_df[adjacent][ghostPos]
+
+
 def extractFeatureWRTDir(trial_data):
+    adjacent_data = readAdjacentMap("./extracted_data/adjacent_map.csv")
     trial_features = []
     trial_labels = []
     trial_names = []
@@ -166,22 +197,80 @@ def extractFeatureWRTDir(trial_data):
         trial = each[1]
         true_dir = each[2]
         # Features for the estimation
-        PG1 = trial[["pacmanPos", "ghost1Pos"]].apply(
-            lambda x : 0 if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos],
+
+        PG1_left = trial[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x : _adjacentDist(x.pacmanPos, x.ghost1Pos, "left", adjacent_data),
             axis = 1
         )
-        PG2 = trial[["pacmanPos", "ghost2Pos"]].apply(
-            lambda x: 0 if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos],
+        PG1_right = trial[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x : _adjacentDist(x.pacmanPos, x.ghost1Pos, "right", adjacent_data),
+            axis = 1
+        )
+        PG1_up = trial[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x : _adjacentDist(x.pacmanPos, x.ghost1Pos, "up", adjacent_data),
+            axis = 1
+        )
+        PG1_down = trial[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x : _adjacentDist(x.pacmanPos, x.ghost1Pos, "down", adjacent_data),
+            axis = 1
+        )
+
+        PG2_left = trial[["pacmanPos", "ghost2Pos"]].apply(
+            lambda x: _adjacentDist(x.pacmanPos, x.ghost2Pos, "left", adjacent_data),
             axis=1
         )
-        min_PE = trial[["pacmanPos", "energizers"]].apply(
+        PG2_right = trial[["pacmanPos", "ghost2Pos"]].apply(
+            lambda x: _adjacentDist(x.pacmanPos, x.ghost2Pos, "right", adjacent_data),
+            axis=1
+        )
+        PG2_up = trial[["pacmanPos", "ghost2Pos"]].apply(
+            lambda x: _adjacentDist(x.pacmanPos, x.ghost2Pos, "up", adjacent_data),
+            axis=1
+        )
+        PG2_down = trial[["pacmanPos", "ghost2Pos"]].apply(
+            lambda x: _adjacentDist(x.pacmanPos, x.ghost2Pos, "down", adjacent_data),
+            axis=1
+        )
+
+        PE_left = trial[["pacmanPos", "energizers"]].apply(
             lambda x : inf_val if isinstance(x.energizers, float)
-            else np.min([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.energizers]),
+            else np.min([_adjacentDist(x.pacmanPos, each, "left", adjacent_data) for each in x.energizers]),
             axis = 1
         )
-        PF = trial[["pacmanPos", "fruitPos"]].apply(
+        PE_right = trial[["pacmanPos", "energizers"]].apply(
+            lambda x: inf_val if isinstance(x.energizers, float)
+            else np.min([_adjacentDist(x.pacmanPos, each, "right", adjacent_data) for each in x.energizers]),
+            axis=1
+        )
+        PE_up = trial[["pacmanPos", "energizers"]].apply(
+            lambda x: inf_val if isinstance(x.energizers, float)
+            else np.min([_adjacentDist(x.pacmanPos, each, "up", adjacent_data) for each in x.energizers]),
+            axis=1
+        )
+        PE_down = trial[["pacmanPos", "energizers"]].apply(
+            lambda x: inf_val if isinstance(x.energizers, float)
+            else np.min([_adjacentDist(x.pacmanPos, each, "down", adjacent_data) for each in x.energizers]),
+            axis=1
+        )
+
+        PF_left = trial[["pacmanPos", "fruitPos"]].apply(
             lambda x : inf_val if isinstance(x.fruitPos, float)
-            else (0 if x.pacmanPos == x.fruitPos else locs_df[x.pacmanPos][x.fruitPos]),
+            else _adjacentDist(x.pacmanPos, x.fruitPos, "left", adjacent_data),
+            axis = 1
+        )
+        PF_right = trial[["pacmanPos", "fruitPos"]].apply(
+            lambda x: inf_val if isinstance(x.fruitPos, float)
+            else _adjacentDist(x.pacmanPos, x.fruitPos, "right", adjacent_data),
+            axis=1
+        )
+        PF_up = trial[["pacmanPos", "fruitPos"]].apply(
+            lambda x: inf_val if isinstance(x.fruitPos, float)
+            else _adjacentDist(x.pacmanPos, x.fruitPos, "up", adjacent_data),
+            axis=1
+        )
+        PF_down = trial[["pacmanPos", "fruitPos"]].apply(
+            lambda x : inf_val if isinstance(x.fruitPos, float)
+            else _adjacentDist(x.pacmanPos, x.fruitPos, "down", adjacent_data),
             axis = 1
         )
         beans_15step = trial[["pacmanPos", "beans"]].apply(
@@ -213,15 +302,31 @@ def extractFeatureWRTDir(trial_data):
             {
                 "ifscared1" : trial.ifscared1,
                 "ifscared2" : trial.ifscared2,
-                "PG1" : PG1,
-                "PG2" : PG2,
-                "min_PE" : min_PE,
-                "PF" : PF,
+
+                "PG1_left" : PG1_left,
+                "PG1_right": PG1_right,
+                "PG1_up": PG1_up,
+                "PG1_down": PG1_down,
+
+                "PG2_left" : PG2_left,
+                "PG2_right": PG2_right,
+                "PG2_up": PG2_up,
+                "PG2_down": PG2_down,
+
+                "PE_left" : PE_left,
+                "PE_right": PE_right,
+                "PE_up": PE_up,
+                "PE_down": PE_down,
+
+                "PF_left" : PF_left,
+                "PF_right": PF_right,
+                "PF_up": PF_up,
+                "PF_down": PF_down,
+
                 "beans_15step" : beans_15step,
                 "beans_diff" : beans_diff
             }
         )
-        # X = trial_data[["ifscared1", "ifscared2", "PG1", "PG2", "min_PE", "PF", "beans_15step", "beans_diff"]]
         X = processed_trial_data
         y = true_dir.apply(lambda x : list(x).index(1))
         trial_features.append(copy.deepcopy(X))
@@ -230,13 +335,19 @@ def extractFeatureWRTDir(trial_data):
     return trial_names, trial_features, trial_labels
 
 
-def perceptron(config):
+def perceptron(config, feature_type):
     print("="*30)
     data_filename = config["data_filename"]
     window = config["window"]
     print("Filename : ", data_filename)
     print("Window size : ", window)
-    trial_names, trial_features, trial_labels = extractFeature(readTrialDataForLR(data_filename))
+    print("Feature Type : ", feature_type)
+    if feature_type == "features":
+        trial_names, trial_features, trial_labels = extractFeature(readTrialDataForLR(data_filename))
+    elif feature_type == "features_wrt_dir":
+        trial_names, trial_features, trial_labels = extractFeatureWRTDir(readTrialDataForLR(data_filename))
+    else:
+        raise ValueError("Undefine feature type \"{}\"!".format(feature_type))
     trial_num = len(trial_names)
     print("Num of trials : ", trial_num)
     trial_index = list(range(trial_num))
@@ -284,8 +395,8 @@ def perceptron(config):
     if "LR_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format("LR_comparison"))
     save_base = data_filename.split("/")[-1].split(".")[0]
-    np.save("../common_data/LR_comparison/{}-window{}-perceptron-weight.npy".format(save_base, window), all_weight)
-    np.save("../common_data/LR_comparison/{}-window{}-perceptron-cr.npy".format(save_base, window), all_cr)
+    np.save("../common_data/LR_comparison/{}-window{}-perceptron-{}-weight.npy".format(save_base, window, feature_type), all_weight)
+    np.save("../common_data/LR_comparison/{}-window{}-perceptron-{}-cr.npy".format(save_base, window, feature_type), all_cr)
     print("Finished saving for perceptron...")
 
 
@@ -308,9 +419,9 @@ def multiAgentAnalysis(config):
     trial_weight = []
     trial_Q = []
     trial_contribution = []
-    trial_matching_rate = []
     trial_cr = []
-    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    agent_name = config["agents"]
+    print(agent_name)
     agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(each) for each in agent_name]
     for trial_index, each in enumerate(trial_data):
         print("-"*15)
@@ -402,46 +513,69 @@ def multiAgentAnalysis(config):
     if "LR_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format("LR_comparison"))
     save_base = data_filename.split("/")[-1].split(".")[0]
-    np.save("../common_data/LR_comparison/{}-window{}-agent-weight.npy".format(save_base, window), trial_weight)
-    np.save("../common_data/LR_comparison/{}-window{}-agent-cr.npy".format(save_base, window), trial_cr)
-    np.save("../common_data/LR_comparison/{}-window{}-agent-Q.npy".format(save_base, window), trial_Q)
-    np.save("../common_data/LR_comparison/{}-window{}-agent-contribution.npy".format(save_base, window), trial_contribution)
+    np.save("../common_data/LR_comparison/{}-window{}-agent-{}-weight.npy".format(save_base, window, "_".join(agent_name)), trial_weight)
+    np.save("../common_data/LR_comparison/{}-window{}-agent-{}-cr.npy".format(save_base, window, "_".join(agent_name)), trial_cr)
+    np.save("../common_data/LR_comparison/{}-window{}-agent-{}-Q.npy".format(save_base, window, "_".join(agent_name)), trial_Q)
+    np.save("../common_data/LR_comparison/{}-window{}-agent-{}-contribution.npy".format(save_base, window, "_".join(agent_name)), trial_contribution)
     print("Finished saving for multi-agent...")
 
 
 def comparison(config):
-    print("="*14, " Perceptron ", "="*14)
-    perceptron(config)
-    print("\n\n")
-    print("=" * 14, " Multi-Agent ", "=" * 14)
-    multiAgentAnalysis(config)
+    if "features" in config["analysis"]:
+        print("="*14, " Perceptron ", "="*14)
+        perceptron(config, "features")
+        print("\n\n")
+    if "features_wrt_dir" in config["analysis"]:
+        print("=" * 14, " Perceptron (dir features) ", "=" * 14)
+        perceptron(config, "features_wrt_dir")
+        print("\n\n")
+    if "multi-agent" in config["analysis"]:
+        print("=" * 14, " Multi-Agent ", "=" * 14)
+        multiAgentAnalysis(config)
 
 
 def showResults():
     perceptron_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-cr.npy", allow_pickle=True)
+    perceptron_dir_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-features_wrt_dir-cr.npy",allow_pickle=True)
     multi_agent_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-agent-cr.npy", allow_pickle=True)
+    local_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-agent-local-cr.npy", allow_pickle=True)
     perceptron_trial_cr = [np.nanmean(each) for each in perceptron_cr]
+    perceptron_dir_trial_cr = [np.nanmean(each) for each in perceptron_dir_cr]
     multi_agent_trial_cr = [np.nanmean(each) for each in multi_agent_cr]
+    local_trial_cr = [np.nanmean(each) for each in local_cr]
+    print("Perceptron : ", np.mean(perceptron_trial_cr))
+    print("Perceptron (dir) : ", np.mean(perceptron_dir_trial_cr))
+    print("Multi-Agent : ", np.mean(multi_agent_trial_cr))
+    print("Multi-Agent (local) : ", np.mean(local_trial_cr))
+    cr = np.concatenate([[perceptron_trial_cr], [perceptron_dir_trial_cr], [local_trial_cr], [multi_agent_trial_cr]]).T
 
-    cr = np.concatenate([[perceptron_trial_cr], [multi_agent_trial_cr]]).T
-
-    # plt.subplot(1, 2, 1)
-    # plt.hist(perceptron_trial_cr)
-    # plt.subplot(1, 2, 2)
-    # plt.hist(multi_agent_trial_cr)
-    plt.hist(cr, density=True,  histtype='bar', label = ["Perceptron", "Multi-Agent"], align="mid", rwidth = 0.9)
+    from palettable.colorbrewer.diverging import RdBu_7
+    color = RdBu_7.mpl_colors
+    plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+             label = ["Perceptron", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
+             rwidth = 1.0, color=[color[-2], color[-1], color[1], color[0]])
+    plt.xlabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
+    plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
+    plt.xlim(0.3, 1.0)
+    plt.ylabel("# of Trials", fontsize=20)
+    plt.legend(frameon = False, fontsize = 20, ncol = 2)
     plt.show()
 
 
 
 if __name__ == '__main__':
     config = {
-        "data_filename" : "../common_data/trial/500_trial_data_Omega-with_Q.pkl",
+        # "data_filename" : "../common_data/trial/500_trial_data_Omega-with_Q.pkl",
+        # "data_filename": "../common_data/trial/5_trial-data_for_comparison-one_ghost-with_Q-with_weight.pkl",
+        "data_filename": "../common_data/trial/100_trial_data_all_new-with_Q.pkl",
         "window" : 5,
         "trial_num" : None,
         "need_intercept" : True,
+        # "analysis" : ["features", "features_wrt_dir", "multi-agent"],
+        "analysis": ["multi-agent"],
+        "agents" : ["local"]
     }
 
-    comparison(config)
+    # comparison(config)
 
-    # showResults()
+    showResults()

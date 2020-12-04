@@ -149,7 +149,9 @@ class SuicideAgent:
         utility = 0.0
         for each in node.leaves:
             utility += each.cumulative_utility
-        return utility / len(node.leaves)
+        # return utility / len(node.leaves)
+        return utility
+
 
 
     def nextDir(self, return_Q = False):
@@ -248,15 +250,15 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Suicide agent
-    cur_pos = (24, 30)
-    ghost_data = [(27, 26), (10, 22)]
+    cur_pos = (19, 22)
+    ghost_data = [(18, 15), (18, 9)]
     ghost_status = [1, 1]
     reward_pos = None
-    energizer_data = None
-    bean_data = [(26, 5), (27, 8), (9, 24), (4, 30), (10, 30), (13, 30), (13, 32), (5, 33), (10, 33), (15, 33)]
+    energizer_data = [(25, 30)]
+    bean_data = [(24, 30), (25, 30), (18, 24), (27, 12), (19, 24), (27, 10), (19, 23)]
     reward_type = None
     fruit_pos = None
-    last_dir = None
+    last_dir = "down"
     agent = SuicideAgent(
         adjacent_data, adjacent_path, locs_df, reward_amount,
         cur_pos,
@@ -267,8 +269,8 @@ if __name__ == '__main__':
         fruit_pos,
         ghost_status,
         last_dir,
-        depth = 5, ghost_attractive_thr = 10, ghost_repulsive_thr = 10, fruit_attractive_thr = 10,
-        randomness_coeff = 1.0, laziness_coeff = 1.0
+        depth = 10, ghost_attractive_thr = 10, ghost_repulsive_thr = 10, fruit_attractive_thr = 10,
+        randomness_coeff = 1.0, laziness_coeff = 0.0
     )
     _, Q = agent.nextDir(return_Q=True)
     choice = agent.dir_list[makeChoice(Q)]
