@@ -96,6 +96,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     # Configuration (fpr planne hunting agent)
     ghost_attractive_thr = 20
     energizer_attractive_thr = 20
+    beans_attractive_thr = 15
     # Configuration (for suicide agent)
     suicide_depth = 10
     suicide_ghost_attractive_thr = 10
@@ -262,9 +263,11 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             energizer_data,
             ghost_data,
             ghost_status,
+            bean_data,
             last_dir[index],
             ghost_attractive_thr=ghost_attractive_thr,
             energizer_attractive_thr = energizer_attractive_thr,
+            beans_attractive_thr = beans_attractive_thr,
             randomness_coeff = randomness_coeff,
             laziness_coeff = laziness_coeff
         )
@@ -313,12 +316,16 @@ def preEstimation():
         # "../common_data/transition/local_to_suicide.pkl",
         # "../common_data/trial/500_trial_data.pkl",
         # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
-        "../common_data/trial/100_trial_data_new.pkl",
+        # "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
-        # "../common_data/trial/500_trial_data_Omega.pkl",
+        "../common_data/trial/500_trial_data_Omega.pkl",
+        # For suicide agents
         # "../common_data/trial/9-3-Omega-19-Aug-2019-1.pkl",
         # "../common_data/trial/7-3-Omega-11-Jun-2019-1.pkl",
+        # "../common_data/trial/15-6-Patamon-04-Jul-2019-4.pkl",
+        # For attack
+        # "../common_data/trial/23-1-Omega-05-Aug-2019-1.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)
@@ -327,7 +334,7 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}/{}-new_suicide-with_Q.pkl".format(
+        with open("{}/{}-with_Q.pkl".format(
                 "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
                 filename.split("/")[-1].split(".")[0]
         ), "wb") as file:

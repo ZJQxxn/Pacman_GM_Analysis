@@ -155,7 +155,65 @@ def extractFeature(trial_data):
     print("Finished extracing features...")
     return trial_names, trial_features, trial_labels
 
-#TODO: for every adjacent positions
+
+def extractFeatureLocal(trial_data):
+    trial_features = []
+    trial_labels = []
+    trial_names = []
+    #
+    for trial_index, each in enumerate(trial_data):
+        trial_names.append(each[0])
+        trial = each[1]
+        true_dir = each[2]
+        # Features for the estimation
+        PG1 = trial[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x : 0 if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos],
+            axis = 1
+        ).apply(lambda x: x if x < 10 else inf_val)
+        PG2 = trial[["pacmanPos", "ghost2Pos"]].apply(
+            lambda x: 0 if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos],
+            axis=1
+        ).apply(lambda x: x if x < 10 else inf_val)
+        min_PE = trial[["pacmanPos", "energizers"]].apply(
+            lambda x : inf_val if isinstance(x.energizers, float)
+            else np.min([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.energizers]),
+            axis = 1
+        ).apply(lambda x: x if x < 10 else inf_val)
+        PF = trial[["pacmanPos", "fruitPos"]].apply(
+            lambda x : inf_val if isinstance(x.fruitPos, float)
+            else (0 if x.pacmanPos == x.fruitPos else locs_df[x.pacmanPos][x.fruitPos]),
+            axis = 1
+        ).apply(lambda x: x if x < 10 else inf_val)
+        beans_10step = trial[["pacmanPos", "beans"]].apply(
+            lambda x : 0 if isinstance(x.beans, float)
+            else np.sum(
+                np.where(
+                    np.array([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.beans]) <= 10
+                )
+            ),
+            axis = 1
+        )
+
+        processed_trial_data = pd.DataFrame(
+            data=
+            {
+                "ifscared1" : trial.ifscared1,
+                "ifscared2" : trial.ifscared2,
+                "PG1" : PG1,
+                "PG2" : PG2,
+                "min_PE" : min_PE,
+                "PF" : PF,
+                "beans_10step" : beans_10step,
+            }
+        )
+        # X = trial_data[["ifscared1", "ifscared2", "PG1", "PG2", "min_PE", "PF", "beans_15step", "beans_diff"]]
+        X = processed_trial_data
+        y = true_dir.apply(lambda x : list(x).index(1))
+        trial_features.append(copy.deepcopy(X))
+        trial_labels.append(copy.deepcopy(y))
+    print("Finished extracting features...")
+    return trial_names, trial_features, trial_labels
+
 
 def _adjacentDist(pacmanPos, ghostPos, type, adjacent_data):
     # Pacman in tunnel
@@ -342,8 +400,10 @@ def perceptron(config, feature_type):
     print("Filename : ", data_filename)
     print("Window size : ", window)
     print("Feature Type : ", feature_type)
-    if feature_type == "features":
+    if feature_type == "features_all":
         trial_names, trial_features, trial_labels = extractFeature(readTrialDataForLR(data_filename))
+    elif feature_type == "features_local":
+        trial_names, trial_features, trial_labels = extractFeatureLocal(readTrialDataForLR(data_filename))
     elif feature_type == "features_wrt_dir":
         trial_names, trial_features, trial_labels = extractFeatureWRTDir(readTrialDataForLR(data_filename))
     else:
@@ -521,9 +581,13 @@ def multiAgentAnalysis(config):
 
 
 def comparison(config):
-    if "features" in config["analysis"]:
+    if "features-all" in config["analysis"]:
         print("="*14, " Perceptron ", "="*14)
-        perceptron(config, "features")
+        perceptron(config, "features_all")
+        print("\n\n")
+    if "features-local" in config["analysis"]:
+        print("="*14, " Perceptron ", "="*14)
+        perceptron(config, "features_local")
         print("\n\n")
     if "features_wrt_dir" in config["analysis"]:
         print("=" * 14, " Perceptron (dir features) ", "=" * 14)
@@ -536,24 +600,27 @@ def comparison(config):
 
 def showResults():
     perceptron_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-cr.npy", allow_pickle=True)
+    perceptron_local_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-features_local-cr.npy", allow_pickle=True)
     perceptron_dir_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-features_wrt_dir-cr.npy",allow_pickle=True)
     multi_agent_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-agent-cr.npy", allow_pickle=True)
     local_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-agent-local-cr.npy", allow_pickle=True)
     perceptron_trial_cr = [np.nanmean(each) for each in perceptron_cr]
+    perceptron_local_trial_cr = [np.nanmean(each) for each in perceptron_local_cr]
     perceptron_dir_trial_cr = [np.nanmean(each) for each in perceptron_dir_cr]
     multi_agent_trial_cr = [np.nanmean(each) for each in multi_agent_cr]
     local_trial_cr = [np.nanmean(each) for each in local_cr]
-    print("Perceptron : ", np.mean(perceptron_trial_cr))
+    print("Perceptron (local) : ", np.mean(perceptron_local_trial_cr))
+    print("Perceptron (global) : ", np.mean(perceptron_trial_cr))
     print("Perceptron (dir) : ", np.mean(perceptron_dir_trial_cr))
     print("Multi-Agent : ", np.mean(multi_agent_trial_cr))
     print("Multi-Agent (local) : ", np.mean(local_trial_cr))
-    cr = np.concatenate([[perceptron_trial_cr], [perceptron_dir_trial_cr], [local_trial_cr], [multi_agent_trial_cr]]).T
+    cr = np.concatenate([[perceptron_local_trial_cr], [perceptron_trial_cr], [perceptron_dir_trial_cr], [local_trial_cr], [multi_agent_trial_cr]]).T
 
     from palettable.colorbrewer.diverging import RdBu_7
     color = RdBu_7.mpl_colors
     plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-             label = ["Perceptron", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
-             rwidth = 1.0, color=[color[-2], color[-1], color[1], color[0]])
+             label = ["Perceptron (local)", "Perceptron (global)", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
+             rwidth = 1.0, color=[color[-3], color[-2], color[-1], color[1], color[0]])
     plt.xlabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
     plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
     plt.xlim(0.3, 1.0)
@@ -571,8 +638,8 @@ if __name__ == '__main__':
         "window" : 5,
         "trial_num" : None,
         "need_intercept" : True,
-        # "analysis" : ["features", "features_wrt_dir", "multi-agent"],
-        "analysis": ["multi-agent"],
+        # "analysis" : ["features-all", "features-local", "features_wrt_dir", "multi-agent"],
+        "analysis": ["features-local"],
         "agents" : ["local"]
     }
 

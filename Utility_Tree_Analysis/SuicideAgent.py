@@ -149,8 +149,8 @@ class SuicideAgent:
         utility = 0.0
         for each in node.leaves:
             utility += each.cumulative_utility
-        # return utility / len(node.leaves)
-        return utility
+        return utility / len(node.leaves)
+        # return utility
 
 
 

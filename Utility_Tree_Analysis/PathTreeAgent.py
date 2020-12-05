@@ -291,38 +291,41 @@ class PathTree:
             ghost_status = [4 if each != 3 else 3 for each in ghost_status]  # change ghost status
         else:
             pass
-        # Potential ghost reward (check whether ghosts are scared)
-        ifscared1 = ghost_status[0] if not isinstance(ghost_status[0], float) else 0
-        ifscared2 = ghost_status[1] if not isinstance(ghost_status[1], float) else 0
-        if 4 <= ifscared1 or 4 <= ifscared2:  # ghosts are scared
-            if cur_position not in self.ghost_data:
-                # compute ghost dist
-                if 3 == ifscared1:
-                    ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
-                elif 3 == ifscared2:
-                    ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
-                else:
-                    ghost_dist = min(
-                        self.locs_df[cur_position][self.ghost_data[0]],
-                        self.locs_df[cur_position][self.ghost_data[1]]
-                    )
-                if ghost_dist < self.ghost_attractive_thr:
-                    R = self.reward_amount[8]
-                    T = self.ghost_attractive_thr
-                    if ghost_dist <= (self.ghost_attractive_thr / 2):
-                        ghost_potential_reward += (-R / T) * ghost_dist + R
-                    else:
-                        ghost_potential_reward += (R * T) / (2 * ghost_dist) - R / 2
-                    # reward += self.reward_amount[8] * (self.ghost_attractive_thr / ghost_dist - 1)
-                    # reward += self.reward_amount[8] * (1 / ghost_dist)
-            elif cur_position in self.ghost_data:
-                exact_reward += self.reward_amount[8]
-                if cur_position == self.ghost_data[0]:
-                    ghost_status[0] = 3
-                else:
-                    ghost_status[1] = 3
-            else:
-                exact_reward += 0.0
+
+        # TODO: exclude ghost rewards in local & global agents
+        # # Potential ghost reward (check whether ghosts are scared)
+        # ifscared1 = ghost_status[0] if not isinstance(ghost_status[0], float) else 0
+        # ifscared2 = ghost_status[1] if not isinstance(ghost_status[1], float) else 0
+        # if 4 <= ifscared1 or 4 <= ifscared2:  # ghosts are scared
+        #     if cur_position not in self.ghost_data:
+        #         # compute ghost dist
+        #         if 3 == ifscared1:
+        #             ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
+        #         elif 3 == ifscared2:
+        #             ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
+        #         else:
+        #             ghost_dist = min(
+        #                 self.locs_df[cur_position][self.ghost_data[0]],
+        #                 self.locs_df[cur_position][self.ghost_data[1]]
+        #             )
+        #         if ghost_dist < self.ghost_attractive_thr:
+        #             R = self.reward_amount[8]
+        #             T = self.ghost_attractive_thr
+        #             if ghost_dist <= (self.ghost_attractive_thr / 2):
+        #                 ghost_potential_reward += (-R / T) * ghost_dist + R
+        #             else:
+        #                 ghost_potential_reward += (R * T) / (2 * ghost_dist) - R / 2
+        #             # reward += self.reward_amount[8] * (self.ghost_attractive_thr / ghost_dist - 1)
+        #             # reward += self.reward_amount[8] * (1 / ghost_dist)
+        #     elif cur_position in self.ghost_data:
+        #         exact_reward += self.reward_amount[8]
+        #         if cur_position == self.ghost_data[0]:
+        #             ghost_status[0] = 3
+        #         else:
+        #             ghost_status[1] = 3
+        #     else:
+        #         exact_reward += 0.0
+
         # Fruit reward
         if not isinstance(existing_fruit, float) and None != existing_fruit:
             if cur_position == self.fruit_pos:

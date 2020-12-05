@@ -68,6 +68,19 @@ def _PG(x, locs_df):
     return PG
 
 
+def _PE(x, locs_df):
+    PE = []
+    if isinstance(x.energizers, float) or len(x.energizers) == 0:
+        PE = [100]
+    else:
+        for each in x.energizers:
+            if x.pacmanPos == each:
+                PE.append(0)
+            else:
+                PE.append(locs_df[tuple(x.pacmanPos)][tuple(each)])
+    return np.min(PE)
+
+
 def _ghostStatus(x):
     ghost_status =[int(x.ifscared1), int(x.ifscared2)]
     return ghost_status
@@ -142,22 +155,23 @@ def _pessimisticProcesing(pess_Q, PG):
     return temp_pess_Q
 
 
-def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num):
+def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num, PE):
     if np.any(np.concatenate(planned_Q) < 0):
-        offset = np.max(np.abs(np.concatenate(planned_Q))) # TODO: max absolte value of negative values
+        offset = np.max(np.abs(np.concatenate(planned_Q))) # TODO: max absolute value of negative values
     else:
         offset = 0.0
     temp_planned_Q = copy.deepcopy(planned_Q)
     for index in range(len(temp_planned_Q)):
         non_zero = np.where(temp_planned_Q[index] != 0)
-        if np.all(np.array(ghost_status[index]) >= 3) or energizer_num[index] == 0:
+        # if np.all(np.array(ghost_status[index]) >= 3) or energizer_num[index] == 0 or PE[index] > 15:
+        if (np.all(np.array(ghost_status[index]) < 3) and energizer_num[index] == 0) or (np.all(np.array(ghost_status[index]) < 3) and PE[index] > 20) or np.all(np.array(ghost_status[index]) == 3):
             temp_planned_Q[index][non_zero] = 0.0
         else:
             temp_planned_Q[index][non_zero] = temp_planned_Q[index][non_zero] + offset
     return temp_planned_Q
 
 
-def _suicideProcesing(suicide_Q, PR, RR, ghost_status):
+def _suicideProcesing(suicide_Q, PR, RR, ghost_status, PG):
     # PR: minimum distance between Pacman position and reward entities
     # RR: minimum distance between reborn position and reward entities
     if np.any(np.concatenate(suicide_Q) < 0):
@@ -168,7 +182,7 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status):
     for index in range(len(temp_suicide_Q)):
         non_zero = np.where(temp_suicide_Q[index] != 0)
         # if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
-        if np.all(np.array(ghost_status[index]) >= 3) or RR[index] > 10 or PR[index] <= 10:
+        if np.all(np.array(ghost_status[index]) >= 3) or RR[index] > 10 or PR[index] <= 10 or not np.any(np.array(PG[index]) < 10):
             temp_suicide_Q[index][non_zero] = 0.0
         else:
             temp_suicide_Q[index][non_zero] = temp_suicide_Q[index][non_zero] + offset
@@ -314,6 +328,10 @@ def readTrialData(filename):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    PE = all_data[["pacmanPos", "energizers"]].apply(
+        lambda x: _PE(x, locs_df),
+        axis=1
+    )
     ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
         lambda x: _ghostStatus(x),
         axis=1
@@ -335,8 +353,8 @@ def readTrialData(filename):
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
     all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
-    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
     print("Finished Q-value pre-processing.")
     # Split into trials
     trial_data = []
@@ -1812,6 +1830,12 @@ def singleTrialAllFitting(config):
     all_weight_rest = []
     all_Q = []
 
+    random_index = np.arange(len(trial_data))
+    np.random.shuffle(random_index)
+    temp_trial_data = []
+    for each in random_index:
+        temp_trial_data.append(trial_data[each])
+    trial_data = temp_trial_data
     for trial_index, each in enumerate(trial_data):
         temp_record = []
         print("-"*15)
@@ -1953,11 +1977,16 @@ def singleTrialAllFitting(config):
 
         for i in range(len(handcrafted_label)):
             if handcrafted_label[i] is not None:
-                if len(handcrafted_label[i]) == 2:
-                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.05, color=agent_color[handcrafted_label[i][0]])
-                    plt.fill_between(x=[i, i + 1], y1=-0.05, y2=-0.1, color=agent_color[handcrafted_label[i][1]])
-                else:
-                    plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
+
+                seq = np.linspace(-0.1, 0.0, len(handcrafted_label[i])+1)
+                for j, h in enumerate(handcrafted_label[i]):
+                    plt.fill_between(x=[i, i + 1], y1=seq[j+1], y2=seq[j], color=agent_color[h])
+                #
+                # if len(handcrafted_label[i]) == 2:
+                #     plt.fill_between(x=[i, i + 1], y1=0, y2=-0.05, color=agent_color[handcrafted_label[i][0]])
+                #     plt.fill_between(x=[i, i + 1], y1=-0.05, y2=-0.1, color=agent_color[handcrafted_label[i][1]])
+                # else:
+                #     plt.fill_between(x=[i, i + 1], y1=0, y2=-0.1, color=agent_color[handcrafted_label[i][0]])
 
         # for pessimistic agent
         plt.ylabel("Normalized Agent Weight", fontsize=20)
@@ -2888,8 +2917,8 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Single Trial Analysis
         # Filename
-        # "single_trial_data_filename": "../common_data/trial/global15-local10-100_trial_data_new-with_Q.pkl",
-        "single_trial_data_filename": "../common_data/trial/100_trial_data_new-new_suicide-with_Q.pkl",
+        # "single_trial_data_filename": "../common_data/trial/15-6-Patamon-04-Jul-2019-4-new_suicide-with_Q.pkl",
+        "single_trial_data_filename": "../common_data/trial/100_trial_data_all_new-with_Q.pkl",
         # Window size for correlation analysis
         "single_trial_window": 1,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],

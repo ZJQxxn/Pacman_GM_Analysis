@@ -20,13 +20,14 @@ from PathTreeAgent import PathTree
 
 class PlannedHuntingAgent:
 
-    def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, ghost_data, ghost_status, last_dir,
-                 ghost_attractive_thr = 15, energizer_attractive_thr = 15, randomness_coeff = 1.0, laziness_coeff = 1.0):
+    def __init__(self, adjacent_data, adjacent_path, locs_df, reward_amount, cur_pos, energizer_data, ghost_data, ghost_status, beans, last_dir,
+                 ghost_attractive_thr = 15, energizer_attractive_thr = 15, beans_attractive_thr =15, randomness_coeff = 1.0, laziness_coeff = 1.0):
         # Game status (energizer)
         self.cur_pos = cur_pos
         self.energizer_data = energizer_data
         self.ghost_data = ghost_data
         self.ghost_status = np.array(ghost_status)
+        self.beans = beans
         self.last_dir = last_dir
         # Auxiliary data
         self.adjacent_data=  adjacent_data
@@ -51,6 +52,7 @@ class PlannedHuntingAgent:
         self.laziness_coeff = laziness_coeff
         self.ghost_attractive_thr = ghost_attractive_thr
         self.energizer_attractive_thr = energizer_attractive_thr
+        self.beans_attractive_thr = beans_attractive_thr
 
     def _descendantUtility(self, node):
         leaves_utility = []
@@ -107,22 +109,93 @@ class PlannedHuntingAgent:
                 closest_P_G_distance = []
                 for each in range(len(self.adjacent_pos)):
                     closest_P_G_distance.append(np.min(P_G_distance[each]))
+                    # Compute the distance between adjacent positions of Pacman and ghosts
+                    P_G_distance = []  # (# of adjacent positions, # of ghosts)
+                    for each_adjacent_pos in self.adjacent_pos:
+                        temp_P_G_distance = []
+                        for index, each_ghost in enumerate(self.ghost_data):
+                            if self.ghost_status[index] == 3:
+                                continue
+                            if tuple(each_ghost) != each_adjacent_pos:
+                                temp_P_G_distance.append(self.locs_df[each_adjacent_pos][tuple(each_ghost)])
+                            else:
+                                temp_P_G_distance.append(0.0)
+                        P_G_distance.append(temp_P_G_distance)
+                    P_G_distance = np.array(P_G_distance)
+                    closest_P_G_distance = []
+                    for each in range(len(self.adjacent_pos)):
+                        closest_P_G_distance.append(np.min(P_G_distance[each]))
+
+                # closest_P_B_distance = None
+                # if not (isinstance(self.beans, float) or self.beans is None or len(self.beans) == 0):
+                #     P_B_distance = []  # (# of adjacent positions, # of beans)
+                #     for each_adjacent_pos in self.adjacent_pos:
+                #         temp_P_B_distance = []
+                #         for index, each_bean in enumerate(self.beans):
+                #             if tuple(each_bean) != each_adjacent_pos:
+                #                 temp_P_B_distance.append(self.locs_df[each_adjacent_pos][tuple(each_bean)])
+                #             else:
+                #                 temp_P_B_distance.append(0.0)
+                #         P_B_distance.append(temp_P_B_distance)
+                #     P_B_distance = np.array(P_B_distance)
+                #     closest_P_B_distance = []
+                #     for each in range(len(self.adjacent_pos)):
+                #         closest_P_B_distance.append(np.min(P_B_distance[each]))
                 # Compute utility of each adjacent positions (i.e., each moving direction)
                 available_dir_utility = []
                 for adjacent_index in range(len(self.available_dir)):
-                    P_G = closest_P_G_distance[adjacent_index]
                     temp_utility = 0.0
+                    P_G = closest_P_G_distance[adjacent_index]
                     # Ghost reward
-                    ghost_attractive_thr = 15
+                    ghost_attractive_thr = self.ghost_attractive_thr
                     if P_G < ghost_attractive_thr:
                         R = self.reward_amount[8]
                         T = ghost_attractive_thr
                         if P_G <= ghost_attractive_thr:
                             temp_utility += (-R / T) * P_G + R
+                    # # Beans reward
+                    # if closest_P_B_distance is not None:
+                    #     P_B = closest_P_B_distance[adjacent_index]
+                    #     beans_attractive_thr = self.beans_attractive_thr
+                    #     if P_B < beans_attractive_thr:
+                    #         R = self.reward_amount[1]
+                    #         T = beans_attractive_thr
+                    #         if P_B <= beans_attractive_thr:
+                    #             temp_utility += (-R / T) * P_B + R
                     available_dir_utility.append(temp_utility)
                 available_dir_utility = np.array(available_dir_utility)
                 for index, each in enumerate(self.available_dir):
                     self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
+
+                # For beans reward
+                if not (isinstance(self.beans, float) or self.beans is None or len(self.beans) == 0):
+                    cur_pos_tree, _, _ = PathTree(
+                        self.adjacent_data,
+                        self.locs_df,
+                        self.reward_amount,
+                        self.cur_pos,
+                        np.nan,  # ignore energizers
+                        self.beans,
+                        self.ghost_data,
+                        np.nan,  # ignore fruits
+                        np.nan,  # inore fruits
+                        [3, 3], # ignore ghosts
+                        self.last_dir,
+                        depth=10,
+                        ignore_depth=0,
+                        ghost_attractive_thr=10,
+                        ghost_repulsive_thr=10,
+                        fruit_attractive_thr=10,
+                        reward_coeff=1.0,
+                        risk_coeff=0.0,
+                        randomness_coeff=self.randomness_coeff,
+                        laziness_coeff=self.laziness_coeff
+                    )._construct()
+                    available_directions = [each.dir_from_parent for each in cur_pos_tree.children]
+                    reward_dir_utility = np.array([self._descendantUtility(each) for each in cur_pos_tree.children])
+                    for index, each in enumerate(available_directions):
+                        self.Q_value[self.dir_list.index(each)] += reward_dir_utility[index]
+
                 self.Q_value = np.array(self.Q_value)
             else:
                 self.Q_value = np.array([0.0, 0.0, 0.0, 0.0])
@@ -258,9 +331,11 @@ if __name__ == '__main__':
         energizer_data,
         ghost_data,
         ghost_status,
+        bean_data,
         last_dir,
         ghost_attractive_thr=12,
         energizer_attractive_thr=12,
+        beans_attractive_thr=12,
         randomness_coeff = 0.0,
         laziness_coeff = 0.0
     )
