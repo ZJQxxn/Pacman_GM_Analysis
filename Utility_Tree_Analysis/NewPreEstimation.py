@@ -94,9 +94,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     pessimistic_fruit_attractive_thr = 10
     pessimistic_ghost_repulsive_thr = 10
     # Configuration (fpr planne hunting agent)
-    ghost_attractive_thr = 20
-    energizer_attractive_thr = 20
-    beans_attractive_thr = 15
+    ghost_attractive_thr = 15
+    energizer_attractive_thr = 15
+    beans_attractive_thr = 5
     # Configuration (for suicide agent)
     suicide_depth = 10
     suicide_ghost_attractive_thr = 10
@@ -319,13 +319,19 @@ def preEstimation():
         # "../common_data/trial/100_trial_data_new.pkl",
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
-        "../common_data/trial/500_trial_data_Omega.pkl",
+        # "../common_data/trial/500_trial_data_Omega.pkl",
+        # "../common_data/trial/50_trial_data_Omega.pkl",
+        "../common_data/trial/2000_trial_data_Omega.pkl",
         # For suicide agents
         # "../common_data/trial/9-3-Omega-19-Aug-2019-1.pkl",
         # "../common_data/trial/7-3-Omega-11-Jun-2019-1.pkl",
         # "../common_data/trial/15-6-Patamon-04-Jul-2019-4.pkl",
         # For attack
         # "../common_data/trial/23-1-Omega-05-Aug-2019-1.pkl",
+        # "../common_data/trial/27-1-Omega-13-Jun-2019-1.pkl",
+        # "../common_data/trial/39-1-Omega-22-Aug-2019-1.pkl",
+        # "../common_data/trial/16-2-Omega-16-Jul-2019-1.pkl",
+        # "../common_data/trial/25-2-Omega-24-Jun-2019-1.pkl",
     ]
     for filename in filename_list:
         print("-" * 50)

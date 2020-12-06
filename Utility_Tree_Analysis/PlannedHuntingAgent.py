@@ -168,7 +168,7 @@ class PlannedHuntingAgent:
                     self.Q_value[self.dir_list.index(each)] = available_dir_utility[index]
 
                 # For beans reward
-                if not (isinstance(self.beans, float) or self.beans is None or len(self.beans) == 0):
+                if (not (isinstance(self.beans, float) or self.beans is None or len(self.beans) == 0)): # and np.any(np.array(closest_P_G_distance) < self.ghost_attractive_thr):
                     cur_pos_tree, _, _ = PathTree(
                         self.adjacent_data,
                         self.locs_df,
@@ -313,11 +313,11 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Planned hunting agent
-    cur_pos = (22, 27) # 1457
-    ghost_data = [(16, 26), (26, 24)]
-    ghost_status = [3, 5]
-    energizer_data = [(18, 5)]
-    bean_data = [(13, 8), (3, 9), (4, 9), (13, 9), (10, 22), (26, 24), (27, 24), (27, 25), (27, 28), (10, 30), (13, 30), (19, 30), (2, 33), (9, 33)]
+    cur_pos = (23, 33) # 1457
+    ghost_data = [(4, 33), (2, 32)]
+    ghost_status = [1, 1]
+    energizer_data = [(12, 9), (27, 10), (25, 24), (6, 30)]
+    bean_data = [(16, 9), (7, 12), (25, 12), (21, 9), (22, 6), (7, 11), (14, 9), (2, 5), (16, 14), (12, 9), (22, 20), (13, 12), (8, 24), (22, 27), (7, 6), (22, 14), (7, 19), (27, 10), (7, 28), (22, 28), (27, 28), (26, 12), (27, 32), (7, 14), (4, 5), (22, 17), (24, 24), (22, 11), (7, 22), (3, 12), (20, 24), (22, 12), (25, 24), (13, 5), (23, 9), (7, 30), (25, 33), (21, 24), (7, 21), (27, 6), (2, 12), (13, 8), (23, 30), (10, 30), (27, 33), (2, 9), (5, 12), (15, 9), (10, 12), (17, 24), (22, 7), (7, 10), (27, 5), (10, 22), (7, 23), (10, 9), (18, 24), (22, 15), (2, 10), (6, 30), (26, 30), (20, 5), (27, 31), (6, 12), (7, 9), (23, 5), (13, 14), (27, 7), (26, 5), (24, 12), (22, 30)]
     reward_type = None
     fruit_pos = None
     last_dir = "right"
@@ -333,9 +333,9 @@ if __name__ == '__main__':
         ghost_status,
         bean_data,
         last_dir,
-        ghost_attractive_thr=12,
-        energizer_attractive_thr=12,
-        beans_attractive_thr=12,
+        ghost_attractive_thr=15,
+        energizer_attractive_thr=15,
+        beans_attractive_thr=5,
         randomness_coeff = 0.0,
         laziness_coeff = 0.0
     )

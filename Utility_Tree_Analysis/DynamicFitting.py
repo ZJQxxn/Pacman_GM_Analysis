@@ -23,7 +23,7 @@ import sys
 sys.path.append("./")
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from LabelAnalysis import _pessimisticProcesing, _plannedHuntingProcesing,_suicideProcesing, _makeChoice, _label2Index, negativeLikelihood
-from LabelAnalysis import _PG, _PE, _ghostStatus, _energizerNum, _PR, _RR
+from LabelAnalysis import _PG, _PE, _ghostStatus, _energizerNum, _PR, _RR, _PGWODead
 
 dir_list = ['left', 'right', 'up', 'down']
 locs_df = readLocDistance("../common_data/dij_distance_map.csv")
@@ -90,6 +90,10 @@ def readTrialData(filename):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    PG_wo_dead = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PGWODead(x, locs_df),
+        axis=1
+    )
     PE = all_data[["pacmanPos", "energizers"]].apply(
         lambda x: _PE(x, locs_df),
         axis=1
@@ -114,8 +118,9 @@ def readTrialData(filename):
     )
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE)
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE,
+                                                          PG_wo_dead)
     all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
     print("Finished Q-value pre-processing.")
     # Split into trials
@@ -245,7 +250,7 @@ def _readOneTrialData():
 
 def multiAgentAnalysis(trial_num = None):
     print("== Omega Data Analysis with All the Agents ==")
-    trial_data_filename = "../common_data/trial/500_trial_data_Omega-with_Q.pkl"
+    trial_data_filename = "../common_data/trial/2000_trial_data_Omega-with_Q.pkl"
     # trial_data_filename = "../common_data/single_trial/5_trial-data_for_comparison-one_ghost-with_Q.pkl"
     agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     print(trial_data_filename)

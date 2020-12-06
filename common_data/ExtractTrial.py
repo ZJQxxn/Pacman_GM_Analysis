@@ -139,19 +139,19 @@ def extractMonkeyData(trial_num = 10):
 
 def _extractOneTrial():
     # Read data
-    data_filename = "./trial/500_trial_data_Omega-with_Q-with_weight-window3-new_suicide.pkl"  # TODO: new data
+    data_filename = "./trial/50_trial_data_Omega-with_Q.pkl"  # TODO: new data
     with open(data_filename, "rb") as file:
         data = pickle.load(file)
     data = data.reset_index(drop = True)
     # trial_name = ["9-3-Omega-19-Aug-2019-1.csv"]
-    trial_name = ["23-1-Omega-05-Aug-2019-1.csv"]
+    trial_name = "25-2-Omega-24-Jun-2019-1.csv" # "39-1-Omega-22-Aug-2019-1.csv"
     is_need = data.file.apply(lambda x : x in trial_name)
     need_index = np.where(is_need.values == 1)
     trial_data = data.iloc[need_index]
     trial_data = trial_data.reset_index(drop = True)
     print(trial_data.shape)
     print("Finished extracting trial data.")
-    with open("trial/23-1-Omega-05-Aug-2019-1.pkl", "wb") as file:
+    with open("trial/{}.pkl".format(trial_name.split(".")[-2]), "wb") as file:
         pickle.dump(trial_data, file)
     print("Finished saving trial data.")
 
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     # print(all_data_with_label.columns.values)
 
     # Extract monkey data
-    # extractMonkeyData(trial_num=500)
+    extractMonkeyData(trial_num=2000)
 
-    _extractOneTrial()
+    # _extractOneTrial()
     pass

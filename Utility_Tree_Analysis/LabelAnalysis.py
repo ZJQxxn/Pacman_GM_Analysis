@@ -68,6 +68,25 @@ def _PG(x, locs_df):
     return PG
 
 
+def _PGWODead(x, locs_df):
+    PG = [0, 0]
+    if x.ifscared1 != 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost1Pos):
+            PG[0] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost1Pos)]
+        else:
+            pass
+    else:
+        PG[0] = 100
+    if x.ifscared2 != 3:
+        if tuple(x.pacmanPos) != tuple(x.ghost2Pos):
+            PG[1] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost2Pos)]
+        else:
+            pass
+    else:
+        PG[1] = 100
+    return PG
+
+
 def _PE(x, locs_df):
     PE = []
     if isinstance(x.energizers, float) or len(x.energizers) == 0:
@@ -137,13 +156,26 @@ def _RR(x, locs_df):
         return 100
 
 
-def _pessimisticProcesing(pess_Q, PG):
+def _mixStatus(ghost_status, PG):
+    if ghost_status[0] < 3 and ghost_status[1] > 3:
+        if PG[1] >= 15:
+            return True
+        else:
+            return False
+    if ghost_status[0] > 3 and ghost_status[1] < 3:
+        if PG[0] >= 15:
+            return True
+        else:
+            return False
+    return False
+
+def _pessimisticProcesing(pess_Q, PG, ghost_status):
     offset = np.max(np.abs(np.concatenate(pess_Q)))
     temp_pess_Q = copy.deepcopy(pess_Q)
     for index in range(len(temp_pess_Q)):
         non_zero = np.where(temp_pess_Q[index] != 0)
         # if np.any(temp_pess_Q[index] < -5):
-        if np.any(np.array(PG[index]) <= 10):
+        if np.any(np.array(PG[index]) <= 10) and np.all(np.array(ghost_status[index]) < 3):
             temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
         else:
             temp_pess_Q[index][non_zero] = 0.0
@@ -155,7 +187,7 @@ def _pessimisticProcesing(pess_Q, PG):
     return temp_pess_Q
 
 
-def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num, PE):
+def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num, PE, PG):
     if np.any(np.concatenate(planned_Q) < 0):
         offset = np.max(np.abs(np.concatenate(planned_Q))) # TODO: max absolute value of negative values
     else:
@@ -164,7 +196,9 @@ def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num, PE):
     for index in range(len(temp_planned_Q)):
         non_zero = np.where(temp_planned_Q[index] != 0)
         # if np.all(np.array(ghost_status[index]) >= 3) or energizer_num[index] == 0 or PE[index] > 15:
-        if (np.all(np.array(ghost_status[index]) < 3) and energizer_num[index] == 0) or (np.all(np.array(ghost_status[index]) < 3) and PE[index] > 20) or np.all(np.array(ghost_status[index]) == 3):
+        if (np.all(np.array(ghost_status[index]) <= 3) and energizer_num[index] == 0) \
+                or (np.all(np.array(ghost_status[index]) < 3) and PE[index] >= 15) \
+                or np.all(np.array(ghost_status[index]) == 3) or np.all(np.array(PG[index]) >= 15) or _mixStatus(ghost_status[index], PG[index]):
             temp_planned_Q[index][non_zero] = 0.0
         else:
             temp_planned_Q[index][non_zero] = temp_planned_Q[index][non_zero] + offset
@@ -328,6 +362,10 @@ def readTrialData(filename):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    PG_wo_dead = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PGWODead(x, locs_df),
+        axis=1
+    )
     PE = all_data[["pacmanPos", "energizers"]].apply(
         lambda x: _PE(x, locs_df),
         axis=1
@@ -352,8 +390,8 @@ def readTrialData(filename):
     )
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE)
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE, PG_wo_dead)
     all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
     print("Finished Q-value pre-processing.")
     # Split into trials
@@ -2918,9 +2956,9 @@ if __name__ == '__main__':
         #                       For Single Trial Analysis
         # Filename
         # "single_trial_data_filename": "../common_data/trial/15-6-Patamon-04-Jul-2019-4-new_suicide-with_Q.pkl",
-        "single_trial_data_filename": "../common_data/trial/100_trial_data_all_new-with_Q.pkl",
+        "single_trial_data_filename": "../common_data/trial/25-2-Omega-24-Jun-2019-1-with_Q.pkl",
         # Window size for correlation analysis
-        "single_trial_window": 1,
+        "single_trial_window": 3,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
 
