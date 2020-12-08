@@ -268,6 +268,14 @@ def readTransitionData(filename):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    PG_wo_dead = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PGWODead(x, locs_df),
+        axis=1
+    )
+    PE = all_data[["pacmanPos", "energizers"]].apply(
+        lambda x: _PE(x, locs_df),
+        axis=1
+    )
     ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
         lambda x: _ghostStatus(x),
         axis=1
@@ -276,19 +284,22 @@ def readTransitionData(filename):
         lambda x: _energizerNum(x),
         axis=1
     )
-    PR = all_data[["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+    PR = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _PR(x, locs_df),
         axis=1
     )
-    RR = all_data[["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+    RR = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _RR(x, locs_df),
         axis=1
     )
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
-    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE,
+                                                          PG_wo_dead)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
     print("Finished Q-value pre-processing.")
     # Split into trajectories
     trajectory_data = []
@@ -465,6 +476,14 @@ def readTrajectoryData(filename):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    PG_wo_dead = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PGWODead(x, locs_df),
+        axis=1
+    )
+    PE = all_data[["pacmanPos", "energizers"]].apply(
+        lambda x: _PE(x, locs_df),
+        axis=1
+    )
     ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
         lambda x: _ghostStatus(x),
         axis=1
@@ -485,9 +504,10 @@ def readTrajectoryData(filename):
     )
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
-    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE,
+                                                          PG_wo_dead)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
     print("Finished Q-value pre-processing.")
     # Split into trajectories
     trial_data = []
@@ -558,6 +578,14 @@ def readAllData(filename, trial_num):
         lambda x: _PG(x, locs_df),
         axis=1
     )
+    PG_wo_dead = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PGWODead(x, locs_df),
+        axis=1
+    )
+    PE = all_data[["pacmanPos", "energizers"]].apply(
+        lambda x: _PE(x, locs_df),
+        axis=1
+    )
     ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
         lambda x: _ghostStatus(x),
         axis=1
@@ -578,9 +606,10 @@ def readAllData(filename, trial_num):
     )
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num)
-    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status)
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE,
+                                                          PG_wo_dead)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
     print("Finished Q-value pre-processing.")
     # Split into trials
     trial_data = []
@@ -2943,13 +2972,13 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/100_trial_data_new-one_ghost-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
         "trial_window" : 3,
         "correlation_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
-        "multi_agent_list" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
+        "multi_agent_list" : ["global", "local", "planned_hunting"],
         # ==================================================================================
 
         # ==================================================================================
@@ -2976,7 +3005,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Incremental Analysis
         # Filename
-        "incremental_data_filename": "../common_data/trial/100_trial_data_new-one_ghost-with_Q.pkl",
+        "incremental_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # Window size for correlation analysis
         "incremental_window": 3,
         "incremental_num_trial" : None,
@@ -3072,10 +3101,10 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
-    singleTrialAllFitting(config)
+    # singleTrialAllFitting(config)
 
     # simpleMLE(config)
 

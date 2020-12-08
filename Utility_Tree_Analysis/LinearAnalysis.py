@@ -573,9 +573,9 @@ def multiAgentAnalysis(config):
     if "LR_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format("LR_comparison"))
     save_base = data_filename.split("/")[-1].split(".")[0]
-    np.save("../common_data/LR_comparison/{}-window{}-agent-{}-weight.npy".format(save_base, window, "_".join(agent_name)), trial_weight)
+    # np.save("../common_data/LR_comparison/{}-window{}-agent-{}-weight.npy".format(save_base, window, "_".join(agent_name)), trial_weight)
     np.save("../common_data/LR_comparison/{}-window{}-agent-{}-cr.npy".format(save_base, window, "_".join(agent_name)), trial_cr)
-    np.save("../common_data/LR_comparison/{}-window{}-agent-{}-Q.npy".format(save_base, window, "_".join(agent_name)), trial_Q)
+    # np.save("../common_data/LR_comparison/{}-window{}-agent-{}-Q.npy".format(save_base, window, "_".join(agent_name)), trial_Q)
     np.save("../common_data/LR_comparison/{}-window{}-agent-{}-contribution.npy".format(save_base, window, "_".join(agent_name)), trial_contribution)
     print("Finished saving for multi-agent...")
 
@@ -599,11 +599,11 @@ def comparison(config):
 
 
 def showResults():
-    perceptron_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-cr.npy", allow_pickle=True)
-    perceptron_local_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-features_local-cr.npy", allow_pickle=True)
-    perceptron_dir_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-perceptron-features_wrt_dir-cr.npy",allow_pickle=True)
-    multi_agent_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-agent-cr.npy", allow_pickle=True)
-    local_cr = np.load("../common_data/LR_comparison/100_trial_data_all_new-with_Q-window5-agent-local-cr.npy", allow_pickle=True)
+    perceptron_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-perceptron-features_all-cr.npy", allow_pickle=True)
+    perceptron_local_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-perceptron-features_local-cr.npy", allow_pickle=True)
+    perceptron_dir_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-perceptron-features_wrt_dir-cr.npy",allow_pickle=True)
+    multi_agent_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-agent-global_local_pessimistic_suicide_planned_hunting-cr.npy", allow_pickle=True)
+    local_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-agent-local-cr.npy", allow_pickle=True)
     perceptron_trial_cr = [np.nanmean(each) for each in perceptron_cr]
     perceptron_local_trial_cr = [np.nanmean(each) for each in perceptron_local_cr]
     perceptron_dir_trial_cr = [np.nanmean(each) for each in perceptron_dir_cr]
@@ -634,12 +634,12 @@ if __name__ == '__main__':
     config = {
         # "data_filename" : "../common_data/trial/500_trial_data_Omega-with_Q.pkl",
         # "data_filename": "../common_data/trial/5_trial-data_for_comparison-one_ghost-with_Q-with_weight.pkl",
-        "data_filename": "../common_data/trial/100_trial_data_all_new-with_Q.pkl",
+        "data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
         "window" : 5,
         "trial_num" : None,
         "need_intercept" : True,
         # "analysis" : ["features-all", "features-local", "features_wrt_dir", "multi-agent"],
-        "analysis": ["features-local"],
+        "analysis": ["multi-agent"],
         "agents" : ["local"]
     }
 

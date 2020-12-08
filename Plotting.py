@@ -894,9 +894,9 @@ def plotWeightVariation(config):
     #TODO: =========================================================================================
     # centering_index += 5 # TODO: shift the centering
     plt.clf()
-    agent_name = ["local", "pessimistic"]
+    agent_name = ["local", "suicide"]
     for index in range(len(agent_name)):
-        plt.plot(avg_evade2local_weight[:,index],
+        plt.plot(avg_local2suicide_weight[:,index],
                  color=agent_color[agent_name[index]], ms=3, lw=5, label=label_name[agent_name[index]])
 
     plt.xlabel("Time Step", fontsize=15)
@@ -1483,12 +1483,12 @@ if __name__ == '__main__':
 
         # ==================================================================================
         #                       For Experimental Results Visualization
-        "estimated_label_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_weight_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "./common_data/{}/100_trial_data_new-one_ghost-with_Q-window3-w_intercept-matching_rate.npy",
-        "trial_agent_name" : ["global", "local", "planned_hunting"],
+        "estimated_label_filename": "./common_data/{}/100_trial_data_Omega-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "./common_data/{}/100_trial_data_Omega-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        "trial_weight_filename": "./common_data/{}/100_trial_data_Omega-with_Q-window3-w_intercept-trial_weight.npy",
+        "trial_Q_filename": "./common_data/{}/100_trial_data_Omega-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "./common_data/{}/100_trial_data_Omega-with_Q-window3-w_intercept-matching_rate.npy",
+        "trial_agent_name" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         "trial_window": 3,
 
         # ------------------------------------------------------------------------------------
@@ -1514,16 +1514,16 @@ if __name__ == '__main__':
         "local_to_planned_cr": "./common_data/transition/local_to_planned-window1-cr-w_intercept.npy",
         "local_to_planned_Q": "./common_data/transition/local_to_planned-window1-Q-w_intercept.npy",
 
-        "local_to_suicide_agent_weight": "./common_data/transition/5_suicide_wo_break/local_to_suicide-window1-agent_weight-w_intercept.npy",
-        "local_to_suicide_cr": "./common_data/transition/5_suicide_wo_break/local_to_suicide-window1-cr-w_intercept.npy",
-        "local_to_suicide_Q": "./common_data/transition/5_suicide_wo_break/local_to_suicide-window1-Q-w_intercept.npy",
+        "local_to_suicide_agent_weight": "./common_data/transition/local_to_suicide-window1-agent_weight-w_intercept.npy",
+        "local_to_suicide_cr": "./common_data/transition/local_to_suicide-window1-cr-w_intercept.npy",
+        "local_to_suicide_Q": "./common_data/transition/local_to_suicide-window1-Q-w_intercept.npy",
 
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"],
                         ["local", "pessimistic"], ["local", "planned_hunting"], ["local", "suicide"]],
 
         # ------------------------------------------------------------------------------------
 
-        "bean_vs_cr_filename" : "./common_data/incremental/100trial-window3-incremental_cr-w_intercept.npy",
+        "bean_vs_cr_filename" : "./common_data/incremental/100trial-Omega-window3-incremental_cr-w_intercept.npy",
     }
 
     # ============ VISUALIZATION =============
@@ -1532,11 +1532,11 @@ if __name__ == '__main__':
 
     # plotAllAgentMatching(config)
 
-    # plotWeightVariation(config)
+    plotWeightVariation(config)
 
     # plotBeanNumVSCr(config)
 
-    singleTrialThreeFitting(config)
+    # singleTrialThreeFitting(config)
 
     # Best trials:
     # "13-2-Patamon-10-Sep-2019-1.csv", "10-3-Omega-09-Jul-2019-1.csv", "10-2-Patamon-07-Jul-2019-1.csv",

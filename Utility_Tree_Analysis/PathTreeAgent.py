@@ -327,21 +327,24 @@ class PathTree:
         #         exact_reward += 0.0
 
         # Fruit reward
-        if not isinstance(existing_fruit, float) and None != existing_fruit:
+        if not isinstance(existing_fruit, float) and None != existing_fruit and not isinstance(self.reward_type, float) and None != self.reward_type:
             if cur_position == self.fruit_pos:
                 exact_reward += self.reward_amount[int(self.reward_type)]
                 existing_fruit = np.nan
             else:
                 fruit_dist = self.locs_df[cur_position][self.fruit_pos]
                 if fruit_dist < self.fruit_attractive_thr:
-                    R = self.reward_amount[int(self.reward_type)]
-                    T = self.fruit_attractive_thr
-                    # reward += self.reward_amount[int(self.reward_type)] * ( self.fruit_attractive_thr/ fruit_dist - 1)
-                    # reward += self.reward_amount[int(self.reward_type)] * ( 1 / fruit_dist)
-                    if fruit_dist <= (self.fruit_attractive_thr / 2):
-                        fruit_potential_reward += (-R / T) * fruit_dist + R
-                    else:
-                        fruit_potential_reward += (R * T) / (2 * fruit_dist) - R / 2
+                    try:
+                        R = self.reward_amount[int(self.reward_type)]
+                        T = self.fruit_attractive_thr
+                        # reward += self.reward_amount[int(self.reward_type)] * ( self.fruit_attractive_thr/ fruit_dist - 1)
+                        # reward += self.reward_amount[int(self.reward_type)] * ( 1 / fruit_dist)
+                        if fruit_dist <= (self.fruit_attractive_thr / 2):
+                            fruit_potential_reward += (-R / T) * fruit_dist + R
+                        else:
+                            fruit_potential_reward += (R * T) / (2 * fruit_dist) - R / 2
+                    except:
+                        fruit_potential_reward = 0.0
 
         # TODO: For excluding potential reward
         ghost_potential_reward = 0.0

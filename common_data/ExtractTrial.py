@@ -156,6 +156,23 @@ def _extractOneTrial():
     print("Finished saving trial data.")
 
 
+def _extractMultiTrial(trial_num = 100):
+    with open("trial/1000_trial_data_Omega-with_Q.pkl", "rb") as file:
+        data = pickle.load(file)
+    data = data.sort_index()
+    print("All data shape : ", data.shape)
+    trial_name_list = np.unique(data.file.values)
+    if trial_num < len(trial_name_list):
+        trial_name_list = np.random.choice(trial_name_list, trial_num)
+    is_need = data.file.apply(lambda x: x in trial_name_list)
+    trial_index = np.where(is_need == 1)
+    trial_data = data.iloc[trial_index].reset_index(drop = True)
+    print("{} trial data shape : ".format(trial_num), trial_data.shape)
+    with open("trial/{}_trial_data_Omega-with_Q.pkl".format(trial_num), "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving data.")
+
+
 if __name__ == '__main__':
     # Extract transition data
     # extractTrialData(trial_num = 500)
@@ -168,7 +185,8 @@ if __name__ == '__main__':
     # print(all_data_with_label.columns.values)
 
     # Extract monkey data
-    extractMonkeyData(trial_num=2000)
+    # extractMonkeyData(trial_num=2000)
 
     # _extractOneTrial()
-    pass
+
+    _extractMultiTrial(trial_num = 100)
