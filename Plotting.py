@@ -47,9 +47,8 @@ from palettable.lightbartlein.diverging import BlueDarkRed18_18, BlueOrange12_5,
 
 sys.path.append("./Utility_Tree_Analysis")
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
-from PathTreeAgent import PathTree
-from SuicideAgent import SuicideAgent
-from PlannedHuntingAgent import PlannedHuntingAgent
+from LabelAnalysis import _pessimisticProcesing, _plannedHuntingProcesing,_suicideProcesing, _makeChoice, _label2Index, negativeLikelihood
+from LabelAnalysis import _PG, _PE, _ghostStatus, _energizerNum, _PR, _RR, _PGWODead
 
 
 
@@ -70,51 +69,6 @@ def oneHot(val):
     onehot_vec = [0, 0, 0, 0]
     onehot_vec[dir_list.index(val)] = 1
     return onehot_vec
-
-
-def _PG(x, locs_df):
-    PG = [0, 0]
-    if x.ifscared1 < 3:
-        if tuple(x.pacmanPos) != tuple(x.ghost1Pos):
-            PG[0] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost1Pos)]
-        else:
-            pass
-    else:
-        PG[0] = 100
-    if x.ifscared2 < 3:
-        if tuple(x.pacmanPos) != tuple(x.ghost2Pos):
-            PG[1] = locs_df[tuple(x.pacmanPos)][tuple(x.ghost2Pos)]
-        else:
-            pass
-    else:
-        PG[1] = 100
-    return PG
-
-
-def _pessimisticProcesing(pess_Q, PG):
-    offset = np.max(np.abs(np.concatenate(pess_Q)))
-    temp_pess_Q = copy.deepcopy(pess_Q)
-    for index in range(len(temp_pess_Q)):
-        non_zero = np.where(temp_pess_Q[index] != 0)
-        # if np.any(temp_pess_Q[index] < -5):
-        if np.any(np.array(PG[index]) <= 10):
-            temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
-        else:
-            temp_pess_Q[index][non_zero] = 0.0
-    # for index in range(len(temp_pess_Q)):
-    #     non_zero = np.where(temp_pess_Q[index] != 0)
-    #     temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
-    #     temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
-    #     temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
-    return temp_pess_Q
-
-
-def _makeChoice(prob):
-    copy_estimated = copy.deepcopy(prob)
-    if np.any(prob) < 0:
-        available_dir_index = np.where(prob != 0)
-        copy_estimated[available_dir_index] = copy_estimated[available_dir_index] - np.min(copy_estimated[available_dir_index]) + 1
-    return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
 
 def readTrialData(filename):
@@ -160,9 +114,41 @@ def readTrialData(filename):
     locs_df = readLocDistance("./Utility_Tree_Analysis/extracted_data/dij_distance_map.csv")
     PG = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _PG(x, locs_df),
-        axis = 1
+        axis=1
     )
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG)
+    PG_wo_dead = all_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PGWODead(x, locs_df),
+        axis=1
+    )
+    PE = all_data[["pacmanPos", "energizers"]].apply(
+        lambda x: _PE(x, locs_df),
+        axis=1
+    )
+    ghost_status = all_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: _ghostStatus(x),
+        axis=1
+    )
+    energizer_num = all_data[["energizers"]].apply(
+        lambda x: _energizerNum(x),
+        axis=1
+    )
+    PR = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    print("Finished extracting features.")
+    # TODO: planned hunting and suicide Q value
+    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE,
+                                                          PG_wo_dead)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
+    print("Finished Q-value pre-processing.")
     # Split into trials
     trial_data = []
     trial_name_list = np.unique(all_data.file.values)
@@ -189,15 +175,6 @@ def readTrialData(filename):
     return trial_data
 
 
-def _estimationLabeling(Q_value, agent_list):
-    indicies = np.argsort(Q_value)
-    # estimated_label = [agent_list[each] for each in indicies[-2:]]
-    estimated_label = agent_list[indicies[-1]]
-    # if Q_value[indicies[-2]] - Q_value[indicies[-3]] <= 0.1:
-    #     estimated_label.append(agent_list[indicies[-3]])
-    return estimated_label
-
-
 def _handcraftLabeling(labels):
     hand_crafted_label = []
     labels = labels.fillna(0)
@@ -222,63 +199,6 @@ def _handcraftLabeling(labels):
     if len(hand_crafted_label) == 0:
         hand_crafted_label = None
     return hand_crafted_label
-
-
-def _label2Index(labels):
-    label_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
-    label_val = copy.deepcopy(labels)
-    for index, each in enumerate(label_val):
-        if each is not None:
-            label_val[index] = label_list.index(each)
-        else:
-            label_val[index] = None
-    return label_val
-
-
-def negativeLikelihood(param, all_data, true_prob, agents_list, return_trajectory = False, need_intercept = False):
-    '''
-    Estimate agent weights with utility (Q-value).
-    :param param:
-    :param all_data:
-    :param agent_list:
-    :param return_trajectory:
-    :return:
-    '''
-    if 0 == len(agents_list) or None == agents_list:
-        raise ValueError("Undefined agents list!")
-    else:
-        if need_intercept:
-            if len(agents_list)+1 != len(param):
-                raise ValueError("Specify intercept!")
-            agent_weight = [param[i] for i in range(len(param)-1)]
-            intercept = param[-1]
-        else:
-            agent_weight = [param[i] for i in range(len(param))]
-            intercept = 0
-    # Compute estimation error
-    nll = 0  # negative log likelihood
-    num_samples = all_data.shape[0]
-    agents_list = ["{}_Q".format(each) for each in agents_list]
-    pre_estimation = all_data[agents_list].values
-    agent_Q_value = np.zeros((num_samples, 4, len(agents_list)))
-    for each_sample in range(num_samples):
-        for each_agent in range(len(agents_list)):
-            agent_Q_value[each_sample, :, each_agent] = pre_estimation[each_sample][each_agent]
-    dir_Q_value = agent_Q_value @ agent_weight + intercept # add intercept
-    true_dir = true_prob.apply(lambda x: _makeChoice(x)).values
-    # true_dir = np.array([makeChoice(dir_Q_value[each]) if not np.isnan(dir_Q_value[each][0]) else -1 for each in range(num_samples)])
-    exp_prob = np.exp(dir_Q_value)
-    for each_sample in range(num_samples):
-        # In computing the Q-value, divided-by-zero might exists when normalizing the Q
-        # TODO: fix this in  Q-value computing
-        if np.isnan(dir_Q_value[each_sample][0]):
-            continue
-        log_likelihood = dir_Q_value[each_sample, true_dir[each_sample]] - np.log(np.sum(exp_prob[each_sample]))
-        nll = nll -log_likelihood
-    if not return_trajectory:
-        return nll
-    else:
-        return (nll, dir_Q_value)
 
 
 def singleTrialThreeFitting(config):
@@ -333,7 +253,9 @@ def singleTrialThreeFitting(config):
     all_weight_rest = []
     all_Q = []
 
-    agent_name = ["global", "local", "pessimistic"]
+    # agent_name = ["global", "local", "pessimistic"]
+    agent_name = config["single_trial_agents"]
+    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
     # Construct optimizer
     for trial_index, each in enumerate(trial_data):
         temp_record = []
@@ -356,10 +278,10 @@ def singleTrialThreeFitting(config):
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         # (num of windows, num of agents)
-        temp_weight = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
+        temp_weight = np.zeros((len(window_index), len(agent_name) if not config["need_intercept"] else len(agent_name)))
         # temp_weight_rest = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
         # temp_Q = []
-        temp_contribution = np.zeros((len(window_index), 3))
+        temp_contribution = np.zeros((len(window_index), len(agent_name)))
         # temp_contribution_rest = np.zeros((len(window_index), 3))
         cr = np.zeros((len(window_index), ))
         # (num of windows, window size, num of agents, num pf directions)
@@ -415,12 +337,12 @@ def singleTrialThreeFitting(config):
                     print("Fail, retrying...")
                     retry_num += 1
 
-            temp_weight[centering_index, :] = res.x
+            temp_weight[centering_index, :] = res.x[:-1]
             contribution = temp_weight[centering_index, :-1] * \
                            [scaleOfNumber(each) for each in
-                            np.max(np.abs(temp_trial_Q[centering_index, :, [0, 1, 2], :]), axis=(1, 2))]
+                            np.max(np.abs(temp_trial_Q[centering_index, :, agent_index, :]), axis=(1, 2))]
             temp_contribution[centering_index, :] = contribution
-            window_estimated_label.append(_estimationThreeLabeling(contribution, agent_name))
+            window_estimated_label.append(_estimationMultipleLabeling(contribution, agent_name))
             trial_estimated_label.append(window_estimated_label)
 
         matched_num = 0
@@ -445,7 +367,7 @@ def singleTrialThreeFitting(config):
 
 
         estimated_label = [
-            _estimationThreeLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
+            _estimationMultipleLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
             for index in range(len(temp_contribution))
         ]
 
@@ -493,33 +415,37 @@ def singleTrialThreeFitting(config):
         # plt.figure(figsize=(13,5))
         plt.subplot(2, 1, 2)
         for i in range(len(handcrafted_label)):
-            if handcrafted_label[i] is not None and (
-                    "pessimistic" in handcrafted_label[i] or
-                    "local" in handcrafted_label[i] or
-                    "global" in handcrafted_label[i]
-            ):
-                handcrafted_label[i] = sorted(handcrafted_label[i])
-                estimated_label[i] = sorted(estimated_label[i])
-
-                # Hand-crafted labels
-                if len(handcrafted_label[i]) > 2:
-                    handcrafted_label[i] = handcrafted_label[i][:2]
-                if len(handcrafted_label[i]) == 2:
-                    if "local" in handcrafted_label[i] and "global" in handcrafted_label[i]:
-                        handcrafted_label[i] = ["global", "global"]
-                    # if "pessimistic" in handcrafted_label[i]:
-                    #     plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color["pessimistic"])
-                    # else:
-                    plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.25, facecolor=agent_color[handcrafted_label[i][0]])
-                    plt.fill_between(x=[i, i + 1], y1=0.25, y2=0.3, facecolor=agent_color[handcrafted_label[i][1]])
-                else:
-                    plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color[handcrafted_label[i][0]])
-                # Estimated labels
-                if len(estimated_label[i]) == 1:
-                    plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.1, facecolor=agent_color[estimated_label[i][0]])
-                else:
-                    plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.05, facecolor=agent_color[estimated_label[i][0]])
-                    plt.fill_between(x=[i, i + 1], y1=0.05, y2=0.1, facecolor=agent_color[estimated_label[i][1]])
+            if handcrafted_label[i] is not None:
+                seq = np.linspace(-0.1, 0.0, len(handcrafted_label[i]) + 1)
+                for j, h in enumerate(handcrafted_label[i]):
+                    plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+            # if handcrafted_label[i] is not None and (
+            #         "pessimistic" in handcrafted_label[i] or
+            #         "local" in handcrafted_label[i] or
+            #         "global" in handcrafted_label[i]
+            # ):
+            #     handcrafted_label[i] = sorted(handcrafted_label[i])
+            #     estimated_label[i] = sorted(estimated_label[i])
+            #
+            #     # Hand-crafted labels
+            #     if len(handcrafted_label[i]) > 2:
+            #         handcrafted_label[i] = handcrafted_label[i][:2]
+            #     if len(handcrafted_label[i]) == 2:
+            #         if "local" in handcrafted_label[i] and "global" in handcrafted_label[i]:
+            #             handcrafted_label[i] = ["global", "global"]
+            #         # if "pessimistic" in handcrafted_label[i]:
+            #         #     plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color["pessimistic"])
+            #         # else:
+            #         plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.25, facecolor=agent_color[handcrafted_label[i][0]])
+            #         plt.fill_between(x=[i, i + 1], y1=0.25, y2=0.3, facecolor=agent_color[handcrafted_label[i][1]])
+            #     else:
+            #         plt.fill_between(x=[i, i + 1], y1=0.2, y2=0.3, facecolor=agent_color[handcrafted_label[i][0]])
+            #     # Estimated labels
+            #     if len(estimated_label[i]) == 1:
+            #         plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.1, facecolor=agent_color[estimated_label[i][0]])
+            #     else:
+            #         plt.fill_between(x=[i, i + 1], y1=0.0, y2=0.05, facecolor=agent_color[estimated_label[i][0]])
+            #         plt.fill_between(x=[i, i + 1], y1=0.05, y2=0.1, facecolor=agent_color[estimated_label[i][1]])
         plt.xlim(0, temp_weight.shape[0])
         # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
         # x_ticks = [window + int(each) for each in x_ticks_index]
@@ -894,9 +820,9 @@ def plotWeightVariation(config):
     #TODO: =========================================================================================
     # centering_index += 5 # TODO: shift the centering
     plt.clf()
-    agent_name = ["local", "suicide"]
+    agent_name = ["local", "planned_hunting"]
     for index in range(len(agent_name)):
-        plt.plot(avg_local2suicide_weight[:,index],
+        plt.plot(avg_local2planned_weight[:,index],
                  color=agent_color[agent_name[index]], ms=3, lw=5, label=label_name[agent_name[index]])
 
     plt.xlabel("Time Step", fontsize=15)
@@ -1474,12 +1400,12 @@ if __name__ == '__main__':
         "need_intercept" : True,
         "maximum_try": 5,
 
-        "single_trial_data_filename": "./common_data/trial/100_trial_data_new-one_ghost-with_Q.pkl",
+        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
-        "single_trial_window": 2,
-        "single_trial_agents": ["global", "local", "pessimistic"],
+        "single_trial_window": 3,
+        "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
 
         # ==================================================================================
         #                       For Experimental Results Visualization
@@ -1514,9 +1440,9 @@ if __name__ == '__main__':
         "local_to_planned_cr": "./common_data/transition/local_to_planned-window1-cr-w_intercept.npy",
         "local_to_planned_Q": "./common_data/transition/local_to_planned-window1-Q-w_intercept.npy",
 
-        "local_to_suicide_agent_weight": "./common_data/transition/local_to_suicide-window1-agent_weight-w_intercept.npy",
-        "local_to_suicide_cr": "./common_data/transition/local_to_suicide-window1-cr-w_intercept.npy",
-        "local_to_suicide_Q": "./common_data/transition/local_to_suicide-window1-Q-w_intercept.npy",
+        "local_to_suicide_agent_weight": "./common_data/transition/suicide_5/local_to_suicide-window1-agent_weight-w_intercept.npy",
+        "local_to_suicide_cr": "./common_data/transition/suicide_5/local_to_suicide-window1-cr-w_intercept.npy",
+        "local_to_suicide_Q": "./common_data/transition/suicide_5/local_to_suicide-window1-Q-w_intercept.npy",
 
         "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"],
                         ["local", "pessimistic"], ["local", "planned_hunting"], ["local", "suicide"]],

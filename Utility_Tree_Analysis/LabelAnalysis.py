@@ -169,6 +169,7 @@ def _mixStatus(ghost_status, PG):
             return False
     return False
 
+
 def _pessimisticProcesing(pess_Q, PG, ghost_status):
     offset = np.max(np.abs(np.concatenate(pess_Q)))
     temp_pess_Q = copy.deepcopy(pess_Q)
@@ -209,7 +210,7 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status, PG):
     # PR: minimum distance between Pacman position and reward entities
     # RR: minimum distance between reborn position and reward entities
     if np.any(np.concatenate(suicide_Q) < 0):
-        offset = np.max(np.abs(np.concatenate(suicide_Q)))  # TODO: max absolte value of negative values
+        offset = np.max(np.abs(np.concatenate(suicide_Q)))  # TODO: max absolute value of negative values
     else:
         offset = 0.0
     temp_suicide_Q = copy.deepcopy(suicide_Q)
@@ -2109,7 +2110,7 @@ def trajectoryTransitionFitting(config):
 
     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
                   "label_global_optimal", "label_global_notoptimal", "label_global",
-                  "label_evade", "label_evade1",
+                  "label_evade",
                   "label_suicide",
                   "label_true_accidental_hunting",
                   "label_true_planned_hunting"]
@@ -2272,7 +2273,7 @@ def trajectoryTransitionFitting(config):
         plt.yticks(fontsize=15)
         plt.ylim(-0.1, 1.1)
         plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name))
-        # plt.show()
+        plt.show()
         # print()
 
         all_Q.append(temp_trial_Q)
@@ -2985,7 +2986,7 @@ if __name__ == '__main__':
         #                       For Single Trial Analysis
         # Filename
         # "single_trial_data_filename": "../common_data/trial/15-6-Patamon-04-Jul-2019-4-new_suicide-with_Q.pkl",
-        "single_trial_data_filename": "../common_data/trial/25-2-Omega-24-Jun-2019-1-with_Q.pkl",
+        "single_trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # Window size for correlation analysis
         "single_trial_window": 3,
         "single_trial_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
@@ -2995,11 +2996,11 @@ if __name__ == '__main__':
         #                       For Trajectory Transtion Analysis
         # Filename
         # "single_trial_data_filename": "../common_data/trial/global15-local10-100_trial_data_new-with_Q.pkl",
-        "trajectory_transition_data_filename": "../common_data/transition/local_to_evade-with_Q.pkl",
+        "trajectory_transition_data_filename": "../common_data/transition/local_to_planned-with_Q.pkl",
         # Window size for correlation analysis
         "trajectory_transition_window": 1,
         "trajectory_num": None,
-        "trajectory_transition_agents": ["local", "pessimistic"],
+        "trajectory_transition_agents": ["local", "planned_hunting"],
         # ==================================================================================
 
         # ==================================================================================
@@ -3015,10 +3016,10 @@ if __name__ == '__main__':
         #                       For Simple MLE Analysis
         # Filename
         # "MLE_data_filename": "../common_data/trial/100_trial_data_new-one_ghost-with_Q.pkl",
-        "MLE_data_filename": "../common_data/simulation/100_trial_data_new-one_ghost-with_Q.pkl",
+        "MLE_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # Window size for MLE analysis
         "MLE_num_trial": None,
-        "MLE_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
+        "MLE_agents": ["global", "local", "pessimistic"],
         # ==================================================================================
 
         # ==================================================================================
@@ -3101,7 +3102,7 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config)
+    # movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
     # singleTrialAllFitting(config)
@@ -3119,7 +3120,7 @@ if __name__ == '__main__':
 
     # data = np.load("../common_data/controlled/trial_cr.npy", allow_pickle=True)
     # print()
-    # trajectoryTransitionFitting(config)
+    trajectoryTransitionFitting(config)
 
     # ============ VISUALIZATION =============
     # plotThreeAgentMatching(config)

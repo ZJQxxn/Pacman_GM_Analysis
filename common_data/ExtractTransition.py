@@ -81,6 +81,49 @@ def _PB(x):
     return np.min(PB)
 
 
+def _PR(x, locs_df):
+    # beans, energizers, fruits, scared ghosts
+    PR_dist = []
+    if x.beans is not None and x.beans != [] and not isinstance(x.beans, float):
+        PR_dist.extend(x.beans)
+    if x.energizers is not None and x.energizers != [] and not isinstance(x.energizers, float):
+        PR_dist.extend(x.energizers)
+    if x.fruitPos is not None and x.fruitPos != [] and not  isinstance(x.fruitPos, float):
+        PR_dist.append(x.fruitPos)
+    if x.ifscared1 > 3:
+        PR_dist.append(x.ghost1Pos)
+    if x.ifscared2 > 3:
+        PR_dist.append(x.ghost2Pos)
+    # Compute distance
+    PR_dist = [locs_df[x.pacmanPos][each] if each != x.pacmanPos else 0 for each in PR_dist]
+    if len(PR_dist) > 0:
+        return np.min(PR_dist)
+    else:
+        return 100
+
+
+def _RR(x, locs_df):
+    # beans, energizers, fruits, scared ghosts
+    RR_dist = []
+    if x.beans is not None and x.beans != [] and not  isinstance(x.beans, float):
+        RR_dist.extend(x.beans)
+    if x.energizers is not None and x.energizers != [] and not  isinstance(x.energizers, float):
+        RR_dist.extend(x.energizers)
+    if x.fruitPos is not None and x.fruitPos != [] and not  isinstance(x.fruitPos, float):
+        RR_dist.append(x.fruitPos)
+    if x.ifscared1 > 3:
+        RR_dist.append(x.ghost1Pos)
+    if x.ifscared2 > 3:
+        RR_dist.append(x.ghost2Pos)
+    # Compute distance
+    reborn_pos = (14, 27)
+    RR_dist = [locs_df[reborn_pos][each] if each != reborn_pos else 0 for each in RR_dist]
+    if len(RR_dist) > 0:
+        return np.min(RR_dist)
+    else:
+        return 100
+
+
 def _extractAllData(trial_num = 20000):
     # Read data
     # data_filename = "partial_data_with_reward_label_cross.pkl"
@@ -331,7 +374,7 @@ def _local2Evade(trial_data):
         axis=1
     )
     trial_data["PG"] = PG
-    is_evade = trial_data[["label_evade1","PG"]].apply(
+    is_evade = trial_data[["label_evade1", "PG"]].apply(
         lambda x: x.label_evade1 == 1,  # and np.any(np.array(x.PG) <= 10),
         axis=1
     )
@@ -461,14 +504,20 @@ def _global2Local(trial_data):
 
 
 def _local2Planned(trial_data):
+    PG = trial_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x),
+        axis=1
+    )
+    trial_data["PG"] = PG
     is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting", "label_global_ending"]].apply(
         lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1,
         axis = 1
     )
-    is_planned = trial_data[["label_true_planned_hunting"]].apply(
-        lambda x: x.label_true_planned_hunting == 1,
+    is_planned = trial_data[["label_true_planned_hunting", "PG"]].apply(
+        lambda x: x.label_true_planned_hunting == 1 and np.all(np.array(x.PG) < 15),
         axis = 1
     )
+    trial_data = trial_data.drop(columns=["PG"])
     length = 15
     print("Local_to_planned length : ", length)
     trajectory_point = _findTransitionPoint(is_local, is_planned, length)
@@ -490,14 +539,23 @@ def _local2Suicide(trial_data):
         axis=1
     )
 
-    # is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting"]].apply(
-    #     lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1 or x.label_true_accidental_hunting == 1,
-    #     axis = 1
-    # )
-    is_suicide = trial_data[["label_suicide"]].apply(
-        lambda x: x.label_suicide == 1,
+    PR = trial_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PR(x, locs_df),
+        axis=1
+    )
+    RR = trial_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _RR(x, locs_df),
+        axis=1
+    )
+    trial_data["PR"] = PR
+    trial_data["RR"] = RR
+    is_suicide = trial_data[["label_suicide", "PR", "RR"]].apply(
+        lambda x: x.label_suicide == 1 and x.RR <= 10 and x.PR > 10 ,
         axis = 1
     )
+    trial_data = trial_data.drop(columns=["PR", "RR"])
     length = 5
     print("Local_to_suicide length : ", length)
     # trajectory_point = _findTransitionPoint(is_local, is_suicide, length)
@@ -657,5 +715,5 @@ def extractTransitionData(transition_type, need_save = True):
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["evade_to_local"]
+    transition_type = ["local_to_suicide"]
     extractTransitionData(transition_type, need_save = True)

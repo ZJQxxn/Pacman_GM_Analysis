@@ -185,8 +185,8 @@ if __name__ == '__main__':
     # print(all_data_with_label.columns.values)
 
     # Extract monkey data
-    # extractMonkeyData(trial_num=2000)
+    extractMonkeyData(trial_num=8000)
 
     # _extractOneTrial()
 
-    _extractMultiTrial(trial_num = 100)
+    # _extractMultiTrial(trial_num = 100)

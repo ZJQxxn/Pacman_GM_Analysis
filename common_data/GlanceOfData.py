@@ -138,7 +138,7 @@ if __name__ == '__main__':
     # print(all_data.columns.values)
     # print(all_data.shape)
 
-    with open("70-80windowQ.pkl", "rb") as file:
+    with open("contribution_zero.pkl", "rb") as file:
         data = pickle.load(file)
         print()
 
