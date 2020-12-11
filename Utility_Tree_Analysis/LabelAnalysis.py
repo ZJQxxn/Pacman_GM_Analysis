@@ -2444,6 +2444,196 @@ def controlledMLE(config):
     np.save("../common_data/controlled/trial_cr.npy", trial_cr)
 
 
+def diffStateAnalysis(config):
+    print("="*40)
+    print("Diff State Analysis")
+    print("=" * 40)
+    local_X = []
+    local_Y = []
+    # Read global data
+    local2global_data = readTransitionData("../common_data/transition/local_to_global-with_Q.pkl")
+    global2local_data = readTransitionData("../common_data/transition/global_to_local-with_Q.pkl")
+    global_X = []
+    global_Y = []
+    for each in local2global_data:
+        length = each[1].shape[0]
+        global_X.append(each[1].iloc[length // 2:])
+        global_Y.append(each[2][length // 2:])
+        local_X.append(each[1].iloc[:length // 2])
+        local_Y.append(each[2][:length // 2])
+    for each in global2local_data:
+        length = each[1].shape[0]
+        global_X.append(each[1].iloc[:length // 2])
+        global_Y.append(each[2][:length // 2])
+        local_X.append(each[1].iloc[length // 2:])
+        local_Y.append(each[2][length // 2:])
+    global_X = pd.concat(global_X).reset_index(drop = True)
+    global_Y = pd.concat(global_Y).reset_index(drop = True)
+    print("Finished global.")
+    # Read evade data
+    local2evade_data = readTransitionData("../common_data/transition/local_to_evade-with_Q.pkl")
+    evade2local_data = readTransitionData("../common_data/transition/evade_to_local-with_Q.pkl")
+    evade_X = []
+    evade_Y = []
+    for each in local2evade_data:
+        length = each[1].shape[0]
+        evade_X.append(each[1].iloc[length // 2:])
+        evade_Y.append(each[2][length // 2:])
+        local_X.append(each[1].iloc[:length // 2])
+        local_Y.append(each[2][:length // 2])
+    for each in evade2local_data:
+        length = each[1].shape[0]
+        evade_X.append(each[1].iloc[:length // 2])
+        evade_Y.append(each[2][:length // 2])
+        local_X.append(each[1].iloc[length // 2:])
+        local_Y.append(each[2][length // 2:])
+    evade_X = pd.concat(evade_X).reset_index(drop=True)
+    evade_Y = pd.concat(evade_Y).reset_index(drop=True)
+    print("Finished evade.")
+    # Read attack data
+    local2attack_data = readTransitionData("../common_data/transition/local_to_planned-with_Q.pkl")
+    attack_X = []
+    attack_Y = []
+    for each in local2attack_data:
+        length = each[1].shape[0]
+        attack_X.append(each[1].iloc[length // 2:])
+        attack_Y.append(each[2][length // 2:])
+        local_X.append(each[1].iloc[:length // 2])
+        local_Y.append(each[2][:length // 2])
+    attack_X = pd.concat(attack_X).reset_index(drop=True)
+    attack_Y = pd.concat(attack_Y).reset_index(drop=True)
+    print("Finished attack.")
+    # Read suicide data
+    local2suicide_data = readTransitionData("../common_data/transition/local_to_suicide-with_Q.pkl")
+    suicide_X = []
+    suicide_Y = []
+    for each in local2suicide_data:
+        length = each[1].shape[0]
+        suicide_X.append(each[1].iloc[length // 2:])
+        suicide_Y.append(each[2][length // 2:])
+        local_X.append(each[1].iloc[:length // 2])
+        local_Y.append(each[2][:length // 2])
+    suicide_X = pd.concat(suicide_X).reset_index(drop=True)
+    suicide_Y = pd.concat(suicide_Y).reset_index(drop=True)
+    print("Finished suicide.")
+    # Read local data
+    local_X = pd.concat(local_X).reset_index(drop=True)
+    local_Y = pd.concat(local_Y).reset_index(drop=True)
+    # Read vague data
+    trial_data = readTrialData("../common_data/trial/2000_trial_data_Omega-with_Q.pkl")
+    label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+                  "label_global_optimal", "label_global_notoptimal", "label_global",
+                  "label_evade",
+                  "label_suicide",
+                  "label_true_accidental_hunting",
+                  "label_true_planned_hunting"]
+    vague_X = []
+    vague_Y = []
+    for each in trial_data:
+        length = each[1].shape[0]
+        handcrafted_label = [_handcraftLabeling(each[1][label_list].iloc[index]) for index in range(length)]
+        is_vague = [len(label) > 1 if label is not None and not isinstance(label, float) else False for label in handcrafted_label]
+        is_vague = np.where(np.array(is_vague == 1))
+        if len(is_vague[0]) > 0:
+            vague_X.append(each[1].iloc[is_vague])
+            vague_Y.append(each[2][is_vague])
+    if len(vague_X) > 0:
+        vague_X = pd.concat(vague_X).reset_index(drop=True)
+        vague_Y = pd.concat(vague_Y).reset_index(drop=True)
+    else:
+        vague_X = None
+        vague_Y = None
+    print("Finished vague.")
+    # Analysis
+    state_cr = {
+        "global": None,
+        "local":None,
+        "pessimistic": None,
+        "planned_hunting":None,
+        "suicide":None,
+        "vague":None
+    }
+    state_data = {
+        "vague": (vague_X, vague_Y),
+        "global":(global_X, global_Y),
+        "local":(local_X, local_Y),
+        "pessimistic": (evade_X, evade_Y),
+        "planned_hunting":(attack_X, attack_Y),
+        "suicide":(suicide_X, suicide_Y),
+    }
+    for state in state_data:
+        print("="*15, " {} Analysis".format(state), "="*15)
+        X, Y = state_data[state]
+        if X is None:
+            print("No data for state \"{}\"".format(state))
+            state_cr[state] = None
+            continue
+        temp_cr = []
+        for agent_name in [["local"], ["local", state], ["global", "local", "pessimistic", "suicide", "planned_hunting"]]:
+            if agent_name == ["local", "vague"]:
+                temp_cr.append(np.nan)
+                continue
+            print("Agent name : ", agent_name)
+            # agents_list = ["{}_Q".format(each) for each in agent_name]
+            print("Data shape : ", X.shape)
+            # Construct optimizer
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
+            params.append(1)
+            bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            func = lambda params: negativeLikelihood(
+                params,
+                X,
+                Y,
+                agent_name,
+                return_trajectory = False,
+                need_intercept = True
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < 5:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0 = params,
+                    method = "SLSQP",
+                    bounds = bounds,
+                    tol = 1e-5,
+                    constraints = cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            # correct rate in the window
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                X,
+                Y,
+                agent_name,
+                return_trajectory=True,
+                need_intercept=True
+            )
+            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+            true_dir = Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            print("Weight : ", res.x)
+            print("Correct rate : ", correct_rate)
+            temp_cr.append(correct_rate)
+        state_cr[state] = temp_cr
+    print("="*40)
+    print("Summary : ")
+    print(state_cr)
+    if "state_comparison" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/state_comparison")
+    np.save("../common_data/state_comparison/state_cr.npy", state_cr)
+
+
 
 # ===================================
 #         VISUALIZATION
@@ -2973,13 +3163,13 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/1000_trial_data_Omega-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
         "trial_window" : 3,
         "correlation_agents": ["global", "local", "pessimistic", "suicide", "planned_hunting"],
-        "multi_agent_list" : ["global", "local", "planned_hunting"],
+        "multi_agent_list" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
 
         # ==================================================================================
@@ -3032,6 +3222,13 @@ if __name__ == '__main__':
         "controlled_maximum_try": 5,
         "controlled_trial_num": 50,
         # ==================================================================================
+
+        # ==================================================================================
+        #                       For Different State Analysis
+        # Filename
+        # "diff_state": ["global", "local", "evade", "attack", "suicide", "vague"],
+        # ==================================================================================
+
 
         # ==================================================================================
         #                       For Experimental Results Visualization
@@ -3114,13 +3311,14 @@ if __name__ == '__main__':
     # incrementalAnalysis(config)
     # multiAgentAnalysis(config)
 
-    # simpleMLE(config)
+    diffStateAnalysis(config)
 
+    # simpleMLE(config)
     # controlledMLE(config)
 
     # data = np.load("../common_data/controlled/trial_cr.npy", allow_pickle=True)
     # print()
-    trajectoryTransitionFitting(config)
+    # trajectoryTransitionFitting(config)
 
     # ============ VISUALIZATION =============
     # plotThreeAgentMatching(config)

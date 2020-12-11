@@ -250,7 +250,7 @@ def _readOneTrialData():
 
 def multiAgentAnalysis(trial_num = None):
     print("== Omega Data Analysis with All the Agents ==")
-    trial_data_filename = "../common_data/trial/2000_trial_data_Omega-with_Q.pkl"
+    trial_data_filename = "../common_data/trial/7000_trial_data_Patamon-with_Q.pkl"
     # trial_data_filename = "../common_data/single_trial/5_trial-data_for_comparison-one_ghost-with_Q.pkl"
     agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     print(trial_data_filename)
