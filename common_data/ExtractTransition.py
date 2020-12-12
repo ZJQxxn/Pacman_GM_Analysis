@@ -573,6 +573,70 @@ def _local2Suicide(trial_data):
     return trajectory_data
 
 
+def _local2Accidental(trial_data):
+    PG = trial_data[["pacmanPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PG(x),
+        axis=1
+    )
+    trial_data["PG"] = PG
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending"]].apply(
+        lambda x: x.label_local_graze == 1 or x.label_local_graze_noghost == 1,
+        axis=1
+    )
+    is_accidental = trial_data[["label_true_accidental_hunting", "PG"]].apply(
+        lambda x: x.label_true_accidental_hunting == 1 and np.all(np.array(x.PG) > 15),
+        axis=1
+    )
+    trial_data = trial_data.drop(columns=["PG"])
+    length = 15
+    print("Local_to_accidental length : ", length)
+    trajectory_point = _findTransitionPoint(is_local, is_accidental, length)
+    # trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
+    if len(trajectory_point) == 0:
+        return None
+    else:
+        trajectory_data = []
+        for trajectory_index, each in enumerate(trajectory_point):
+            for index in range(each[0], each[2] + 1):
+                each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
+                trajectory_data.append(each_step)
+    return trajectory_data
+
+
+def _scaredLocal2Hunt(trial_data):
+    #TODO: how to determine transition point
+    is_scared = trial_data[["ifscared1", "ifscared2"]].apply(
+        lambda x: x.ifscard1 > 3 and x.ifscared2 > 3,
+        axis=1
+    )
+    trial_data["is_scared"] = is_scared
+
+    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
+                           "label_global_ending"]].apply(
+        lambda x: (x.label_local_graze == 1 or x.label_local_graze_noghost == 1) and x.is_scared == 1,
+        axis=1
+    )
+    is_accidental = trial_data[["label_true_accidental_hunting", "PG"]].apply(
+        lambda x: x.label_true_accidental_hunting == 1 and np.all(np.array(x.PG) > 15),
+        axis=1
+    )
+    trial_data = trial_data.drop(columns=["PG"])
+    length = 15
+    print("Local_to_accidental length : ", length)
+    trajectory_point = _findTransitionPoint(is_local, is_accidental, length)
+    # trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
+    if len(trajectory_point) == 0:
+        return None
+    else:
+        trajectory_data = []
+        for trajectory_index, each in enumerate(trajectory_point):
+            for index in range(each[0], each[2] + 1):
+                each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
+                trajectory_data.append(each_step)
+    return trajectory_data
+
+
 def _extractTrialData(trial_data, transition_type):
     print("Transition types : ", transition_type)
     # Initialization
@@ -582,6 +646,7 @@ def _extractTrialData(trial_data, transition_type):
     trial_global_to_local = None
     trial_local_to_planned = None
     trial_local_to_suicide = None
+    trial_local_to_accidental = None
     # For every transtion type
     if "local_to_global" in transition_type:
         trial_local_to_global = _local2Global(trial_data)
@@ -595,7 +660,9 @@ def _extractTrialData(trial_data, transition_type):
         trial_local_to_evade = _local2Evade(trial_data)
     if "evade_to_local" in transition_type:
         trial_evade_to_local = _evade2Local(trial_data)
-    return trial_local_to_global, trial_local_to_evade, trial_global_to_local, trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local
+    if "local_to_accidental" in transition_type:
+        trial_local_to_accidental = _local2Accidental(trial_data)
+    return trial_local_to_global, trial_local_to_evade, trial_global_to_local, trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local, trial_local_to_accidental
 
 
 def extractTransitionData(transition_type, need_save = True):
@@ -606,6 +673,7 @@ def extractTransitionData(transition_type, need_save = True):
     local_to_planned = []
     local_to_suicide = []
     evade_to_local = []
+    local_to_accidental = []
     # Read data
     all_data, trial_name_list = _extractAllData()
     columns_values = np.append(all_data.columns.values, ["trajectory_index", "trajectory_shape"])
@@ -617,13 +685,15 @@ def extractTransitionData(transition_type, need_save = True):
     local2planned_trial_num = 0
     local2suicide_trial_num = 0
     evade2local_trial_num = 0
+    local2accidental_trial_num = 0
     for index, trial in enumerate(trial_name_list):
         print("-"*25)
         print("{}-th : ".format(index + 1), trial)
         trial_data = all_data[all_data.file == trial]
         trial_data = trial_data.reset_index(drop=True)
         (trial_local_to_global, trial_local_to_evade, trial_global_to_local,
-         trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local) = _extractTrialData(trial_data, transition_type)
+         trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local,
+         trial_local_to_accidental) = _extractTrialData(trial_data, transition_type)
         if trial_local_to_global is not None:
             if local2global_trial_num > 1000: #TODO:
                 pass
@@ -657,6 +727,12 @@ def extractTransitionData(transition_type, need_save = True):
             else:
                 evade_to_local.extend(copy.deepcopy(trial_evade_to_local))
                 evade2local_trial_num += 1
+        if trial_local_to_accidental is not None:
+            if local2accidental_trial_num > 1000: #TODO:
+                pass
+            else:
+                local_to_accidental.extend(copy.deepcopy(trial_local_to_accidental))
+                local2accidental_trial_num += 1
         print("-"*25)
     print("Finished extracting!")
     # Write data
@@ -666,6 +742,7 @@ def extractTransitionData(transition_type, need_save = True):
     print("Evade_to_local trial num : ", evade2local_trial_num)
     print("Local_to_planned trial num : ", local2planned_trial_num)
     print("Local_to_suicide trial num : ", local2suicide_trial_num)
+    print("Local_to_accidental trial num : ", local2accidental_trial_num)
     if need_save:
         if "transition" not in os.listdir():
             os.mkdir("transition")
@@ -711,9 +788,16 @@ def extractTransitionData(transition_type, need_save = True):
             print("Finished writing evade_to_local {}.".format(evade_to_local.shape[0]))
         else:
             print("No evade_to_local data!")
+        if len(local_to_accidental) > 0:
+            local_to_accidental = pd.DataFrame(data=local_to_accidental, columns=columns_values)
+            with open("transition/local_to_accidental.pkl", "wb") as file:
+                pickle.dump(local_to_accidental, file)
+            print("Finished writing local_to_accidental {}.".format(local_to_accidental.shape[0]))
+        else:
+            print("No local_to_accidental data!")
 
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["local_to_suicide"]
+    transition_type = ["local_to_accidental"]
     extractTransitionData(transition_type, need_save = True)

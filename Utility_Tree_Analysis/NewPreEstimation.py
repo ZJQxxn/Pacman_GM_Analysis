@@ -314,6 +314,7 @@ def preEstimation():
         # "../common_data/transition/evade_to_local.pkl",
         # "../common_data/transition/local_to_planned.pkl",
         # "../common_data/transition/local_to_suicide.pkl",
+        "../common_data/transition/local_to_accidental.pkl",
         # "../common_data/trial/500_trial_data.pkl",
         # "../common_data/single_trial/14-1-Patamon-14-Jun-data.pkl",
         # "../common_data/trial/100_trial_data_new.pkl",
@@ -322,7 +323,7 @@ def preEstimation():
         # "../common_data/trial/500_trial_data_Omega.pkl",
         # "../common_data/trial/50_trial_data_Omega.pkl",
         # "../common_data/trial/8000_trial_data_Omega.pkl",
-        "../common_data/trial/7000_trial_data_Patamon.pkl",
+        # "../common_data/trial/7000_trial_data_Patamon.pkl",
 
         # For suicide agents
         # "../common_data/trial/9-3-Omega-19-Aug-2019-1.pkl",

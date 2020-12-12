@@ -14,6 +14,24 @@ import pandas as pd
 import numpy as np
 import pickle
 import copy
+import sys
+sys.path.append("../Utility_Tree_Analysis")
+sys.path.append("../")
+
+from LabelAnalysis import _makeChoice, _handcraftLabeling
+from Plotting import _estimationVagueLabeling
+
+
+dir_list = ['left', 'right', 'up', 'down']
+
+label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+              "label_global_optimal", "label_global_notoptimal", "label_global",
+              "label_evade",
+              "label_suicide",
+              "label_true_accidental_hunting",
+              "label_true_planned_hunting"]
+
+all_agent_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
 
 
 def extractTrialData(trial_num = 10):
@@ -215,6 +233,99 @@ def _extractMultiTrial(trial_num = 100):
     print("Finished saving data.")
 
 
+def _multiAgentDir(weight, window_Q):
+    if weight is None or isinstance(weight, float):
+        return np.nan
+    weight = weight[:-1]
+    index = int(window_Q.shape[1] - 1 / 2)
+    Q_value = window_Q[:, index, :]
+    return dir_list[_makeChoice(weight @ Q_value)]
+
+
+def transferTrialData():
+    # For Omega
+    print("="*20, " Omega ", "="*20)
+    with open("./trial/8000_trial_data_Omega-with_Q-with_weight-window3-new_agents.pkl", "rb") as file:
+        data = pickle.load(file)
+    print("Finished reading data.")
+    omega_trials = []
+    trial_data = data.groupby("file")
+    count = 0
+    for each_trial in trial_data:
+        if count >= 200:
+            break
+        print("-"*40)
+        print("|{}| Trial Name : ".format(count+1), each_trial[0])
+        trial = each_trial[1]
+        true_dir = trial.next_pacman_dir_fill
+        global_dir = trial.global_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        local_dir = trial.local_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        evade_dir = trial.pessimistic_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        attack_dir = trial.planned_hunting_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        suicide_dir = trial.suicide_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        multi_agent_dir = trial[["weight", "window_Q"]].apply(lambda x: _multiAgentDir(x.weight, x.window_Q), axis = 1)
+        hand_crafted_label = trial[label_list].apply(lambda x : _handcraftLabeling(x), axis = 1)
+        fitted_label = trial.weight.apply(lambda x: _estimationVagueLabeling(x, all_agent_list) if not isinstance(x, float) else np.nan)
+        trial["true_dir"] = true_dir
+        trial["global_dir"] = global_dir
+        trial["local_dir"] = local_dir
+        trial["evade_dir"] = evade_dir
+        trial["attack_dir"] = attack_dir
+        trial["suicide_dir"] = suicide_dir
+        trial["multi_agent_dir"] = multi_agent_dir
+        trial["hand_crafted_label"] = hand_crafted_label
+        trial["fitted_label"] = fitted_label
+        omega_trials.append(copy.deepcopy(trial))
+        count += 1
+    print("Finished extracting Omega data.")
+    with open("./trial/200trial_Omega_videos.pkl", "wb") as file:
+        pickle.dump(omega_trials, file)
+    print("Finished saving Omega data.")
+    # For Patamon
+    print("\n")
+    print("=" * 20, " Patamon ", "=" * 20)
+    with open("./trial/7000_trial_data_Patamon-with_Q-with_weight-window3-new_agents.pkl", "rb") as file:
+        data = pickle.load(file)
+    print("Finished reading data.")
+    patamon_trials = []
+    trial_data = data.groupby("file")
+    count = 0
+    for each_trial in trial_data:
+        if count >= 200:
+            break
+        print("-" * 40)
+        print("|{}| Trial Name : ".format(count+1), each_trial[0])
+        trial = each_trial[1]
+        true_dir = trial.next_pacman_dir_fill
+        global_dir = trial.global_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        local_dir = trial.local_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        evade_dir = trial.pessimistic_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        attack_dir = trial.planned_hunting_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        suicide_dir = trial.suicide_Q.apply(lambda x: dir_list[_makeChoice(x)])
+        multi_agent_dir = trial[["weight", "window_Q"]].apply(lambda x: _multiAgentDir(x.weight, x.window_Q), axis=1)
+        hand_crafted_label = trial[label_list].apply(lambda x: _handcraftLabeling(x), axis=1)
+        fitted_label = trial.weight.apply(
+            lambda x: _estimationVagueLabeling(x, all_agent_list) if not isinstance(x, float) else np.nan)
+        trial["true_dir"] = true_dir
+        trial["global_dir"] = global_dir
+        trial["local_dir"] = local_dir
+        trial["evade_dir"] = evade_dir
+        trial["attack_dir"] = attack_dir
+        trial["suicide_dir"] = suicide_dir
+        trial["multi_agent_dir"] = multi_agent_dir
+        trial["hand_crafted_label"] = hand_crafted_label
+        trial["fitted_label"] = fitted_label
+        patamon_trials.append(copy.deepcopy(trial))
+        count += 1
+    print("Finished extracting Patamon data.")
+    with open("./trial/200trial_Patamon_videos.pkl", "wb") as file:
+        pickle.dump(patamon_trials, file)
+    print("Finished saving Patamon data.")
+
+
+
+
+
 if __name__ == '__main__':
     # Extract transition data
     # extractTrialData(trial_num = 500)
@@ -228,8 +339,22 @@ if __name__ == '__main__':
 
     # Extract monkey data
     # extractOmegaData(trial_num=8000)
-    extractPatamonData(trial_num=7000)
+    # extractPatamonData(trial_num=7000)
 
     # _extractOneTrial()
 
     # _extractMultiTrial(trial_num = 100)
+
+    # transferTrialData()
+    # with open("trial/200trial_Omega_videos.pkl", "rb") as file:
+    #     data = pickle.load(file)
+    #     print(len(data))
+    #     sample = data[0]
+    #     print()
+
+    # data_filename = "/home/qlyang/Documents/pacman/constants/all_data_new.pkl"
+    # with open(data_filename, "rb") as file:
+    #     data = pickle.load(file)
+    # print(data.keys())
+
+    pass
