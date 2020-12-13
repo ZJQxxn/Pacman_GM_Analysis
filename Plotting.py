@@ -1844,11 +1844,11 @@ if __name__ == '__main__':
 
         # ==================================================================================
         #                       For Experimental Results Visualization
-        "estimated_label_filename": "./common_data/{}/1000_trial_data_Omega-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "./common_data/{}/1000_trial_data_Omega-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_weight_filename": "./common_data/{}/1000_trial_data_Omega-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "./common_data/{}/1000_trial_data_Omega-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "./common_data/{}/1000_trial_data_Omega-with_Q-window3-w_intercept-matching_rate.npy",
+        "estimated_label_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-multi_labels.npy",
+        "handcrafted_label_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        "trial_weight_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-trial_weight.npy",
+        "trial_Q_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-Q.npy",
+        "trial_matching_rate_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-matching_rate.npy",
         # "trial_agent_name" : ["global", "local", "planned_hunting"],
         "trial_window": 3,
 
@@ -1894,16 +1894,16 @@ if __name__ == '__main__':
 
     # plotGlobalLocalAttackMatching(config)
     # plotLocalEvadeSuicideMatching(config)
-    # plotAllAgentMatching(config)
+    plotAllAgentMatching(config)
 
     # plotWeightVariation(config)
-    plotTestWeight()
+    # plotTestWeight()
 
     # plotBeanNumVSCr(config)
+    # plotStateComparison(config)
 
     # singleTrialMultiFitting(config)
 
-    # plotStateComparison(config)
 
     # Best trials:
     # "13-2-Patamon-10-Sep-2019-1.csv", "10-3-Omega-09-Jul-2019-1.csv", "10-2-Patamon-07-Jul-2019-1.csv",

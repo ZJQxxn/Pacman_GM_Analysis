@@ -2713,7 +2713,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/1000_trial_data_Omega-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/all_agent-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -2849,7 +2849,7 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config)
+    # movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
     # singleTrialAllFitting(config)
@@ -2859,7 +2859,7 @@ if __name__ == '__main__':
     # threeAgentAnalysis(config)
 
     # incrementalAnalysis(config)
-    # multiAgentAnalysis(config)
+    multiAgentAnalysis(config)
 
     # _extractDiffState()
     # diffStateAnalysis(config)

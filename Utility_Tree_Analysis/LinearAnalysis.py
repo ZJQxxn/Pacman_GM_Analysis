@@ -25,6 +25,12 @@ sys.path.append("./")
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from LabelAnalysis import readTrialData, negativeLikelihood, _makeChoice
 
+params = {
+    "pdf.fonttype": 42,
+    "font.sans-serif": "CMU Serif",
+    "font.family": "sans-serif",
+}
+plt.rcParams.update(params)
 
 dir_list = ['left', 'right', 'up', 'down']
 locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
@@ -625,6 +631,7 @@ def showResults():
     plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
     plt.xlim(0.3, 1.0)
     plt.ylabel("# of Trials", fontsize=20)
+    plt.yticks(fontsize = 20)
     plt.legend(frameon = False, fontsize = 20, ncol = 2)
     plt.show()
 
