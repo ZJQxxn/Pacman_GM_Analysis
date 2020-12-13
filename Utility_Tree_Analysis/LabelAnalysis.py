@@ -2681,7 +2681,7 @@ if __name__ == '__main__':
             agents = ["local", "global"]
         elif "local_to_evade" == type or "evade_to_local" == type:
             agents = ["local", "pessimistic"]
-        elif "local_to_planned" == type or "local_to_accidental" == type:
+        elif "local_to_planned" == type or "local_to_accidental" == type or "graze_to_hunt" == type:
             agents = ["local", "planned_hunting"]
         elif "local_to_suicide" == type:
             agents = ["local", "suicide"]
@@ -2849,7 +2849,7 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
     # singleTrialAllFitting(config)

@@ -138,12 +138,16 @@ def _extractAllData(trial_num = 20000):
     all_data_with_label = all_data_with_label.sort_index()
     accident_index = np.concatenate(data["cons_list_accident"])
     plan_index = np.concatenate(data["cons_list_plan"])
+    scared_plan_index = np.concatenate(data["map_indexes_plan"])
     is_accidental = np.zeros((all_data_with_label.shape[0],))
     is_accidental[accident_index] = 1
     is_planned = np.zeros((all_data_with_label.shape[0],))
     is_planned[plan_index] = 1
+    is_scared_plan = np.zeros((all_data_with_label.shape[0],))
+    is_scared_plan[scared_plan_index] = 1
     all_data_with_label["label_true_accidental_hunting"] = is_accidental
     all_data_with_label["label_true_planned_hunting"] = is_planned
+    all_data_with_label["label_scared_plan"] = is_scared_plan
     all_data_with_label = all_data_with_label.reset_index(drop=True)
     label_list = [
         "label_local_graze",
@@ -224,6 +228,10 @@ def _findDiscontinuePeriod(ls):
     ranges = np.where(absdiff == 1)[0].reshape(-1, 2)
     continue_period.extend(list(ranges[:,1] - ranges[:,0]))
     return continue_period
+
+
+def _findConinuePeriod(ls):
+    return np.split(ls, np.where(np.diff(ls) != 1)[0] + 1)
 
 
 def _findTransitionPoint(state1_indication, state2_indication, length):
@@ -334,6 +342,50 @@ def _findTransitionWOBreak(state1_indication, state2_indication, length):
                     each, # centering index
                     each + length + 1 # ending index
                 ])
+    return trajectories
+
+
+def _findScaredTransition(scared_plan, reward_num, length):
+    '''
+    scared_plan = [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0]
+    reward_num =  [5, 5, 5, 5, 4, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1]
+    length = 2
+    trajectories = _findScaredTransition(scared_plan, reward_num, length)
+    print(trajectories)
+    '''
+    scared_plan = np.array(scared_plan)
+    reward_num = np.array(reward_num)
+    scared_path = _findConinuePeriod(np.where(scared_plan == 1))
+    temp_scared_path = []
+    for each in scared_path:
+        if len(each) > 0:
+            temp_scared_path.append(each[0])
+    scared_path = temp_scared_path
+    if len(scared_path) == 0:
+        return []
+    reward_num_path = [reward_num[each] for each in scared_path]
+    trajectories = []
+    # Find transition point for every path
+    for index, path in enumerate(scared_path):
+        if len(path) < (2*length) + 1:
+            continue
+        reward = reward_num_path[index]
+        k = len(path)-1
+        cur_reward = reward[k]
+        while reward[k] == cur_reward and k >= 0:
+            k = k-1
+        if k == -1:
+            k = int(len(path) / 2)
+        if k == 0:
+            continue
+        elif k - length < 0 or k + 1 + length >= len(path):
+                continue
+        else:
+            trajectories.append([
+                k - length,  # starting index
+                k,  # centering index
+                k + length + 1  # ending index
+            ])
     return trajectories
 
 
@@ -605,27 +657,15 @@ def _local2Accidental(trial_data):
 
 
 def _scaredLocal2Hunt(trial_data):
-    #TODO: how to determine transition point
-    is_scared = trial_data[["ifscared1", "ifscared2"]].apply(
-        lambda x: x.ifscard1 > 3 and x.ifscared2 > 3,
-        axis=1
-    )
-    trial_data["is_scared"] = is_scared
+    scared_plan = trial_data.label_scared_plan
 
-    is_local = trial_data[["label_local_graze", "label_local_graze_noghost", "label_true_accidental_hunting",
-                           "label_global_ending"]].apply(
-        lambda x: (x.label_local_graze == 1 or x.label_local_graze_noghost == 1) and x.is_scared == 1,
+    reward_num = trial_data[["beans", "energizers", "fruitPos"]].apply(
+        lambda x: _rewardNum(x),
         axis=1
     )
-    is_accidental = trial_data[["label_true_accidental_hunting", "PG"]].apply(
-        lambda x: x.label_true_accidental_hunting == 1 and np.all(np.array(x.PG) > 15),
-        axis=1
-    )
-    trial_data = trial_data.drop(columns=["PG"])
-    length = 15
-    print("Local_to_accidental length : ", length)
-    trajectory_point = _findTransitionPoint(is_local, is_accidental, length)
-    # trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
+    length = 8
+    print("Scared Graze to Hunt length : ", length)
+    trajectory_point = _findScaredTransition(scared_plan, reward_num, length)
     if len(trajectory_point) == 0:
         return None
     else:
@@ -647,6 +687,7 @@ def _extractTrialData(trial_data, transition_type):
     trial_local_to_planned = None
     trial_local_to_suicide = None
     trial_local_to_accidental = None
+    trial_graze_to_hunt = None
     # For every transtion type
     if "local_to_global" in transition_type:
         trial_local_to_global = _local2Global(trial_data)
@@ -662,7 +703,10 @@ def _extractTrialData(trial_data, transition_type):
         trial_evade_to_local = _evade2Local(trial_data)
     if "local_to_accidental" in transition_type:
         trial_local_to_accidental = _local2Accidental(trial_data)
-    return trial_local_to_global, trial_local_to_evade, trial_global_to_local, trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local, trial_local_to_accidental
+    if "graze_to_hunt" in transition_type:
+        trial_graze_to_hunt = _scaredLocal2Hunt(trial_data)
+    return trial_local_to_global, trial_local_to_evade, trial_global_to_local, trial_local_to_planned, \
+           trial_local_to_suicide, trial_evade_to_local, trial_local_to_accidental, trial_graze_to_hunt
 
 
 def extractTransitionData(transition_type, need_save = True):
@@ -674,6 +718,7 @@ def extractTransitionData(transition_type, need_save = True):
     local_to_suicide = []
     evade_to_local = []
     local_to_accidental = []
+    graze_to_hunt = []
     # Read data
     all_data, trial_name_list = _extractAllData()
     columns_values = np.append(all_data.columns.values, ["trajectory_index", "trajectory_shape"])
@@ -686,6 +731,7 @@ def extractTransitionData(transition_type, need_save = True):
     local2suicide_trial_num = 0
     evade2local_trial_num = 0
     local2accidental_trial_num = 0
+    graze2hunt_trial_num = 0
     for index, trial in enumerate(trial_name_list):
         print("-"*25)
         print("{}-th : ".format(index + 1), trial)
@@ -693,7 +739,7 @@ def extractTransitionData(transition_type, need_save = True):
         trial_data = trial_data.reset_index(drop=True)
         (trial_local_to_global, trial_local_to_evade, trial_global_to_local,
          trial_local_to_planned, trial_local_to_suicide, trial_evade_to_local,
-         trial_local_to_accidental) = _extractTrialData(trial_data, transition_type)
+         trial_local_to_accidental, trial_graze_to_hunt) = _extractTrialData(trial_data, transition_type)
         if trial_local_to_global is not None:
             if local2global_trial_num > 1000: #TODO:
                 pass
@@ -733,6 +779,12 @@ def extractTransitionData(transition_type, need_save = True):
             else:
                 local_to_accidental.extend(copy.deepcopy(trial_local_to_accidental))
                 local2accidental_trial_num += 1
+        if trial_graze_to_hunt is not None:
+            if graze2hunt_trial_num > 1000: #TODO:
+                pass
+            else:
+                graze_to_hunt.extend(copy.deepcopy(trial_graze_to_hunt))
+                graze2hunt_trial_num += 1
         print("-"*25)
     print("Finished extracting!")
     # Write data
@@ -743,6 +795,8 @@ def extractTransitionData(transition_type, need_save = True):
     print("Local_to_planned trial num : ", local2planned_trial_num)
     print("Local_to_suicide trial num : ", local2suicide_trial_num)
     print("Local_to_accidental trial num : ", local2accidental_trial_num)
+    print("Graze_to_hunt trial num : ", graze2hunt_trial_num)
+
     if need_save:
         if "transition" not in os.listdir():
             os.mkdir("transition")
@@ -795,9 +849,19 @@ def extractTransitionData(transition_type, need_save = True):
             print("Finished writing local_to_accidental {}.".format(local_to_accidental.shape[0]))
         else:
             print("No local_to_accidental data!")
+        if len(graze_to_hunt) > 0:
+            graze_to_hunt = pd.DataFrame(data=graze_to_hunt, columns=columns_values)
+            with open("transition/graze_to_hunt.pkl", "wb") as file:
+                pickle.dump(graze_to_hunt, file)
+            print("Finished writing graze_to_hunt {}.".format(graze_to_hunt.shape[0]))
+        else:
+            print("No graze_to_hunt data!")
 
 
 if __name__ == '__main__':
     # Extract transition data
-    transition_type = ["local_to_accidental"]
+    transition_type = ["graze_to_hunt"]
     extractTransitionData(transition_type, need_save = True)
+
+    # res = _findConinuePeriod(np.where(np.array([0, 0, 0]) == 1))
+    # print()
