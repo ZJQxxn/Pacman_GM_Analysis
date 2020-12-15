@@ -211,11 +211,11 @@ def singleTrialMultiFitting(config):
     window = config["single_trial_window"]
     trial_data = readTrialData(config["single_trial_data_filename"])
     trial_num = len(trial_data)
-    # print("Num of trials : ", trial_num)
+    print("Num of trials : ", trial_num)
 
     trial_name_list = None
     all_trial_names = np.array([each[0] for each in trial_data])
-    trial_name_list = np.random.choice(all_trial_names, 10, replace = True)
+    trial_name_list = np.random.choice(all_trial_names, trial_num, replace = True)
     # trial_name_list = all_trial_names[np.where(np.array([each[1].shape[0] for each in trial_data]) == 80)]
 
     # trial_name_list = ["26-6-Omega-21-Aug-2019-1.csv"]
@@ -356,7 +356,7 @@ def singleTrialMultiFitting(config):
 
 
         estimated_label = [
-            _estimationVagueLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
+            _estimationThresholdLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
             for index in range(len(temp_contribution))
         ]
 
@@ -496,6 +496,30 @@ def _estimationVagueLabeling(contributions, all_agent_name):
     else:
         label = all_agent_name[np.argmax(contributions)]
         return [label]
+
+
+def _estimationThresholdLabeling(contributions, all_agent_name):
+    # global, local, pessimistic
+    labels = []
+    agent_name = ["global", "local"]
+    if np.any(contributions[:2] > 0):
+        labels.append(agent_name[np.argmax(contributions[:2])])
+    # Threshold for different labels
+    pess_threshold = 0.1
+    planned_threshold = 0.1
+    suicide_threshold = 0.1
+    if "pessimistic" in all_agent_name:
+        if contributions[all_agent_name.index("pessimistic")] > pess_threshold:
+            labels.append("pessimistic")
+    if "suicide" in all_agent_name:
+        if contributions[all_agent_name.index("suicide")] > suicide_threshold:
+            labels.append("suicide")
+    if "planned_hunting" in all_agent_name:
+        if contributions[all_agent_name.index("planned_hunting")] > planned_threshold:
+            labels.append("planned_hunting")
+    if len(labels) >= 2:
+        return ["vague"]
+    return labels
 
 
 def plotWeightVariation(config):
@@ -1835,7 +1859,7 @@ if __name__ == '__main__':
         "need_intercept" : True,
         "maximum_try": 5,
 
-        "single_trial_data_filename": "./common_data/trial/50_trial_data_Omega-with_Q.pkl",
+        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
@@ -1894,10 +1918,10 @@ if __name__ == '__main__':
 
     # plotGlobalLocalAttackMatching(config)
     # plotLocalEvadeSuicideMatching(config)
-    plotAllAgentMatching(config)
+    # plotAllAgentMatching(config)
 
     # plotWeightVariation(config)
-    # plotTestWeight()
+    plotTestWeight()
 
     # plotBeanNumVSCr(config)
     # plotStateComparison(config)

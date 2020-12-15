@@ -641,15 +641,17 @@ if __name__ == '__main__':
     config = {
         # "data_filename" : "../common_data/trial/500_trial_data_Omega-with_Q.pkl",
         # "data_filename": "../common_data/trial/5_trial-data_for_comparison-one_ghost-with_Q-with_weight.pkl",
-        "data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
+        "data_filename": "../common_data/trial/1000_trial_data_Omega-with_Q.pkl",
         "window" : 5,
         "trial_num" : None,
         "need_intercept" : True,
         # "analysis" : ["features-all", "features-local", "features_wrt_dir", "multi-agent"],
         "analysis": ["multi-agent"],
-        "agents" : ["local"]
+        "agents" : ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     }
 
-    # comparison(config)
+    comparison(config)
 
-    showResults()
+    config["data_filename"] = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
+    comparison(config)
+    # showResults()

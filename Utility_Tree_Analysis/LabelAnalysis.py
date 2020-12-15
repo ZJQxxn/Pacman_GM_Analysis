@@ -2849,7 +2849,7 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    # movingWindowAnalysis(config)
+    movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
     # singleTrialAllFitting(config)
@@ -2859,7 +2859,7 @@ if __name__ == '__main__':
     # threeAgentAnalysis(config)
 
     # incrementalAnalysis(config)
-    multiAgentAnalysis(config)
+    # multiAgentAnalysis(config)
 
     # _extractDiffState()
     # diffStateAnalysis(config)

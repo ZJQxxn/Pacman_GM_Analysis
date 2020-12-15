@@ -138,8 +138,14 @@ if __name__ == '__main__':
     # print(all_data.columns.values)
     # print(all_data.shape)
 
-    with open("contribution_zero.pkl", "rb") as file:
+    import pprint
+    with open("trial/50_trial_data_Omega-with_Q.pkl", "rb") as file:
         data = pickle.load(file)
-        print()
+    columns = data.columns.values
+    temp = []
+    for each in columns:
+        if "label" in each.split("_"):
+            temp.append(each)
+    pprint.pprint(temp)
 
 
