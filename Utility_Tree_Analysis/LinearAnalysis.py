@@ -604,26 +604,27 @@ def comparison(config):
         multiAgentAnalysis(config)
 
 
-def showResults():
-    perceptron_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-perceptron-features_all-cr.npy", allow_pickle=True)
-    perceptron_local_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-perceptron-features_local-cr.npy", allow_pickle=True)
-    perceptron_dir_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-perceptron-features_wrt_dir-cr.npy",allow_pickle=True)
-    multi_agent_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-agent-global_local_pessimistic_suicide_planned_hunting-cr.npy", allow_pickle=True)
-    local_cr = np.load("../common_data/LR_comparison/100_trial_data_Omega-with_Q-window5-agent-local-cr.npy", allow_pickle=True)
+def showResults(type):
+    perceptron_cr = np.load("../common_data/LR_comparison/1000_trial_data_{}-with_Q-window5-perceptron-features_all-cr.npy".format(type), allow_pickle=True)
+    perceptron_local_cr = np.load("../common_data/LR_comparison/1000_trial_data_{}-with_Q-window5-perceptron-features_local-cr.npy".format(type), allow_pickle=True)
+    perceptron_dir_cr = np.load("../common_data/LR_comparison/1000_trial_data_{}-with_Q-window5-perceptron-features_wrt_dir-cr.npy".format(type),allow_pickle=True)
+    multi_agent_cr = np.load("../common_data/LR_comparison/1000_trial_data_{}-with_Q-window5-agent-global_local_pessimistic_suicide_planned_hunting-cr.npy".format(type), allow_pickle=True)
+    local_cr = np.load("../common_data/LR_comparison/1000_trial_data_{}-with_Q-window5-agent-local-cr.npy".format(type), allow_pickle=True)
     perceptron_trial_cr = [np.nanmean(each) for each in perceptron_cr]
     perceptron_local_trial_cr = [np.nanmean(each) for each in perceptron_local_cr]
     perceptron_dir_trial_cr = [np.nanmean(each) for each in perceptron_dir_cr]
     multi_agent_trial_cr = [np.nanmean(each) for each in multi_agent_cr]
     local_trial_cr = [np.nanmean(each) for each in local_cr]
-    print("Perceptron (local) : ", np.mean(perceptron_local_trial_cr))
-    print("Perceptron (global) : ", np.mean(perceptron_trial_cr))
-    print("Perceptron (dir) : ", np.mean(perceptron_dir_trial_cr))
-    print("Multi-Agent : ", np.mean(multi_agent_trial_cr))
-    print("Multi-Agent (local) : ", np.mean(local_trial_cr))
+    print("Perceptron (local) : ", np.nanmean(perceptron_local_trial_cr))
+    print("Perceptron (global) : ", np.nanmean(perceptron_trial_cr))
+    print("Perceptron (dir) : ", np.nanmean(perceptron_dir_trial_cr))
+    print("Multi-Agent : ", np.nanmean(multi_agent_trial_cr))
+    print("Multi-Agent (local) : ", np.nanmean(local_trial_cr))
     cr = np.concatenate([[perceptron_local_trial_cr], [perceptron_trial_cr], [perceptron_dir_trial_cr], [local_trial_cr], [multi_agent_trial_cr]]).T
 
     from palettable.colorbrewer.diverging import RdBu_7
     color = RdBu_7.mpl_colors
+    plt.title(type, fontsize = 20)
     plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
              label = ["Perceptron (local)", "Perceptron (global)", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
              rwidth = 1.0, color=[color[-3], color[-2], color[-1], color[1], color[0]])
@@ -650,8 +651,8 @@ if __name__ == '__main__':
         "agents" : ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     }
 
-    comparison(config)
-
-    config["data_filename"] = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
-    comparison(config)
-    # showResults()
+    # comparison(config)
+    #
+    # config["data_filename"] = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
+    # comparison(config)
+    showResults("Patamon")

@@ -1921,7 +1921,7 @@ if __name__ == '__main__':
     # plotAllAgentMatching(config)
 
     # plotWeightVariation(config)
-    plotTestWeight()
+    # plotTestWeight()
 
     # plotBeanNumVSCr(config)
     # plotStateComparison(config)

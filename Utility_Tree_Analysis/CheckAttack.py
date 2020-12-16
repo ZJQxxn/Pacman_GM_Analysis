@@ -21,18 +21,27 @@ window = 3
 
 def _readData():
     contribution_filename = "../common_data/global-local-pessimistic-suicide-planned_hunting/1000_trial_data_Omega-with_Q-window3-w_intercept-contribution.npy"
+    # contribution_filename = "../common_data/global_local_pessimistic_suicide_planned_hunting/100_trial_data_Omega-with_Q-window3-w_intercept-contribution.npy"
     trial_filename = "../common_data/trial/1000_trial_data_Omega-with_Q.pkl"
     trial_contribution  =np.load(contribution_filename, allow_pickle=True)
     trial_data = readTrialData(trial_filename)
     return [(trial_data[index][0], trial_data[index][1], trial_contribution[index]) for index in range(len(trial_contribution))]
 
 
-def _eatIndex(energizers):
+def _eatEnergizerIndex(energizers):
     energizer_num = energizers.apply(lambda x : len(x) if not isinstance(x, float) else 0)
     energizer_diff = np.diff(energizer_num)
     eat_index = np.where(energizer_diff == -1)[0]-1
     return eat_index
 
+
+def _eatGhostIndex(ghost_status):
+    eat_index = []
+    for index in range(1, ghost_status.shape[0]):
+        if (ghost_status.ifscared1.values[index] == 3 and ghost_status.ifscared1.values[index-1] != 3) \
+            or (ghost_status.ifscared2.values[index] == 3 and ghost_status.ifscared2.values[index-1] != 3):
+            eat_index.append(index)
+    return eat_index
 
 def _preprocessData():
     data = _readData()
@@ -47,12 +56,17 @@ def _preprocessData():
         fitted_label.extend([np.nan for _ in range(window)])
         is_normal = trial_data[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 < 3 and x.ifscared2 < 3, axis = 1)
         temp_eat_index = np.zeros((length+2*window,), dtype=np.int)
-        eat_index = _eatIndex(trial_data.energizers)
+        eat_index = _eatEnergizerIndex(trial_data.energizers)
         temp_eat_index[eat_index] = 1
         eat_index = temp_eat_index
+        temp_ghost_index = np.zeros((length + 2 * window,), dtype=np.int)
+        eat_ghost_index = _eatGhostIndex(trial_data[["ifscared1", "ifscared2"]])
+        temp_ghost_index[eat_ghost_index] = 1
+        eat_ghost_index = temp_ghost_index
         trial_data["fitted_label"] = fitted_label
         trial_data["is_normal"] = is_normal
         trial_data["eat_index"] = eat_index
+        trial_data["eat_ghost_index"] = eat_ghost_index
         temp_contribution = [np.nan for _ in range(window)]
         temp_contribution.extend(trial_contribution)
         temp_contribution.extend([np.nan for _ in range(window)])
@@ -136,7 +150,7 @@ def computing():
     return all_matching_rate
 
 
-def pltWeight():
+def pltEnergizerWeight():
     data = _preprocessData()
     print("Finished reading and pre-processing.")
     all_planned_weight = []
@@ -169,7 +183,60 @@ def pltWeight():
             all_accidental_weight.append(accidental_weight)
     print("Finished getting weight")
     # save weight dynamics
-    np.save("weight_dynamic.npy", {"planned":all_planned_weight, "accidental":all_accidental_weight})
+    np.save("energizer_weight_dynamic.npy", {"planned":all_planned_weight, "accidental":all_accidental_weight})
+    print("Finished saving data")
+    # # plot agent weight
+    # all_accidental_weight = np.array(all_accidental_weight)
+    # all_planned_weight = np.array(all_planned_weight)
+    # plt.subplot(2, 1, 1)
+    # plt.title("Planned Hunting", fontsize = 20)
+    # plt.plot(np.nanmean(all_planned_weight[:, 1, :], axis = 0), label = "local")
+    # plt.plot(np.nanmean(all_planned_weight[:, 4, :], axis = 0), label = "attack")
+    # plt.ylim(0.0, 1.0)
+    # plt.legend(frameon = False, fontsize = 20)
+    # plt.subplot(2, 1, 2)
+    # plt.title("Accidental Hunting", fontsize=20)
+    # plt.plot(np.nanmean(all_accidental_weight[:, 1, :], axis=0), label="local")
+    # plt.plot(np.nanmean(all_accidental_weight[:, 4, :], axis=0), label="attack")
+    # plt.legend(frameon=False, fontsize=20)
+    # plt.ylim(0.0, 1.0)
+    # plt.show()
+
+
+def pltGhostWeight():
+    data = _preprocessData()
+    print("Finished reading and pre-processing.")
+    all_planned_weight = []
+    all_accidental_weight = []
+
+    for index, trial in enumerate(data):
+        print("|{}| Trial Name : {}".format(index + 1, trial.file[0]))
+        length = trial.shape[0]
+        planned_weight = np.zeros((5, 21))  # (local + attack agent, 20 step from energizer is eaten)
+        accidental_weight = np.zeros((5, 21))
+        planned_weight[planned_weight == 0] = np.nan
+        accidental_weight[accidental_weight == 0] = np.nan
+        eat_ghost_index = np.where(trial.eat_ghost_index == 1)[0]
+        if len(eat_ghost_index) == 0:
+            print("No ghost is eaten!")
+            continue
+        else:
+            for index in eat_ghost_index:
+                sub_data = trial.iloc[max(0, index-20):index+1]
+                sub_length = sub_data.shape[0]
+                if sub_data.label_true_planned_hunting.values[0] == 1:
+                    for i in range(0, sub_length):
+                        if not isinstance(sub_data.contribution.values[sub_length-1-i], float):
+                            planned_weight[:, 20-i] = sub_data.contribution.values[sub_length-1-i] / np.linalg.norm(sub_data.contribution.values[sub_length-1-i])
+                if sub_data.label_true_accidental_hunting.values[0] == 1:
+                    for i in range(0, sub_length):
+                        if not isinstance(sub_data.contribution.values[sub_length - 1 - i], float):
+                            accidental_weight[:, 20 - i] = sub_data.contribution.values[sub_length - 1 - i] / np.linalg.norm(sub_data.contribution.values[sub_length - 1 - i])
+            all_planned_weight.append(planned_weight)
+            all_accidental_weight.append(accidental_weight)
+    print("Finished getting weight")
+    # save weight dynamics
+    np.save("ghost_weight_dynamic.npy", {"planned":all_planned_weight, "accidental":all_accidental_weight})
     print("Finished saving data")
     # # plot agent weight
     # all_accidental_weight = np.array(all_accidental_weight)
@@ -200,14 +267,32 @@ def readAndPlot():
         "suicide": Balance_6.mpl_colors[2],
         "planned_hunting": colors[3]
     }
-    data = np.load("weight_dynamic.npy", allow_pickle=True).item()
+    data = np.load("energizer_weight_dynamic.npy", allow_pickle=True).item()
     # plot agent weight
     all_accidental_weight = np.array(data["accidental"])
     all_planned_weight = np.array(data["planned"])
+    plt.figure(figsize=(10,10))
     plt.subplot(1, 2, 1)
     plt.title("Planned Hunting", fontsize = 20)
     plt.plot(np.nanmean(all_planned_weight[:, 1, :], axis = 0), label = "local", color=agent_color["local"], ms = 3, lw = 5)
     plt.plot(np.nanmean(all_planned_weight[:, 4, :], axis = 0), label = "attack", color=agent_color["planned_hunting"], ms = 3, lw = 5)
+    # ses_weight = np.nanstd(all_planned_weight, axis  = 0)
+    # plt.fill_between(
+    #     np.arange(21),
+    #     np.nanmean(all_planned_weight[:, 1, :], axis = 0) - np.nanstd(all_planned_weight[:, 1, :], axis = 0),
+    #     np.nanmean(all_planned_weight[:, 1, :], axis = 0) + np.nanstd(all_planned_weight[:, 1, :], axis = 0),
+    #     color=agent_color["local"],
+    #     alpha=0.3,
+    #     linewidth=4
+    # )
+    # plt.fill_between(
+    #     np.arange(21),
+    #     np.nanmean(all_planned_weight[:, 4, :], axis=0) - np.nanstd(all_planned_weight[:, 4, :], axis=0),
+    #     np.nanmean(all_planned_weight[:, 4, :], axis=0) + np.nanstd(all_planned_weight[:, 4, :], axis=0),
+    #     color=agent_color["planned_hunting"],
+    #     alpha=0.3,
+    #     linewidth=4
+    # )
     plt.xticks([0, 5, 10, 15, 20], [0, 5, 10, 15, 20], fontsize = 20)
     plt.yticks(fontsize = 20)
     plt.ylabel("Agent Weight", fontsize = 20)
@@ -217,7 +302,49 @@ def readAndPlot():
     plt.title("Accidental Hunting", fontsize=20)
     plt.plot(np.nanmean(all_accidental_weight[:, 1, :], axis=0), label="local", color=agent_color["local"], ms = 3, lw = 5)
     plt.plot(np.nanmean(all_accidental_weight[:, 4, :], axis=0), label="attack", color=agent_color["planned_hunting"], ms = 3, lw = 5)
+    # plt.fill_between(
+    #     np.arange(21),
+    #     np.nanmean(all_accidental_weight[:, 1, :], axis=0) - np.nanstd(all_accidental_weight[:, 1, :], axis=0),
+    #     np.nanmean(all_accidental_weight[:, 1, :], axis=0) + np.nanstd(all_accidental_weight[:, 1, :], axis=0),
+    #     color=agent_color["local"],
+    #     alpha=0.3,
+    #     linewidth=4
+    # )
+    # plt.fill_between(
+    #     np.arange(21),
+    #     np.nanmean(all_accidental_weight[:, 4, :], axis=0) - np.nanstd(all_accidental_weight[:, 4, :], axis=0),
+    #     np.nanmean(all_accidental_weight[:, 4, :], axis=0) + np.nanstd(all_accidental_weight[:, 4, :], axis=0),
+    #     color=agent_color["planned_hunting"],
+    #     alpha=0.3,
+    #     linewidth=4
+    # )
     plt.xticks([0, 5, 10, 15, 20], [0, 5, 10, 15, 20], fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.legend(frameon=False, fontsize=20)
+    plt.ylim(0.0, 1.0)
+    plt.show()
+
+    data = np.load("ghost_weight_dynamic.npy", allow_pickle=True).item()
+    # plot agent weight
+    all_accidental_weight = np.array(data["accidental"])
+    all_planned_weight = np.array(data["planned"])
+    plt.figure(figsize=(10,10))
+    plt.subplot(1, 2, 1)
+    plt.title("Planned Hunting", fontsize=20)
+    plt.plot(np.nanmean(all_planned_weight[:, 1, :], axis=0), label="local", color=agent_color["local"], ms=3, lw=5)
+    plt.plot(np.nanmean(all_planned_weight[:, 4, :], axis=0), label="attack", color=agent_color["planned_hunting"],
+             ms=3, lw=5)
+    plt.xticks([0, 5, 10, 15, 20], [-20, -15, -10, -5, 0], fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylabel("Agent Weight", fontsize=20)
+    plt.ylim(0.0, 1.0)
+    plt.legend(frameon=False, fontsize=20)
+    plt.subplot(1, 2, 2)
+    plt.title("Accidental Hunting", fontsize=20)
+    plt.plot(np.nanmean(all_accidental_weight[:, 1, :], axis=0), label="local", color=agent_color["local"], ms=3, lw=5)
+    plt.plot(np.nanmean(all_accidental_weight[:, 4, :], axis=0), label="attack", color=agent_color["planned_hunting"],
+             ms=3, lw=5)
+    plt.xticks([0, 5, 10, 15, 20], [-20, -15, -10, -5, 0], fontsize=20)
     plt.yticks(fontsize=20)
     plt.legend(frameon=False, fontsize=20)
     plt.ylim(0.0, 1.0)
@@ -234,7 +361,8 @@ if __name__ == '__main__':
     # np.save("hunting_matching_rate.npy", matching_rate)
     # pprint.pprint(matching_rate)
 
-    # pltWeight()
+    # pltEnergizerWeight()
+    # pltGhostWeight()
     readAndPlot()
 
 
@@ -248,5 +376,5 @@ if __name__ == '__main__':
     # plt.ylabel("Time Cost (hours)", fontsize = 20)
     # plt.show()
 
-    # data =np.load("weight_dynamic.npy", allow_pickle=True)
+    # data =np.load("energizer_weight_dynamic.npy", allow_pickle=True)
     # print()
