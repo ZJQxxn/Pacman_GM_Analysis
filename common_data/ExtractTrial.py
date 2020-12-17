@@ -323,7 +323,54 @@ def transferTrialData():
     print("Finished saving Patamon data.")
 
 
+def extractPlannedTrial(trial_num = 100):
+    with open("trial/8000_trial_data_Omega-with_Q.pkl", "rb") as file:
+        data = pickle.load(file)
+    data = data.sort_index()
+    print("All data shape : ", data.shape)
+    trial_name_list = np.unique(data.file.values)
+    temp_trial_name_list = []
+    cnt = 0
+    for each in trial_name_list:
+        if cnt == 100:
+            break
+        if np.any(data[data.file == each].label_true_planned_hunting.values == 1):
+            temp_trial_name_list.append(each)
+            cnt += 1
+    trial_name_list = temp_trial_name_list
+    print("Planned hunting trial num:", len(trial_name_list))
+    is_need = data.file.apply(lambda x: x in trial_name_list)
+    trial_index = np.where(is_need == 1)
+    trial_data = data.iloc[trial_index].reset_index(drop = True)
+    print("{} trial data shape : ".format(trial_num), trial_data.shape)
+    with open("trial/new_{}_trial_data_Omega-with_Q.pkl".format(trial_num), "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving data.")
 
+
+def extractAccidentalTrial(trial_num = 100):
+    with open("trial/8000_trial_data_Omega-with_Q.pkl", "rb") as file:
+        data = pickle.load(file)
+    data = data.sort_index()
+    print("All data shape : ", data.shape)
+    trial_name_list = np.unique(data.file.values)
+    temp_trial_name_list = []
+    cnt = 0
+    for each in trial_name_list:
+        if cnt == 100:
+            break
+        if np.any(data[data.file == each].label_true_accidental_hunting.values == 1):
+            temp_trial_name_list.append(each)
+            cnt += 1
+    trial_name_list = temp_trial_name_list
+    print("Planned hunting trial num:", len(trial_name_list))
+    is_need = data.file.apply(lambda x: x in trial_name_list)
+    trial_index = np.where(is_need == 1)
+    trial_data = data.iloc[trial_index].reset_index(drop = True)
+    print("{} trial data shape : ".format(trial_num), trial_data.shape)
+    with open("trial/accidental_{}_trial_data_Omega-with_Q.pkl".format(trial_num), "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving data.")
 
 
 if __name__ == '__main__':
@@ -343,7 +390,7 @@ if __name__ == '__main__':
 
     # _extractOneTrial()
 
-    _extractMultiTrial(trial_num = 1000)
+    # _extractMultiTrial(trial_num = 1000)
 
     # transferTrialData()
     # with open("trial/200trial_Omega_videos.pkl", "rb") as file:
@@ -357,4 +404,6 @@ if __name__ == '__main__':
     #     data = pickle.load(file)
     # print(data.keys())
 
+    # extractPlannedTrial(trial_num=100)
+    extractAccidentalTrial(trial_num=100)
     pass

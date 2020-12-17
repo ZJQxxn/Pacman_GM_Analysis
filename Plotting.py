@@ -1908,7 +1908,9 @@ if __name__ == '__main__':
 
         # ------------------------------------------------------------------------------------
 
-        "bean_vs_cr_filename" : "./common_data/incremental/100trial-Omega-window3-incremental_cr-w_intercept.npy",
+        # "bean_vs_cr_filename" : "./common_data/incremental/100trial-Omega-window3-incremental_cr-w_intercept.npy",
+        "bean_vs_cr_filename": "./common_data/incremental/descriptive-window3-incremental_cr-w_intercept.npy",
+
     }
 
     # ============ VISUALIZATION =============
@@ -1923,7 +1925,7 @@ if __name__ == '__main__':
     # plotWeightVariation(config)
     # plotTestWeight()
 
-    # plotBeanNumVSCr(config)
+    plotBeanNumVSCr(config)
     # plotStateComparison(config)
 
     # singleTrialMultiFitting(config)

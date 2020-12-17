@@ -2729,7 +2729,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/accidental_100_trial_data_Omega-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis

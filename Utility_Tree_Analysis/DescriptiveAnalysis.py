@@ -599,6 +599,111 @@ def multiAgentAnalysis(config):
     np.save("../common_data/{}/descriptive_records.npy".format(dir_names), record)
 
 
+def incrementalAnalysis(config):
+    # Read trial data
+    # agent_name = config["incremental_data_filename"]
+    # agents_list = ["{}_Q".format(each) for each in agent_name]
+    print("=== Incremental Analysis ====")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    # Incremental analysis
+    incremental_agents_list = [
+        ["local"],
+        ["local", "pessimistic"],
+        ["local", "global"],
+        ["local", "pessimistic", "global"],
+        ["local", "pessimistic", "global", "planned_hunting"],
+        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+    ]
+    all_cr = []
+    for trial_index, each in enumerate(trial_data):
+        print("-"*15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("Trial name : ", trial_name)
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        trial_cr = []
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            agent_cr = []
+            for agent_name in incremental_agents_list:
+                # Construct optimizer
+                params = [0 for _ in range(len(agent_name))]
+                bounds = [[0, 10] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < 5:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                # correct rate in the window
+                _, estimated_prob = negativeLikelihood(
+                    res.x,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                agent_cr.append(correct_rate)
+            trial_cr.append([cur_step.file, cur_step.pacmanPos, cur_step.beans, agent_cr]) #TODO: save cur_step for later use
+            print(agent_cr)
+        print("Average correct rate for trial : ", np.nanmean([temp[-1] for temp in trial_cr]))
+        all_cr.append(trial_cr)
+    # save correct rate data
+    if "incremental" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/incremental")
+    np.save("../common_data/incremental/descriptive-window{}-incremental_cr-{}_intercept.npy".format(
+        window, "w" if config["need_intercept"] else "wo"), all_cr)
+
+
 # ===================================
 #         COMPARISON
 # ===================================
@@ -713,8 +818,466 @@ def plotComparison():
         # plt.show()
 
 
+def plotPlannedHunting():
+    from palettable.cmocean.diverging import Balance_6
+    from palettable.colorbrewer.diverging import RdBu_8, RdYlBu_5
+    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    data = readTrialData("../common_data/trial/new_100_trial_data_Omega-with_Q.pkl")
+    filename = [each[0] for each in data]
+    # del data
+    weight = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/new_100_trial_data_Omega-with_Q-window3-w_intercept-contribution.npy",
+        allow_pickle=True
+    )
+    hand_crafted_label = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/new_100_trial_data_Omega-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        allow_pickle=True
+    )
+    descriptive_weight = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/new_100_trial_data_Omega-with_Q-descriptive-window3-w_intercept-contribution.npy",
+        allow_pickle=True
+    )
+    trial_num = len(weight)
+    random_indices = list(range(trial_num))
+    np.random.shuffle(random_indices)
+    cnt = 1
+    for trial_index in random_indices:
+        print("|{}| Trial Name : {}".format(cnt, filename[trial_index]))
+        trial_data = data[trial_index][1]
+        cnt += 1
+        # Fin planned hunting trajectory
+        start_index = 0
+        end_index = trial_data.shape[0]
+        i = 0
+        while i < trial_data.shape[0]:
+            if trial_data.label_true_planned_hunting.values[i] == 1:
+                start_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            continue
+        while i < trial_data.shape[0]:
+            if trial_data.ifscared1.values[i] == 3 or trial_data.ifscared2.values[i] == 3 or (trial_data.ifscared1.values[i] < 3 and trial_data.ifscared1.values[i-1] > 3):
+                end_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            continue
+        end_index += 1
+        print("Star index : ", start_index)
+        print("End index : ", end_index)
+        # Hand-crafted label and normalize contribution
+        trial_weight = np.array(weight[trial_index])[start_index:end_index]
+        trial_hand_crafted = np.array(hand_crafted_label[trial_index])[start_index:end_index]
+        trial_descriptive_weight = np.array(descriptive_weight[trial_index])[start_index:end_index]
+        window = 3
+        # normalization
+        for index in range(trial_weight.shape[0]):
+            trial_weight[index, :] = trial_weight[index, :] / np.linalg.norm(trial_weight[index, :])
+            trial_descriptive_weight[index, :] = trial_descriptive_weight[index, :] / np.linalg.norm(
+                trial_descriptive_weight[index, :])
+        # Plot weight variation of this trial
+        colors = RdYlBu_5.mpl_colors
+        agent_color = {
+            "local": colors[0],
+            "pessimistic": colors[1],
+            "global": colors[-1],
+            "suicide": Balance_6.mpl_colors[2],
+            "planned_hunting": colors[3],
+            "vague": "black"
+        }
+        label_name = {
+            "local": "local",
+            "pessimistic": "evade",
+            "global": "global",
+            "suicide": "suicide",
+            "planned_hunting": "attack"
+        }
+
+        plt.figure(figsize=(18, 13))
+        plt.subplot(3, 1, 1)
+        # plt.title(trial_name, fontsize = 15)
+        for index in range(len(agent_name)):
+            plt.plot(trial_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                     label=label_name[agent_name[index]])
+        # for pessimistic agent
+        plt.ylabel("Normalized Agent Weight", fontsize=15)
+        plt.xlim(0, trial_weight.shape[0] - 1)
+        # plt.xlabel("Time Step", fontsize=20)
+        x_ticks_index = np.linspace(0, len(trial_hand_crafted), 5)
+        x_ticks = [start_index + window + int(each) for each in x_ticks_index]
+        plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-0.01, 1.02)
+        plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name), frameon=False, bbox_to_anchor=(0.5, 1.2))
+
+        # plt.figure(figsize=(13,5))
+        plt.subplot(3, 1, 2)
+        for i in range(len(trial_hand_crafted)):
+            if trial_hand_crafted[i] is not None:
+                seq = np.linspace(-0.05, 0.0, len(trial_hand_crafted[i]) + 1)
+                for j, h in enumerate(trial_hand_crafted[i]):
+                    plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+                # seq = np.linspace(-0.2, -0.1, len(estimated_label[i]) + 1)
+                # for j, h in enumerate(estimated_label[i]):
+                #     plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+        plt.xlim(0, trial_weight.shape[0])
+        plt.xticks([], [])
+        # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
+        # x_ticks = [window + int(each) for each in x_ticks_index]
+        # plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+        # plt.yticks([-0.05, -0.15], ["Rule-Based Label", "Fitted Label"], fontsize=10)
+        plt.yticks([-0.025], ["Rule-Based Label"], fontsize=15)
+        # plt.ylim(-0.05, 0.35)
+        # plt.axis('off')
+
+        plt.subplot(3, 1, 3)
+        plt.title("Descriptive Agents ({})".format(filename[trial_index]), fontsize=10)
+        for index in range(len(agent_name)):
+            plt.plot(trial_descriptive_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                     label=label_name[agent_name[index]])
+        # for pessimistic agent
+        plt.ylabel("Normalized Agent Weight", fontsize=15)
+        plt.xlim(0, trial_descriptive_weight.shape[0] - 1)
+        plt.xlabel("Time Step", fontsize=15)
+        x_ticks_index = np.linspace(0, len(trial_hand_crafted), 5)
+        x_ticks = [window + int(each) for each in x_ticks_index]
+        plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-0.01, 1.02)
+        # plt.legend(loc="upper center", fontsize=20, ncol=len(agent_name), frameon=False, bbox_to_anchor=(0.5, 1.2))
+        plt.savefig("../common_data/global_local_pessimistic_suicide_planned_hunting/planned/{}.jpg".format(filename[trial_index]))
+        # plt.show()
 
 
+def plotAccidentalHunting():
+    from palettable.cmocean.diverging import Balance_6
+    from palettable.colorbrewer.diverging import RdBu_8, RdYlBu_5
+    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    data = readTrialData("../common_data/trial/accidental_100_trial_data_Omega-with_Q.pkl")
+    filename = [each[0] for each in data]
+    # del data
+    weight = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/accidental_100_trial_data_Omega-with_Q-window3-w_intercept-contribution.npy",
+        allow_pickle=True
+    )
+    hand_crafted_label = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/accidental_100_trial_data_Omega-with_Q-window3-w_intercept-handcrafted_labels.npy",
+        allow_pickle=True
+    )
+    descriptive_weight = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/accidental_100_trial_data_Omega-with_Q-descriptive-window3-w_intercept-contribution.npy",
+        allow_pickle=True
+    )
+    trial_num = len(weight)
+    random_indices = list(range(trial_num))
+    np.random.shuffle(random_indices)
+    cnt = 1
+    for trial_index in random_indices:
+        print("|{}| Trial Name : {}".format(cnt, filename[trial_index]))
+        trial_data = data[trial_index][1]
+        cnt += 1
+        # Fin planned hunting trajectory
+        start_index = 0
+        end_index = trial_data.shape[0]
+        i = 0
+        while i < trial_data.shape[0]:
+            if trial_data.label_true_accidental_hunting.values[i] == 1:
+                start_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            continue
+        while i < trial_data.shape[0]:
+            if (trial_data.ifscared1.values[i] < 3 and trial_data.ifscared1.values[i-1] > 3):
+                end_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            continue
+        end_index += 1
+        print("Star index : ", start_index)
+        print("End index : ", end_index)
+        # Hand-crafted label and normalize contribution
+        trial_weight = np.array(weight[trial_index])[start_index:end_index]
+        trial_hand_crafted = np.array(hand_crafted_label[trial_index])[start_index:end_index]
+        trial_descriptive_weight = np.array(descriptive_weight[trial_index])[start_index:end_index]
+        window = 3
+        # normalization
+        for index in range(trial_weight.shape[0]):
+            trial_weight[index, :] = trial_weight[index, :] / np.linalg.norm(trial_weight[index, :])
+            trial_descriptive_weight[index, :] = trial_descriptive_weight[index, :] / np.linalg.norm(
+                trial_descriptive_weight[index, :])
+        # Plot weight variation of this trial
+        colors = RdYlBu_5.mpl_colors
+        agent_color = {
+            "local": colors[0],
+            "pessimistic": colors[1],
+            "global": colors[-1],
+            "suicide": Balance_6.mpl_colors[2],
+            "planned_hunting": colors[3],
+            "vague": "black"
+        }
+        label_name = {
+            "local": "local",
+            "pessimistic": "evade",
+            "global": "global",
+            "suicide": "suicide",
+            "planned_hunting": "attack"
+        }
+
+        plt.figure(figsize=(18, 13))
+        plt.subplot(3, 1, 1)
+        # plt.title(trial_name, fontsize = 15)
+        for index in range(len(agent_name)):
+            plt.plot(trial_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                     label=label_name[agent_name[index]])
+        # for pessimistic agent
+        plt.ylabel("Normalized Agent Weight", fontsize=15)
+        plt.xlim(0, trial_weight.shape[0] - 1)
+        # plt.xlabel("Time Step", fontsize=20)
+        x_ticks_index = np.linspace(0, len(trial_hand_crafted), 5)
+        x_ticks = [start_index + window + int(each) for each in x_ticks_index]
+        plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-0.01, 1.02)
+        plt.legend(loc="upper center", fontsize=15, ncol=len(agent_name), frameon=False, bbox_to_anchor=(0.5, 1.2))
+
+        # plt.figure(figsize=(13,5))
+        plt.subplot(3, 1, 2)
+        for i in range(len(trial_hand_crafted)):
+            if trial_hand_crafted[i] is not None:
+                seq = np.linspace(-0.05, 0.0, len(trial_hand_crafted[i]) + 1)
+                for j, h in enumerate(trial_hand_crafted[i]):
+                    plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+                # seq = np.linspace(-0.2, -0.1, len(estimated_label[i]) + 1)
+                # for j, h in enumerate(estimated_label[i]):
+                #     plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+        plt.xlim(0, trial_weight.shape[0])
+        plt.xticks([], [])
+        # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
+        # x_ticks = [window + int(each) for each in x_ticks_index]
+        # plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+        # plt.yticks([-0.05, -0.15], ["Rule-Based Label", "Fitted Label"], fontsize=10)
+        plt.yticks([-0.025], ["Rule-Based Label"], fontsize=15)
+        # plt.ylim(-0.05, 0.35)
+        # plt.axis('off')
+
+        plt.subplot(3, 1, 3)
+        plt.title("Descriptive Agents ({})".format(filename[trial_index]), fontsize=10)
+        for index in range(len(agent_name)):
+            plt.plot(trial_descriptive_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                     label=label_name[agent_name[index]])
+        # for pessimistic agent
+        plt.ylabel("Normalized Agent Weight", fontsize=15)
+        plt.xlim(0, trial_descriptive_weight.shape[0] - 1)
+        plt.xlabel("Time Step", fontsize=15)
+        x_ticks_index = np.linspace(0, len(trial_hand_crafted), 5)
+        x_ticks = [window + int(each) for each in x_ticks_index]
+        plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.ylim(-0.01, 1.02)
+        # plt.legend(loc="upper center", fontsize=20, ncol=len(agent_name), frameon=False, bbox_to_anchor=(0.5, 1.2))
+        plt.savefig("../common_data/global_local_pessimistic_suicide_planned_hunting/accidental/{}.jpg".format(filename[trial_index]))
+        # plt.show()
+
+
+def extractIndex():
+    # ================================================================================================
+    # Planned Data
+    planned_data = readTrialData("../common_data/trial/new_100_trial_data_Omega-with_Q.pkl")
+    # For detailed record
+    detailed_record = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/planned_detailed_records.npy",
+        allow_pickle=True
+    )
+    window = 3
+    temp_detailed_record = []
+    trial_num = len(planned_data)
+    for trial_index in range(trial_num):
+        trial_data = planned_data[trial_index][1]
+        trial_record = detailed_record[trial_index]
+        # Fin planned hunting trajectory
+        start_index = 0
+        end_index = trial_data.shape[0]
+        i = 0
+        while i < trial_data.shape[0]:
+            if trial_data.label_true_planned_hunting.values[i] == 1:
+                start_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 1 !!!!!")
+            continue
+        while i < trial_data.shape[0]:
+            if trial_data.ifscared1.values[i] == 3 or trial_data.ifscared2.values[i] == 3 or (
+                    trial_data.ifscared1.values[i] < 3 and trial_data.ifscared1.values[i - 1] > 3):
+                end_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 2 !!!!!")
+            continue
+        end_index += 1
+        print("Star index : ", start_index)
+        print("End index : ", end_index)
+        temp_detailed_record.append(
+            [
+                trial_data.iloc[0].file,
+                trial_record[0][start_index-window:end_index-window],
+                trial_record[1][start_index-window:end_index-window],
+                trial_record[2][start_index-window:end_index-window],
+                trial_record[3][start_index-window:end_index-window],
+                trial_record[4][start_index-window:end_index-window],
+                [start_index, end_index]
+            ]
+        )
+    np.save("../common_data/global_local_pessimistic_suicide_planned_hunting/sub_planned_detailed_records.npy", temp_detailed_record)
+    # For descriptive record
+    descriptive_record = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/planned_descriptive_records.npy",
+        allow_pickle=True
+    )
+    temp_descriptive_record = []
+    trial_num = len(planned_data)
+    for trial_index in range(trial_num):
+        trial_data = planned_data[trial_index][1]
+        trial_record = descriptive_record[trial_index]
+        # Fin planned hunting trajectory
+        start_index = 0
+        end_index = trial_data.shape[0]
+        i = 0
+        while i < trial_data.shape[0]:
+            if trial_data.label_true_planned_hunting.values[i] == 1:
+                start_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 1 !!!!!")
+            continue
+        while i < trial_data.shape[0]:
+            if trial_data.ifscared1.values[i] == 3 or trial_data.ifscared2.values[i] == 3 or (
+                    trial_data.ifscared1.values[i] < 3 and trial_data.ifscared1.values[i - 1] > 3):
+                end_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 2 !!!!!")
+            continue
+        end_index += 1
+        print("Star index : ", start_index)
+        print("End index : ", end_index)
+        temp_descriptive_record.append(
+            [
+                trial_data.iloc[0].file,
+                trial_record[0][start_index - window:end_index - window],
+                trial_record[1][start_index - window:end_index - window],
+                trial_record[2][start_index - window:end_index - window],
+                trial_record[3][start_index - window:end_index - window],
+                trial_record[4][start_index - window:end_index - window],
+                [start_index, end_index]
+            ]
+        )
+    np.save("../common_data/global_local_pessimistic_suicide_planned_hunting/sub_planned_descriptive_records.npy",
+            temp_descriptive_record)
+
+    # ================================================================================================
+    # Accidental Data
+    accidental_data = readTrialData("../common_data/trial/accidental_100_trial_data_Omega-with_Q.pkl")
+    # For detailed record
+    detailed_record = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/accidental_detailed_records.npy",
+        allow_pickle=True
+    )
+    window = 3
+    temp_detailed_record = []
+    trial_num = len(planned_data)
+    for trial_index in range(trial_num):
+        trial_data = accidental_data[trial_index][1]
+        trial_record = detailed_record[trial_index]
+        # Fin planned hunting trajectory
+        start_index = 0
+        end_index = trial_data.shape[0]
+        i = 0
+        while i < trial_data.shape[0]:
+            if trial_data.label_true_accidental_hunting.values[i] == 1:
+                start_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 1 !!!!!")
+            continue
+        while i < trial_data.shape[0]:
+            if (trial_data.ifscared1.values[i] < 3 and trial_data.ifscared1.values[i - 1] > 3):
+                end_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 2 !!!!!")
+            continue
+        end_index += 1
+        print("Star index : ", start_index)
+        print("End index : ", end_index)
+        temp_detailed_record.append(
+            [
+                trial_data.iloc[0].file,
+                trial_record[0][start_index - window:end_index - window],
+                trial_record[1][start_index - window:end_index - window],
+                trial_record[2][start_index - window:end_index - window],
+                trial_record[3][start_index - window:end_index - window],
+                trial_record[4][start_index - window:end_index - window],
+                [start_index, end_index]
+            ]
+        )
+    np.save("../common_data/global_local_pessimistic_suicide_planned_hunting/sub_accidental_detailed_records.npy",
+            temp_detailed_record)
+    # For descriptive record
+    descriptive_record = np.load(
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/accidental_descriptive_records.npy",
+        allow_pickle=True
+    )
+    window = 3
+    temp_descriptive_record = []
+    trial_num = len(accidental_data)
+    for trial_index in range(trial_num):
+        trial_data = accidental_data[trial_index][1]
+        trial_record = descriptive_record[trial_index]
+        # Fin planned hunting trajectory
+        start_index = 0
+        end_index = trial_data.shape[0]
+        i = 0
+        while i < trial_data.shape[0]:
+            if trial_data.label_true_accidental_hunting.values[i] == 1:
+                start_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 1 !!!!!")
+            continue
+        while i < trial_data.shape[0]:
+            if (trial_data.ifscared1.values[i] < 3 and trial_data.ifscared1.values[i - 1] > 3):
+                end_index = i
+                break
+            i += 1
+        if i == trial_data.shape[0]:
+            print("!!!!! IGNORE 2 !!!!!")
+            continue
+        end_index += 1
+        print("Star index : ", start_index)
+        print("End index : ", end_index)
+        temp_descriptive_record.append(
+            [
+                trial_data.iloc[0].file,
+                trial_record[0][start_index - window:end_index - window],
+                trial_record[1][start_index - window:end_index - window],
+                trial_record[2][start_index - window:end_index - window],
+                trial_record[3][start_index - window:end_index - window],
+                trial_record[4][start_index - window:end_index - window],
+                [start_index, end_index]
+            ]
+        )
+    np.save("../common_data/global_local_pessimistic_suicide_planned_hunting/sub_accidental_descriptive_records.npy",
+            temp_descriptive_record)
 
 
 
@@ -735,20 +1298,33 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q-descriptive.pkl",
+        "trial_data_filename": "../common_data/trial/new_100_trial_data_Omega-with_Q-descriptive.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
         "trial_window" : 3,
         "multi_agent_list" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
+        "incremental_window" : 3,
+        "incremental_data_filename" : "../common_data/trial/100_trial_data_Omega-with_Q-descriptive.pkl",
+        "incremental_num_trial" : None
+
     }
 
 
     # ============ MOVING WINDOW =============
 
     # multiAgentAnalysis(config)
-    plotComparison()
+    # plotComparison()
+    # plotPlannedHunting()
+    # plotAccidentalHunting()
+    # incrementalAnalysis(config)
 
     # data = np.load("../common_data/global_local_pessimistic_suicide_planned_hunting/detailed_records.npy", allow_pickle=True)
     # print()
+
+    # data = readTrialData("../common_data/trial/accidental_100_trial_data_Omega-with_Q.pkl")
+    # filename = [each[0] for each in data]
+    # np.save("../common_data/trial/accidental_trial_name.npy", filename)
+
+    # extractIndex()
