@@ -941,6 +941,14 @@ def _estimationLabeling(Q_value, agent_list):
     #     estimated_label.append(agent_list[indicies[-3]])
     return estimated_label
 
+def _estimationVagueLabeling(contributions, all_agent_name):
+    sorted_contributions = np.sort(contributions)[::-1]
+    if sorted_contributions[0] - sorted_contributions[1] < 0.2 :
+        return ["vague"]
+    else:
+        label = all_agent_name[np.argmax(contributions)]
+        return [label]
+
 
 def _estimationThreeLabeling(contributions):
     # global, local, pessimistic
@@ -1312,11 +1320,13 @@ def multiAgentAnalysis(config):
     handcrafted_labels = []
     trial_matching_rate = []
     all_estimated_label = []
+    record = []
     # agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     agent_name = config["multi_agent_list"]
     agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(each) for each in agent_name]
 
     for trial_index, each in enumerate(trial_data):
+        trial_record = []
         print("-"*15)
         trial_name = each[0]
         X = each[1]
@@ -1389,7 +1399,7 @@ def multiAgentAnalysis(config):
             contribution = temp_weight[centering_index, :-1] * [scaleOfNumber(each) for each in
                                 np.max(np.abs(temp_trial_Q[centering_index, :, agent_index, :]), axis=(1, 2))]
             temp_contribution.append(copy.deepcopy(contribution))
-            window_estimated_label.append(_estimationLabeling(contribution, agent_name))
+            window_estimated_label.append(_estimationVagueLabeling(contribution, agent_name))
             trial_estimated_label.append(copy.deepcopy(window_estimated_label))
         trial_contribution.append(copy.deepcopy(temp_contribution))
         matched_num = 0
@@ -1404,6 +1414,14 @@ def multiAgentAnalysis(config):
         trial_weight.append(copy.deepcopy(temp_weight))
         trial_Q.append(copy.deepcopy(temp_trial_Q))
         all_estimated_label.append(copy.deepcopy(trial_estimated_label))
+        # records
+        # records
+        trial_record.append(copy.deepcopy(temp_weight))
+        trial_record.append(copy.deepcopy(temp_contribution))
+        trial_record.append(copy.deepcopy(trial_estimated_label))
+        trial_record.append(copy.deepcopy(temp_handcrafted_label))
+        trial_record.append(copy.deepcopy(temp_trial_Q))
+        record.append(copy.deepcopy(trial_record))
 
     # Save data
     dir_names = "-".join(agent_name)
@@ -1422,10 +1440,8 @@ def multiAgentAnalysis(config):
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
     np.save("../common_data/{}/{}-window{}-{}_intercept-contribution.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
-    # Report
-    # print("Average matching rate : ", np.mean(trial_matching_rate))
-    # print("Min matching rate : ", np.min(trial_matching_rate))
-    # print("Max matching rate : ", np.max(trial_matching_rate))
+    # Save Records
+    np.save("../common_data/{}/detailed_records.npy".format(dir_names), record)
 
 
 def incrementalAnalysis(config):
@@ -2713,7 +2729,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/all_agent-with_Q.pkl",
+        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -2849,7 +2865,7 @@ if __name__ == '__main__':
 
 
     # ============ MOVING WINDOW =============
-    movingWindowAnalysis(config)
+    # movingWindowAnalysis(config)
 
     # singleTrialThreeFitting(config) # global, local, pessimistic
     # singleTrialAllFitting(config)
@@ -2859,7 +2875,7 @@ if __name__ == '__main__':
     # threeAgentAnalysis(config)
 
     # incrementalAnalysis(config)
-    # multiAgentAnalysis(config)
+    multiAgentAnalysis(config)
 
     # _extractDiffState()
     # diffStateAnalysis(config)
