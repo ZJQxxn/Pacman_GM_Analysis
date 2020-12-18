@@ -1115,9 +1115,9 @@ def extractIndex():
                 end_index = i
                 break
             i += 1
-        if i == trial_data.shape[0]:
-            print("!!!!! IGNORE 2 !!!!!")
-            continue
+        # if i == trial_data.shape[0]:
+        #     print("!!!!! IGNORE 2 !!!!!")
+        #     continue
         end_index += 1
         print("Star index : ", start_index)
         print("End index : ", end_index)
@@ -1161,9 +1161,9 @@ def extractIndex():
                 end_index = i
                 break
             i += 1
-        if i == trial_data.shape[0]:
-            print("!!!!! IGNORE 2 !!!!!")
-            continue
+        # if i == trial_data.shape[0]:
+        #     print("!!!!! IGNORE 2 !!!!!")
+        #     continue
         end_index += 1
         print("Star index : ", start_index)
         print("End index : ", end_index)
@@ -1212,9 +1212,9 @@ def extractIndex():
                 end_index = i
                 break
             i += 1
-        if i == trial_data.shape[0]:
-            print("!!!!! IGNORE 2 !!!!!")
-            continue
+        # if i == trial_data.shape[0]:
+        #     print("!!!!! IGNORE 2 !!!!!")
+        #     continue
         end_index += 1
         print("Star index : ", start_index)
         print("End index : ", end_index)
@@ -1259,9 +1259,9 @@ def extractIndex():
                 end_index = i
                 break
             i += 1
-        if i == trial_data.shape[0]:
-            print("!!!!! IGNORE 2 !!!!!")
-            continue
+        # if i == trial_data.shape[0]:
+        #     print("!!!!! IGNORE 2 !!!!!")
+        #     continue
         end_index += 1
         print("Star index : ", start_index)
         print("End index : ", end_index)
@@ -1327,4 +1327,7 @@ if __name__ == '__main__':
     # filename = [each[0] for each in data]
     # np.save("../common_data/trial/accidental_trial_name.npy", filename)
 
-    # extractIndex()
+    extractIndex()
+
+    # data = np.load("../common_data/global_local_pessimistic_suicide_planned_hunting/sub_planned_descriptive_records.npy", allow_pickle=True)
+    # print()
