@@ -363,7 +363,7 @@ def extractAccidentalTrial(trial_num = 100):
             temp_trial_name_list.append(each)
             cnt += 1
     trial_name_list = temp_trial_name_list
-    print("Planned hunting trial num:", len(trial_name_list))
+    print("Accidental hunting trial num:", len(trial_name_list))
     is_need = data.file.apply(lambda x: x in trial_name_list)
     trial_index = np.where(is_need == 1)
     trial_data = data.iloc[trial_index].reset_index(drop = True)
@@ -371,6 +371,83 @@ def extractAccidentalTrial(trial_num = 100):
     with open("trial/accidental_{}_trial_data_Omega-with_Q.pkl".format(trial_num), "wb") as file:
         pickle.dump(trial_data, file)
     print("Finished saving data.")
+
+
+def _isSuicide(label_suicide):
+    return np.all(label_suicide[-5:] == 1)
+
+
+def extractSuicideTrial(trial_num = 100):
+    with open("trial/8000_trial_data_Omega-with_Q.pkl", "rb") as file:
+        data = pickle.load(file)
+    data = data.sort_index()
+    print("All data shape : ", data.shape)
+    trial_name_list = np.unique(data.file.values)
+    temp_trial_name_list = []
+    cnt = 0
+    for each in trial_name_list:
+        if cnt == 100:
+            break
+        if _isSuicide(data[data.file == each].label_suicide):
+            temp_trial_name_list.append(each)
+            cnt += 1
+    trial_name_list = temp_trial_name_list
+    print("Suicide trial num:", len(trial_name_list))
+    is_need = data.file.apply(lambda x: x in trial_name_list)
+    trial_index = np.where(is_need == 1)
+    trial_data = data.iloc[trial_index].reset_index(drop = True)
+    print("{} trial data shape : ".format(trial_num), trial_data.shape)
+    with open("trial/suicide_{}_trial_data_Omega-with_Q.pkl".format(trial_num), "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving data.")
+
+
+def extractGlobalTrial(trial_num = 100):
+    with open("trial/8000_trial_data_Omega-with_Q.pkl", "rb") as file:
+        data = pickle.load(file)
+    data = data.sort_index()
+    print("All data shape : ", data.shape)
+    trial_name_list = np.unique(data.file.values)
+    temp_trial_name_list = []
+    cnt = 0
+    for each in trial_name_list:
+        if cnt == 100:
+            break
+        if np.any(data[data.file == each].label_global_optimal.values == 1):
+            temp_trial_name_list.append(each)
+            cnt += 1
+    trial_name_list = temp_trial_name_list
+    print("Global trial num:", len(trial_name_list))
+    is_need = data.file.apply(lambda x: x in trial_name_list)
+    trial_index = np.where(is_need == 1)
+    trial_data = data.iloc[trial_index].reset_index(drop = True)
+    print("{} trial data shape : ".format(trial_num), trial_data.shape)
+    with open("trial/global_{}_trial_data_Omega-with_Q.pkl".format(trial_num), "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving data.")
+
+
+def extractMultiTrial():
+    # Read data
+    data_filename = "./trial/new_100_trial_data_Omega.pkl"  # TODO: new data
+    with open(data_filename, "rb") as file:
+        data = pickle.load(file)
+    data = data.reset_index(drop = True)
+    trial_name = [
+        "1-1-Omega-12-Aug-2019-1.csv",
+        "1-1-Omega-31-Jul-2019-1.csv",
+        "1-2-Omega-19-Aug-2019-1.csv",
+        "10-1-Omega-13-Jun-2019-1.csv"
+    ]
+    is_need = data.file.apply(lambda x : x in trial_name)
+    need_index = np.where(is_need.values == 1)
+    trial_data = data.iloc[need_index]
+    trial_data = trial_data.reset_index(drop = True)
+    print(trial_data.shape)
+    print("Finished extracting trial data.")
+    with open("trial/test_planned_trial_data_Omega.pkl", "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving trial data.")
 
 
 if __name__ == '__main__':
@@ -405,5 +482,9 @@ if __name__ == '__main__':
     # print(data.keys())
 
     # extractPlannedTrial(trial_num=100)
-    extractAccidentalTrial(trial_num=100)
+    # extractAccidentalTrial(trial_num=100)
+    extractSuicideTrial(trial_num=100)
+    extractGlobalTrial(trial_num=100)
+
+    # extractMultiTrial()
     pass

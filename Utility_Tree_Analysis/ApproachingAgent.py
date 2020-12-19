@@ -173,6 +173,9 @@ class ApproachingAgent:
                 P_G_distance.append(0.0)
                 print("Lost path : {} to {}".format(self.cur_pos, each))
         P_G_distance = np.array(P_G_distance)
+        # When ghosts are normal, ignore yellow ghost
+        if self.ghost_status[1] < 3:
+            P_G_distance[1] = 100
         # Determine the suicide direction and escape direction
         if self.cur_pos != tuple(self.ghost_pos[0]) and self.cur_pos != tuple(self.ghost_pos[1]):
             # The suicide direction: relative direction to all the ghosts
@@ -245,15 +248,15 @@ if __name__ == '__main__':
     reward_amount = readRewardAmount()
     print("Finished reading auxiliary data!")
     # Suicide agent
-    cur_pos = (19, 22)
-    ghost_data = [(18, 15), (18, 9)]
+    cur_pos = (11, 12)
+    ghost_data = [(8, 9), (10, 20)]
     ghost_status = [1, 1]
     reward_pos = None
-    energizer_data = [(25, 30)]
-    bean_data = [(24, 30), (25, 30), (18, 24), (27, 12), (19, 24), (27, 10), (19, 23)]
+    energizer_data = None
+    bean_data = [(13,12)]
     reward_type = None
     fruit_pos = None
-    last_dir = "down"
+    last_dir = "right"
     agent = ApproachingAgent(
         adjacent_data, adjacent_path, locs_df, reward_amount,
         cur_pos,

@@ -15,10 +15,18 @@ import pandas as pd
 # with open("all_trial_data-window3-new_agents.pkl", "wb") as file:
 #     pickle.dump(all_data, file)
 
-with open("accidental_100_trial_data_Omega-with_Q.pkl", "rb") as file:
+with open("suicide_100_trial_data_Omega-with_Q.pkl", "rb") as file:
     data = pickle.load(file)
 print(data.columns.values)
 
 data = data.drop(columns = ["global_Q", "local_Q", "pessimistic_Q", "planned_hunting_Q", "suicide_Q"])
-with open("accidental_100_trial_data_Omega.pkl", "wb") as file:
+with open("suicide_100_trial_data_Omega.pkl", "wb") as file:
+    pickle.dump(data, file)
+
+with open("global_100_trial_data_Omega-with_Q.pkl", "rb") as file:
+    data = pickle.load(file)
+print(data.columns.values)
+
+data = data.drop(columns = ["global_Q", "local_Q", "pessimistic_Q", "planned_hunting_Q", "suicide_Q"])
+with open("global_100_trial_data_Omega.pkl", "wb") as file:
     pickle.dump(data, file)

@@ -97,7 +97,10 @@ class EnergizerAgent:
                 energizer_attractive_thr = self.energizer_attractive_thr
                 if P_E < energizer_attractive_thr:
                     R = self.reward_amount[2]
-                    temp_utility += R
+                    T = energizer_attractive_thr
+                    if P_E <= energizer_attractive_thr:
+                        temp_utility += (-R / T) * P_E + R
+                    # temp_utility += R
                 available_dir_utility.append(temp_utility)
             available_dir_utility = np.array(available_dir_utility)
             for index, each in enumerate(self.available_dir):
