@@ -74,7 +74,7 @@ def readRewardAmount():
     '''
     reward_amount = {
         1:2, # bean
-        2:4, # energizer
+        2:4, # energizer (default as 4)
         3:3, # cherry
         4:5, # strawberry
         5:8, # orange

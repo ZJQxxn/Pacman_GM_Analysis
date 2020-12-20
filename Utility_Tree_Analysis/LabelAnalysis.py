@@ -1441,7 +1441,21 @@ def multiAgentAnalysis(config):
     np.save("../common_data/{}/{}-window{}-{}_intercept-contribution.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
     # Save Records
-    np.save("../common_data/{}/detailed_records.npy".format(dir_names), record)
+    data_type = None
+    if "new" in config["trial_data_filename"]:
+        data_type = "planned"
+    elif "accidental" in config["trial_data_filename"]:
+        data_type = "accidental"
+    elif "suicide" in config["trial_data_filename"]:
+        data_type = "suicide"
+    elif "global" in config["trial_data_filename"]:
+        data_type = "global"
+    else:
+        data_type = None
+    if data_type is not None:
+        np.save("../common_data/{}/{}_detailed_records.npy".format(dir_names, data_type), record)
+    else:
+        np.save("../common_data/{}/records.npy".format(dir_names), record)
 
 
 def incrementalAnalysis(config):

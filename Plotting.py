@@ -51,8 +51,34 @@ from LabelAnalysis import _pessimisticProcesing, _plannedHuntingProcesing,_suici
 from LabelAnalysis import _PG, _PE, _ghostStatus, _energizerNum, _PR, _RR, _PGWODead
 
 
+# colors = RdYlBu_5.mpl_colors
+# agent_color = {
+#         "local" : colors[0],
+#         "pessimistic" : colors[1],
+#         "global" : colors[-1],
+#         "suicide" : Balance_6.mpl_colors[2],
+#         "planned_hunting" : colors[3]
+#     }
+
+agent_color = {
+        "local": "#D7181C",
+        "pessimistic": "#FDAE61",
+        "global": "#44B53C",
+        "suicide": "#836BB7",
+        "planned_hunting": "#81B3FF",
+        "vague": "black"
+    }
+label_name = {
+        "local": "local",
+        "pessimistic": "evade",
+        "global": "global",
+        "suicide": "suicide",
+        "planned_hunting": "attack"
+}
+
 
 dir_list = ['left', 'right', 'up', 'down']
+
 
 def oneHot(val):
     '''
@@ -360,23 +386,6 @@ def singleTrialMultiFitting(config):
             for index in range(len(temp_contribution))
         ]
 
-        # Plot weight variation of this trial
-        colors = RdYlBu_5.mpl_colors
-        agent_color = {
-            "local": colors[0],
-            "pessimistic": colors[1],
-            "global": colors[-1],
-            "suicide": Balance_6.mpl_colors[2],
-            "planned_hunting": colors[3],
-            "vague": "black"
-        }
-        label_name = {                                             
-            "local": "local",                                      
-            "pessimistic": "evade",                                
-            "global": "global",                                    
-            "suicide": "suicide",                                  
-            "planned_hunting": "attack"
-        }                                                          
         # normalization
         for index in range(temp_weight.shape[0]):
             temp_weight[index, :] = temp_weight[index, :] / np.linalg.norm(temp_weight[index, :])
@@ -526,21 +535,6 @@ def plotWeightVariation(config):
     # Determine agent names
     agent_list = config["agent_list"]
     all_agent_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
-    colors = RdYlBu_5.mpl_colors
-    agent_color = {
-        "local" : colors[0],
-        "pessimistic" : colors[1],
-        "global" : colors[-1],
-        "suicide" : Balance_6.mpl_colors[2],
-        "planned_hunting" : colors[3]
-    }
-    label_name = {
-        "local": "local",
-        "pessimistic": "evade",
-        "global": "global",
-        "suicide": "suicide",
-        "planned_hunting": "attack"
-    }
 
     # Read data
     # Weight shape : (num of trajectory, num of windows, num of used agents + intercept)
@@ -1672,9 +1666,16 @@ def plotBeanNumVSCr(config):
     # plotting
     x_ticks = ["local", "+global", "+evade", "+attack", "+suicide"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
-    colors = RdYlBu_5.mpl_colors
-    colors[2] = Balance_6.mpl_colors[2]
-    colors = [colors[0], colors[-1], colors[1], colors[3], colors[2]]
+    # colors = RdYlBu_5.mpl_colors
+    # colors[2] = Balance_6.mpl_colors[2]
+    # colors = [colors[0], colors[-1], colors[1], colors[3], colors[2]]
+    colors = [
+        agent_color["local"],
+        agent_color["global"],
+        agent_color["pessimistic"],
+        agent_color["planned_hunting"],
+        agent_color["suicide"]
+    ]
 
     plt.figure(figsize=(18, 5))
 
@@ -1922,10 +1923,10 @@ if __name__ == '__main__':
     # plotLocalEvadeSuicideMatching(config)
     # plotAllAgentMatching(config)
 
-    # plotWeightVariation(config)
+    plotWeightVariation(config)
     # plotTestWeight()
 
-    plotBeanNumVSCr(config)
+    # plotBeanNumVSCr(config)
     # plotStateComparison(config)
 
     # singleTrialMultiFitting(config)

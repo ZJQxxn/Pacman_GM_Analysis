@@ -429,23 +429,29 @@ def extractGlobalTrial(trial_num = 100):
 
 def extractMultiTrial():
     # Read data
-    data_filename = "./trial/new_100_trial_data_Omega.pkl"  # TODO: new data
+    data_filename = "./trial/suicide_100_trial_data_Omega.pkl"  # TODO: new data
     with open(data_filename, "rb") as file:
         data = pickle.load(file)
     data = data.reset_index(drop = True)
     trial_name = [
-        "1-1-Omega-12-Aug-2019-1.csv",
-        "1-1-Omega-31-Jul-2019-1.csv",
-        "1-2-Omega-19-Aug-2019-1.csv",
-        "10-1-Omega-13-Jun-2019-1.csv"
+        "1-1-Omega-03-Sep-2019-1.csv",
+        "1-1-Omega-19-Jun-2019-3.csv",
+        "1-2-Omega-05-Jul-2019-1.csv",
+        "1-3-Omega-31-Jul-2019-1.csv",
+        "1-3-Omega-09-Jul-2019-1.csv",
+        "1-3-Omega-04-Jun-2019-1.csv",
+        "1-3-Omega-16-Jun-2019-1.csv",
+        "1-3-Omega-25-Jun-2019-1.csv",
+        "1-3-Omega-28-Aug-2019-1.csv"
     ]
+
     is_need = data.file.apply(lambda x : x in trial_name)
     need_index = np.where(is_need.values == 1)
     trial_data = data.iloc[need_index]
     trial_data = trial_data.reset_index(drop = True)
     print(trial_data.shape)
     print("Finished extracting trial data.")
-    with open("trial/test_planned_trial_data_Omega.pkl", "wb") as file:
+    with open("trial/test_suicide_trial_data_Omega.pkl", "wb") as file:
         pickle.dump(trial_data, file)
     print("Finished saving trial data.")
 
@@ -483,8 +489,8 @@ if __name__ == '__main__':
 
     # extractPlannedTrial(trial_num=100)
     # extractAccidentalTrial(trial_num=100)
-    extractSuicideTrial(trial_num=100)
-    extractGlobalTrial(trial_num=100)
+    # extractSuicideTrial(trial_num=100)
+    # extractGlobalTrial(trial_num=100)
 
-    # extractMultiTrial()
+    extractMultiTrial()
     pass
