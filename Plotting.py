@@ -570,12 +570,26 @@ def plotWeightVariation(config):
     local2suicide_Q = np.load(config["local_to_suicide_Q"])
     local2suicide_Q = local2suicide_Q[:, :, :, [all_agent_list.index(each) for each in agent_list[5]], :]
 
+    local2accidental_weight = np.load(
+        "./common_data/transition/local_to_accidental-window1-agent_weight-w_intercept.npy")
+    local2accidental_cr = np.load("./common_data/transition/local_to_accidental-window1-cr-w_intercept.npy")
+    local2accidental_Q = np.load("./common_data/transition/local_to_accidental-window1-Q-w_intercept.npy")
+    local2accidental_Q = local2accidental_Q[:, :, :,
+                         [all_agent_list.index(each) for each in ["local", "planned_hunting"]], :]
+
+    graze2hunt_weight = np.load("./common_data/transition/graze_to_hunt-window1-agent_weight-w_intercept.npy")
+    graze2hunt_cr = np.load("./common_data/transition/graze_to_hunt-window1-cr-w_intercept.npy")
+    graze2hunt_Q = np.load("./common_data/transition/graze_to_hunt-window1-Q-w_intercept.npy")
+    graze2hunt_Q = graze2hunt_Q[:, :, :, [all_agent_list.index(each) for each in ["local", "planned_hunting"]], :]
+
     print("Local - Global : ", local2global_weight.shape[0])
     print("Global - Local : ", global2local_weight.shape[0])
     print("Local - Evade : ", local2evade_weight.shape[0])
     print("Evade - Local : ", evade2local_weight.shape[0])
     print("Local - Attack : ", local2planned_weight.shape[0])
     print("Local - Suicide : ", local2suicide_weight.shape[0])
+    print("Local - Accidental : ", local2accidental_weight.shape[0])
+    print("Graze - Hunt : ", graze2hunt_weight.shape[0])
 
     # Compute contributions: weight * Q value scale
     for i in range(local2global_weight.shape[0]):
@@ -608,6 +622,17 @@ def plotWeightVariation(config):
             local2suicide_weight[i, j, :-1] = local2suicide_weight[i, j, :-1] \
                                               * [scaleOfNumber(each) for each in
                                                  np.max(np.abs(local2suicide_Q[i, j, :, :, :]), axis=(0, 2))]
+    for i in range(local2accidental_weight.shape[0]):
+        for j in range(local2accidental_weight.shape[1]):
+            local2accidental_weight[i, j, :-1] = local2accidental_weight[i, j, :-1] \
+                                                 * [scaleOfNumber(each) for each in
+                                                    np.max(np.abs(local2accidental_Q[i, j, :, :, :]), axis=(0, 2))]
+
+    for i in range(graze2hunt_weight.shape[0]):
+        for j in range(graze2hunt_weight.shape[1]):
+            graze2hunt_weight[i, j, :-1] = graze2hunt_weight[i, j, :-1] \
+                                           * [scaleOfNumber(each) for each in
+                                              np.max(np.abs(graze2hunt_Q[i, j, :, :, :]), axis=(0, 2))]
 
     x_ticks = [int(each) for each in np.arange(0 - 4, 0, 1)]
     x_ticks.append("$\\mathbf{c}$")
@@ -616,7 +641,7 @@ def plotWeightVariation(config):
 
     plt.figure(figsize=(18, 19))
     # Plot weight variation
-    plt.subplot(2 ,3, 1)
+    plt.subplot(2 ,4, 1)
     agent_name = agent_list[0]
     plt.title("Local $\\rightarrow$ Global \n (avg cr = {avg:.3f})".format(avg = np.nanmean(local2global_cr)), fontsize = 20)
     avg_local2global_weight = np.nanmean(local2global_weight, axis = 0)
@@ -644,7 +669,7 @@ def plotWeightVariation(config):
     plt.ylim(0.0, 1.1)
     plt.legend(loc = "lower center", fontsize=15, ncol=2, frameon = False)
 
-    plt.subplot(2, 3, 4)
+    plt.subplot(2, 4, 5)
     agent_name = agent_list[2]
     plt.title("Global $\\rightarrow$ Local \n (avg cr = {avg:.3f})".format(avg = np.nanmean(global2local_cr)), fontsize = 20)
     avg_global2local_weight = np.nanmean(global2local_weight, axis=0)
@@ -674,7 +699,7 @@ def plotWeightVariation(config):
     plt.ylim(0.0, 1.1)
     plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
 
-    plt.subplot(2, 3, 2)
+    plt.subplot(2, 4, 2)
     agent_name = agent_list[1]
     plt.title("Local $\\rightarrow$ Evade \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2evade_cr)), fontsize=20)
     avg_local2evade_weight = np.nanmean(local2evade_weight, axis=0)
@@ -703,7 +728,7 @@ def plotWeightVariation(config):
     plt.ylim(0.0, 1.1)
     plt.legend(loc="lower center", fontsize=15, ncol=2, frameon = False)
 
-    plt.subplot(2, 3, 5)
+    plt.subplot(2, 4, 6)
     agent_name = agent_list[1]
     plt.title("Evade $\\rightarrow$ Local \n (avg cr = {avg:.3f})".format(avg=np.nanmean(evade2local_cr)), fontsize=20)
     avg_evade2local_weight = np.nanmean(evade2local_weight, axis=0)
@@ -732,7 +757,7 @@ def plotWeightVariation(config):
     plt.ylim(0.0, 1.1)
     plt.legend(loc="lower center", fontsize=15, ncol=2, frameon = False)
 
-    plt.subplot(2, 3, 3)
+    plt.subplot(2, 4, 3)
     agent_name = agent_list[4]
     plt.title("Local $\\rightarrow$ Attack \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2planned_cr)),
               fontsize=20)
@@ -768,7 +793,7 @@ def plotWeightVariation(config):
     plt.ylim(0.0, 1.1)
     plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
 
-    plt.subplot(2, 3, 6)
+    plt.subplot(2, 4, 4)
     agent_name = agent_list[5]
     plt.title("Local $\\rightarrow$ Suicide \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2suicide_cr)),
               fontsize=20)
@@ -805,19 +830,197 @@ def plotWeightVariation(config):
     plt.ylim(0.0, 1.1)
     plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
 
+    plt.subplot(2, 4, 7)
+    # Plot weight variation
+    agent_name = ["local", "planned_hunting"]
+    plt.title("Local $\\rightarrow$ Accidental \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2accidental_cr)),
+              fontsize=20)
+    avg_local2accidental_weight = np.nanmean(local2accidental_weight, axis=0)
+    # normalization
+    for index in range(avg_local2accidental_weight.shape[0]):
+        avg_local2accidental_weight[index, :-1] = avg_local2accidental_weight[index, :-1] / np.linalg.norm(
+            avg_local2accidental_weight[index, :-1])
+        local2accidental_weight[:, index, :-1] = local2accidental_weight[:, index, :-1] / np.linalg.norm(
+            local2accidental_weight[:, index, :-1])
+    sem_local2accidental_weight = np.std(local2accidental_weight, axis=0)
+    centering_index = (len(avg_local2accidental_weight) - 1) // 2
+    for index in range(len(agent_name)):
+        plt.plot(avg_local2accidental_weight[centering_index - 4: centering_index + 4 + 1, index],
+                 color=agent_color[agent_name[index]], ms=3, lw=5,
+                 label=label_name[agent_name[index]])
+        plt.fill_between(
+            np.arange(0, 9),
+            avg_local2accidental_weight[centering_index - 4: centering_index + 4 + 1, index] - sem_local2accidental_weight[centering_index - 4: centering_index + 4 + 1,index],
+            avg_local2accidental_weight[centering_index - 4: centering_index + 4 + 1, index] + sem_local2accidental_weight[
+                                                                                            centering_index - 4: centering_index + 4 + 1,
+                                                                                            index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
+    plt.xlim(0, 8)
+    plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+    plt.xlabel("Time Step", fontsize=15)
+    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [], fontsize=15)
+    plt.ylim(0.0, 1.1)
+    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
+
+    plt.subplot(2, 4, 8)
+    # Plot weight variation
+    agent_name = ["local", "planned_hunting"]
+    plt.title("Graze $\\rightarrow$ Hunt \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2accidental_cr)),
+              fontsize=20)
+    avg_graze2hunt_weight = np.nanmean(graze2hunt_weight, axis=0)
+    # normalization
+    for index in range(avg_graze2hunt_weight.shape[0]):
+        avg_graze2hunt_weight[index, :-1] = avg_graze2hunt_weight[index, :-1] / np.linalg.norm(
+            avg_graze2hunt_weight[index, :-1])
+        graze2hunt_weight[:, index, :-1] = graze2hunt_weight[:, index, :-1] / np.linalg.norm(
+            graze2hunt_weight[:, index, :-1])
+    # plt.plot(avg_graze2hunt_weight[:, 0], label="local", color=agent_color["local"], ms=3, lw=5)
+    # plt.plot(avg_graze2hunt_weight[:, 1], label="planned_hunting", color=agent_color["planned_hunting"], ms=3,
+    #          lw=5)
+    sem_graze2hunt_weight = np.std(graze2hunt_weight, axis=0)
+    centering_index = (len(avg_graze2hunt_weight) - 1) // 2
+    for index in range(len(agent_name)):
+        plt.plot(avg_graze2hunt_weight[centering_index - 4: centering_index + 4 + 1, index],
+                 color=agent_color[agent_name[index]], ms=3, lw=5,
+                 label=label_name[agent_name[index]])
+        plt.fill_between(
+            np.arange(0, 9),
+            avg_graze2hunt_weight[centering_index - 4: centering_index + 4 + 1,
+            index] - sem_graze2hunt_weight[centering_index - 4: centering_index + 4 + 1, index],
+            avg_graze2hunt_weight[centering_index - 4: centering_index + 4 + 1,
+            index] + sem_graze2hunt_weight[
+                     centering_index - 4: centering_index + 4 + 1,
+                     index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
+    plt.xlim(0, 8)
+    plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+    plt.xlabel("Time Step", fontsize=15)
+    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [], fontsize=15)
+    plt.ylim(0.0, 1.1)
+    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
+
     # plt.show()
     plt.savefig("./common_data/transition/transition_weight_dynamics.pdf")
 
-    #TODO: =========================================================================================
-    # centering_index += 5 # TODO: shift the centering
-    plt.clf()
-    agent_name = ["local", "planned_hunting"]
-    for index in range(len(agent_name)):
-        plt.plot(avg_local2suicide_weight[:,index],
-                 color=agent_color[agent_name[index]], ms=3, lw=5, label=label_name[agent_name[index]])
+    # #TODO: =========================================================================================
+    # # centering_index += 5 # TODO: shift the centering
+    # plt.clf()
+    # agent_name = ["local", "planned_hunting"]
+    # for index in range(len(agent_name)):
+    #     plt.plot(avg_local2suicide_weight[:,index],
+    #              color=agent_color[agent_name[index]], ms=3, lw=5, label=label_name[agent_name[index]])
+    #
+    # plt.xlabel("Time Step", fontsize=15)
+    # plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [],fontsize=15)
+    # plt.ylim(0.0, 1.1)
+    # plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
+    # plt.show()
 
+
+def plotTestWeight():
+    # Read data
+    all_agent_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    colors = RdYlBu_5.mpl_colors
+    agent_color = {
+        "local": colors[0],
+        "pessimistic": colors[1],
+        "global": colors[-1],
+        "suicide": Balance_6.mpl_colors[2],
+        "planned_hunting": colors[3]
+    }
+    label_name = {
+        "local": "local",
+        "pessimistic": "evade",
+        "global": "global",
+        "suicide": "suicide",
+        "planned_hunting": "attack"
+    }
+
+    # Weight shape : (num of trajectory, num of windows, num of used agents + intercept)
+    # Correct rate shape : (num of trajectory, num of windows)
+    # Q value shape : (num of trajectory, num of windows, whole window size, 5 agents, 4 directions)
+    local2accidental_weight = np.load("./common_data/transition/local_to_accidental-window1-agent_weight-w_intercept.npy")
+    local2accidental_cr = np.load("./common_data/transition/local_to_accidental-window1-cr-w_intercept.npy")
+    local2accidental_Q = np.load("./common_data/transition/local_to_accidental-window1-Q-w_intercept.npy")
+    local2accidental_Q = local2accidental_Q[:, :, :, [all_agent_list.index(each) for each in ["local", "planned_hunting"]], :]
+
+    graze2hunt_weight = np.load("./common_data/transition/graze_to_hunt-window1-agent_weight-w_intercept.npy")
+    graze2hunt_cr = np.load("./common_data/transition/graze_to_hunt-window1-cr-w_intercept.npy")
+    graze2hunt_Q = np.load("./common_data/transition/graze_to_hunt-window1-Q-w_intercept.npy")
+    graze2hunt_Q = graze2hunt_Q[:, :, :,[all_agent_list.index(each) for each in ["local", "planned_hunting"]], :]
+
+
+    print("Local - Accidental : ", local2accidental_weight.shape[0])
+    print("Graze - Hunt : ", graze2hunt_weight.shape[0])
+
+    # Compute contributions: weight * Q value scale
+    for i in range(local2accidental_weight.shape[0]):
+        for j in range(local2accidental_weight.shape[1]):
+            local2accidental_weight[i, j, :-1] = local2accidental_weight[i, j, :-1] \
+                                             * [scaleOfNumber(each) for each in
+                                                np.max(np.abs(local2accidental_Q[i, j, :, :, :]), axis=(0, 2))]
+
+    for i in range(graze2hunt_weight.shape[0]):
+        for j in range(graze2hunt_weight.shape[1]):
+            graze2hunt_weight[i, j, :-1] = graze2hunt_weight[i, j, :-1] \
+                                             * [scaleOfNumber(each) for each in
+                                                np.max(np.abs(graze2hunt_Q[i, j, :, :, :]), axis=(0, 2))]
+
+
+    x_ticks = [int(each) for each in np.arange(0 - 4, 0, 1)]
+    x_ticks.append("$\\mathbf{c}$")
+    x_ticks.extend([str(int(each)) for each in np.arange(1, 5, 1)])
+    x_ticks_index = np.arange(len(x_ticks))
+
+    plt.figure(figsize=(18, 19))
+    plt.subplot(1, 2, 1)
+    # Plot weight variation
+    agent_name = ["local", "planned_hunting"]
+    plt.title("Local $\\rightarrow$ Accidental \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2accidental_cr)),
+              fontsize=20)
+    avg_local2accidental_weight = np.nanmean(local2accidental_weight, axis=0)
+    # normalization
+    for index in range(avg_local2accidental_weight.shape[0]):
+        avg_local2accidental_weight[index, :-1] = avg_local2accidental_weight[index, :-1] / np.linalg.norm(
+            avg_local2accidental_weight[index, :-1])
+        local2accidental_weight[:, index, :-1] = local2accidental_weight[:, index, :-1] / np.linalg.norm(
+            local2accidental_weight[:, index, :-1])
+    plt.plot(avg_local2accidental_weight[:, 0], label="local", color=agent_color["local"], ms=3, lw=5)
+    plt.plot(avg_local2accidental_weight[:, 1], label="planned_hunting", color=agent_color["planned_hunting"], ms=3, lw=5)
+    plt.ylabel("Normalized Agent Weight", fontsize=20)
+    # plt.xlim(0, 8)
+    # plt.xticks(x_ticks_index, x_ticks, fontsize=15)
     plt.xlabel("Time Step", fontsize=15)
-    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0], [],fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.ylim(0.0, 1.1)
+    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
+
+    plt.subplot(1, 2, 2)
+    # Plot weight variation
+    agent_name = ["local", "planned_hunting"]
+    plt.title("Graze $\\rightarrow$ Hunt \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2accidental_cr)),
+              fontsize=20)
+    avg_graze2hunt_weight = np.nanmean(graze2hunt_weight, axis=0)
+    # normalization
+    for index in range(avg_graze2hunt_weight.shape[0]):
+        avg_graze2hunt_weight[index, :-1] = avg_graze2hunt_weight[index, :-1] / np.linalg.norm(
+            avg_graze2hunt_weight[index, :-1])
+        graze2hunt_weight[:, index, :-1] = graze2hunt_weight[:, index, :-1] / np.linalg.norm(
+            graze2hunt_weight[:, index, :-1])
+    plt.plot(avg_graze2hunt_weight[:, 0], label="local", color=agent_color["local"], ms=3, lw=5)
+    plt.plot(avg_graze2hunt_weight[:, 1], label="planned_hunting", color=agent_color["planned_hunting"], ms=3,
+             lw=5)
+    plt.ylabel("Normalized Agent Weight", fontsize=20)
+    # plt.xlim(0, 8)
+    # plt.xticks(x_ticks_index, x_ticks, fontsize=15)
+    plt.xlabel("Time Step", fontsize=15)
+    plt.yticks(fontsize=15)
     plt.ylim(0.0, 1.1)
     plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
     plt.show()
@@ -1634,7 +1837,7 @@ def plotAllAgentMatching(config):
 #     plt.show()
 
 
-def plotBeanNumVSCr(config):
+def plotIncremental(config):
     print("-"*15)
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["bean_vs_cr_filename"], allow_pickle = True)
@@ -1722,6 +1925,182 @@ def plotBeanNumVSCr(config):
     plt.show()
 
 
+def plotDecremental(config):
+    print("-"*15)
+    # trial name, pacman pos, beans, window cr for different agents
+    bean_vs_cr = np.load(config["decremental_filename"], allow_pickle = True)
+    bean_num = []
+    agent_cr = []
+    for i in bean_vs_cr:
+        for j in i:
+            bean_num.append(len(j[2]))
+            agent_cr.append(j[3])
+    # bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
+    # agent_cr  = [each[3] for each in bean_vs_cr]
+    max_bean_num = max(bean_num)
+    min_bean_num = min(bean_num)
+    print("Max bean num : ", max_bean_num)
+    print("Min bean num : ", min_bean_num)
+    agent_index = [1, 0, 2, 3, 4] # (local, glbal, pessimistic, suicide, planned hunting)
+    first_phase_agent_cr = [] # num of beans <= 10
+    second_phase_agent_cr = [] # 10 < num of beans < 80
+    third_phase_agent_cr = [] # num of beans > 80
+    # every bin
+    for index, each in enumerate(bean_num):
+        if each <= 10:
+            first_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+        elif 10 < each < 80:
+            second_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+        else:
+            third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+
+    # plotting
+    x_ticks = ["- local", "- global", "- evade", "- suicide", "- attack"]
+    x_index = np.arange(0, len(x_ticks) / 2, 0.5)
+    # colors = RdYlBu_5.mpl_colors
+    # colors[2] = Balance_6.mpl_colors[2]
+    # colors = [colors[0], colors[-1], colors[1], colors[3], colors[2]]
+    colors = [
+        agent_color["local"],
+        agent_color["global"],
+        agent_color["pessimistic"],
+        agent_color["suicide"],
+        agent_color["planned_hunting"]
+    ]
+
+    plt.figure(figsize=(18, 5))
+
+    plt.subplot(1, 3, 1)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Early Stage (Pellets >= 80)", fontsize=20)
+    avg_cr = np.mean(third_phase_agent_cr, axis=0)
+    var_cr = np.var(third_phase_agent_cr, axis=0)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec=colors[index], marker="o")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([0.6, 0.7, 0.8, 0.9, 1.0], [0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 15)
+    plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
+    plt.ylim(0.6, 1.0)
+
+    plt.subplot(1, 3, 2)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
+    avg_cr = np.mean(second_phase_agent_cr, axis=0)
+    var_cr = np.var(second_phase_agent_cr, axis=0)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec = colors[index], marker="o")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
+    plt.ylim(0.6, 1.0)
+
+    plt.subplot(1, 3, 3)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
+    avg_cr = np.mean(first_phase_agent_cr, axis=0)
+    var_cr = np.var(first_phase_agent_cr, axis=0)
+    # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec=colors[index], marker="o")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
+    plt.ylim(0.6, 1.0)
+    plt.show()
+
+
+def plotOneAgent(config):
+    print("-"*15)
+    # trial name, pacman pos, beans, window cr for different agents
+    bean_vs_cr = np.load(config["one_agent_filename"], allow_pickle = True)
+    bean_num = []
+    agent_cr = []
+    for i in bean_vs_cr:
+        for j in i:
+            bean_num.append(len(j[2]))
+            agent_cr.append(j[3])
+    # bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
+    # agent_cr  = [each[3] for each in bean_vs_cr]
+    max_bean_num = max(bean_num)
+    min_bean_num = min(bean_num)
+    print("Max bean num : ", max_bean_num)
+    print("Min bean num : ", min_bean_num)
+    agent_index = [1, 0, 2, 3, 4] # (global, local, pessimistic, suicide, planned hunting)
+    first_phase_agent_cr = [] # num of beans <= 10
+    second_phase_agent_cr = [] # 10 < num of beans < 80
+    third_phase_agent_cr = [] # num of beans > 80
+    # every bin
+    for index, each in enumerate(bean_num):
+        if each <= 10:
+            first_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+        elif 10 < each < 80:
+            second_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+        else:
+            third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+
+    # plotting
+    x_ticks = ["local", "global", "evade", "suicide", "attack"]
+    x_index = np.arange(0, len(x_ticks) / 2, 0.5)
+    # colors = RdYlBu_5.mpl_colors
+    # colors[2] = Balance_6.mpl_colors[2]
+    # colors = [colors[0], colors[-1], colors[1], colors[3], colors[2]]
+    colors = [
+        agent_color["local"],
+        agent_color["global"],
+        agent_color["pessimistic"],
+        agent_color["suicide"],
+        agent_color["planned_hunting"]
+    ]
+
+    plt.figure(figsize=(18, 5))
+
+    plt.subplot(1, 3, 1)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Early Stage (Pellets >= 80)", fontsize=20)
+    avg_cr = np.mean(third_phase_agent_cr, axis=0)
+    var_cr = np.var(third_phase_agent_cr, axis=0)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec=colors[index], marker="o")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
+    plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
+    plt.ylim(0.0, 1.0)
+
+    plt.subplot(1, 3, 2)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
+    avg_cr = np.mean(second_phase_agent_cr, axis=0)
+    var_cr = np.var(second_phase_agent_cr, axis=0)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec = colors[index], marker="o")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
+    plt.ylim(0.0, 1.0)
+
+    plt.subplot(1, 3, 3)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
+    avg_cr = np.mean(first_phase_agent_cr, axis=0)
+    var_cr = np.var(first_phase_agent_cr, axis=0)
+    # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec=colors[index], marker="o")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
+    plt.ylim(0.0, 1.0)
+    plt.show()
+
+
 def plotStateComparison(config):
     width = 0.4
     color = RdBu_8.mpl_colors
@@ -1746,107 +2125,6 @@ def plotStateComparison(config):
     plt.show()
 
 
-def plotTestWeight():
-    # Read data
-    all_agent_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
-    colors = RdYlBu_5.mpl_colors
-    agent_color = {
-        "local": colors[0],
-        "pessimistic": colors[1],
-        "global": colors[-1],
-        "suicide": Balance_6.mpl_colors[2],
-        "planned_hunting": colors[3]
-    }
-    label_name = {
-        "local": "local",
-        "pessimistic": "evade",
-        "global": "global",
-        "suicide": "suicide",
-        "planned_hunting": "attack"
-    }
-
-    # Weight shape : (num of trajectory, num of windows, num of used agents + intercept)
-    # Correct rate shape : (num of trajectory, num of windows)
-    # Q value shape : (num of trajectory, num of windows, whole window size, 5 agents, 4 directions)
-    local2accidental_weight = np.load("./common_data/transition/local_to_accidental-window1-agent_weight-w_intercept.npy")
-    local2accidental_cr = np.load("./common_data/transition/local_to_accidental-window1-cr-w_intercept.npy")
-    local2accidental_Q = np.load("./common_data/transition/local_to_accidental-window1-Q-w_intercept.npy")
-    local2accidental_Q = local2accidental_Q[:, :, :, [all_agent_list.index(each) for each in ["local", "planned_hunting"]], :]
-
-    graze2hunt_weight = np.load("./common_data/transition/graze_to_hunt-window1-agent_weight-w_intercept.npy")
-    graze2hunt_cr = np.load("./common_data/transition/graze_to_hunt-window1-cr-w_intercept.npy")
-    graze2hunt_Q = np.load("./common_data/transition/graze_to_hunt-window1-Q-w_intercept.npy")
-    graze2hunt_Q = graze2hunt_Q[:, :, :,[all_agent_list.index(each) for each in ["local", "planned_hunting"]], :]
-
-
-    print("Local - Accidental : ", local2accidental_weight.shape[0])
-    print("Graze - Hunt : ", graze2hunt_weight.shape[0])
-
-    # Compute contributions: weight * Q value scale
-    for i in range(local2accidental_weight.shape[0]):
-        for j in range(local2accidental_weight.shape[1]):
-            local2accidental_weight[i, j, :-1] = local2accidental_weight[i, j, :-1] \
-                                             * [scaleOfNumber(each) for each in
-                                                np.max(np.abs(local2accidental_Q[i, j, :, :, :]), axis=(0, 2))]
-
-    for i in range(graze2hunt_weight.shape[0]):
-        for j in range(graze2hunt_weight.shape[1]):
-            graze2hunt_weight[i, j, :-1] = graze2hunt_weight[i, j, :-1] \
-                                             * [scaleOfNumber(each) for each in
-                                                np.max(np.abs(graze2hunt_Q[i, j, :, :, :]), axis=(0, 2))]
-
-
-    x_ticks = [int(each) for each in np.arange(0 - 4, 0, 1)]
-    x_ticks.append("$\\mathbf{c}$")
-    x_ticks.extend([str(int(each)) for each in np.arange(1, 5, 1)])
-    x_ticks_index = np.arange(len(x_ticks))
-
-    plt.figure(figsize=(18, 19))
-    plt.subplot(1, 2, 1)
-    # Plot weight variation
-    agent_name = ["local", "planned_hunting"]
-    plt.title("Local $\\rightarrow$ Accidental \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2accidental_cr)),
-              fontsize=20)
-    avg_local2accidental_weight = np.nanmean(local2accidental_weight, axis=0)
-    # normalization
-    for index in range(avg_local2accidental_weight.shape[0]):
-        avg_local2accidental_weight[index, :-1] = avg_local2accidental_weight[index, :-1] / np.linalg.norm(
-            avg_local2accidental_weight[index, :-1])
-        local2accidental_weight[:, index, :-1] = local2accidental_weight[:, index, :-1] / np.linalg.norm(
-            local2accidental_weight[:, index, :-1])
-    plt.plot(avg_local2accidental_weight[:, 0], label="local", color=agent_color["local"], ms=3, lw=5)
-    plt.plot(avg_local2accidental_weight[:, 1], label="planned_hunting", color=agent_color["planned_hunting"], ms=3, lw=5)
-    plt.ylabel("Normalized Agent Weight", fontsize=20)
-    # plt.xlim(0, 8)
-    # plt.xticks(x_ticks_index, x_ticks, fontsize=15)
-    plt.xlabel("Time Step", fontsize=15)
-    plt.yticks(fontsize=15)
-    plt.ylim(0.0, 1.1)
-    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
-
-    plt.subplot(1, 2, 2)
-    # Plot weight variation
-    agent_name = ["local", "planned_hunting"]
-    plt.title("Graze $\\rightarrow$ Hunt \n (avg cr = {avg:.3f})".format(avg=np.nanmean(local2accidental_cr)),
-              fontsize=20)
-    avg_graze2hunt_weight = np.nanmean(graze2hunt_weight, axis=0)
-    # normalization
-    for index in range(avg_graze2hunt_weight.shape[0]):
-        avg_graze2hunt_weight[index, :-1] = avg_graze2hunt_weight[index, :-1] / np.linalg.norm(
-            avg_graze2hunt_weight[index, :-1])
-        graze2hunt_weight[:, index, :-1] = graze2hunt_weight[:, index, :-1] / np.linalg.norm(
-            graze2hunt_weight[:, index, :-1])
-    plt.plot(avg_graze2hunt_weight[:, 0], label="local", color=agent_color["local"], ms=3, lw=5)
-    plt.plot(avg_graze2hunt_weight[:, 1], label="planned_hunting", color=agent_color["planned_hunting"], ms=3,
-             lw=5)
-    plt.ylabel("Normalized Agent Weight", fontsize=20)
-    # plt.xlim(0, 8)
-    # plt.xticks(x_ticks_index, x_ticks, fontsize=15)
-    plt.xlabel("Time Step", fontsize=15)
-    plt.yticks(fontsize=15)
-    plt.ylim(0.0, 1.1)
-    plt.legend(loc="lower center", fontsize=15, ncol=2, frameon=False)
-    plt.show()
 
 
 if __name__ == '__main__':
@@ -1911,6 +2189,8 @@ if __name__ == '__main__':
 
         # "bean_vs_cr_filename" : "./common_data/incremental/100trial-Omega-window3-incremental_cr-w_intercept.npy",
         "bean_vs_cr_filename": "./common_data/incremental/descriptive-window3-incremental_cr-w_intercept.npy",
+        "one_agent_filename": "./common_data/one_agent/100trial-window3-incremental_cr-w_intercept.npy",
+        "decremental_filename": "./common_data/decremental/100trial-window3-incremental_cr-w_intercept.npy",
 
     }
 
@@ -1926,7 +2206,9 @@ if __name__ == '__main__':
     plotWeightVariation(config)
     # plotTestWeight()
 
-    # plotBeanNumVSCr(config)
+    # plotIncremental(config)
+    # plotOneAgent(config)
+    # plotDecremental(config)
     # plotStateComparison(config)
 
     # singleTrialMultiFitting(config)

@@ -1563,6 +1563,215 @@ def incrementalAnalysis(config):
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
+def decrementalAnalysis(config):
+    # Read trial data
+    # agent_name = config["incremental_data_filename"]
+    # agents_list = ["{}_Q".format(each) for each in agent_name]
+    print("=== Decremental Analysis ====")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    # Decremental analysis
+    incremental_agents_list = [
+        ["local", "pessimistic", "suicide", "planned_hunting"],
+        ["global", "pessimistic", "suicide", "planned_hunting"],
+        ["global", "local", "suicide", "planned_hunting"],
+        ["global", "local", "pessimistic", "planned_hunting"],
+        ["global", "local", "pessimistic", "suicide"],
+        ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    ]
+    all_cr = []
+    for trial_index, each in enumerate(trial_data):
+        print("-"*15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("Trial name : ", trial_name)
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        trial_cr = []
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            agent_cr = []
+            for agent_name in incremental_agents_list:
+                # Construct optimizer
+                params = [0 for _ in range(len(agent_name))]
+                bounds = [[0, 10] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < config["maximum_try"]:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                # correct rate in the window
+                _, estimated_prob = negativeLikelihood(
+                    res.x,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                agent_cr.append(correct_rate)
+            trial_cr.append([cur_step.file, cur_step.pacmanPos, cur_step.beans, agent_cr]) #TODO: save cur_step for later use
+            print(agent_cr)
+        print("Average correct rate for trial : ", np.nanmean([temp[-1] for temp in trial_cr]))
+        all_cr.append(trial_cr)
+    # save correct rate data
+    if "decremental" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/decremental")
+    np.save("../common_data/decremental/{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+        config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
+
+
+def oneAgentAnalysis(config):
+    # Read trial data
+    # agent_name = config["incremental_data_filename"]
+    # agents_list = ["{}_Q".format(each) for each in agent_name]
+    print("=== One Agent Analysis ====")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    # Incremental analysis
+    incremental_agents_list = [
+        ["global"],
+        ["local"],
+        ["pessimistic"],
+        ["suicide"],
+        ["planned_hunting"]
+    ]
+    all_cr = []
+    for trial_index, each in enumerate(trial_data):
+        print("-"*15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("Trial name : ", trial_name)
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        trial_cr = []
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            agent_cr = []
+            for agent_name in incremental_agents_list:
+                # Construct optimizer
+                params = [0 for _ in range(len(agent_name))]
+                bounds = [[0, 10] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < config["maximum_try"]:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                # correct rate in the window
+                _, estimated_prob = negativeLikelihood(
+                    res.x,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                agent_cr.append(correct_rate)
+            trial_cr.append([cur_step.file, cur_step.pacmanPos, cur_step.beans, agent_cr]) #TODO: save cur_step for later use
+            print(agent_cr)
+        print("Average correct rate for trial : ", np.nanmean([temp[-1] for temp in trial_cr]))
+        all_cr.append(trial_cr)
+    # save correct rate data
+    if "one_agent" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/one_agent")
+    np.save("../common_data/one_agent/{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+        config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
+
+
 def singleTrialThreeFitting(config):
     # Read trial data
     agent_name = config["single_trial_agents"]
@@ -2889,7 +3098,10 @@ if __name__ == '__main__':
     # threeAgentAnalysis(config)
 
     # incrementalAnalysis(config)
-    multiAgentAnalysis(config)
+    # decrementalAnalysis(config)
+    # oneAgentAnalysis(config)
+
+    # multiAgentAnalysis(config)
 
     # _extractDiffState()
     # diffStateAnalysis(config)

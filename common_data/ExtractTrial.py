@@ -374,7 +374,7 @@ def extractAccidentalTrial(trial_num = 100):
 
 
 def _isSuicide(label_suicide):
-    return np.all(label_suicide[-5:] == 1)
+    return np.all(label_suicide[-10:] == 1)
 
 
 def extractSuicideTrial(trial_num = 100):
@@ -489,8 +489,8 @@ if __name__ == '__main__':
 
     # extractPlannedTrial(trial_num=100)
     # extractAccidentalTrial(trial_num=100)
-    # extractSuicideTrial(trial_num=100)
+    extractSuicideTrial(trial_num=100)
     # extractGlobalTrial(trial_num=100)
 
-    extractMultiTrial()
+    # extractMultiTrial()
     pass

@@ -261,12 +261,14 @@ def readAndPlot():
     from palettable.colorbrewer.diverging import RdYlBu_5
     colors = RdYlBu_5.mpl_colors
     agent_color = {
-        "local": colors[0],
-        "pessimistic": colors[1],
-        "global": colors[-1],
-        "suicide": Balance_6.mpl_colors[2],
-        "planned_hunting": colors[3]
+        "local": "#D7181C",
+        "pessimistic": "#FDAE61",
+        "global": "#44B53C",
+        "suicide": "#836BB7",
+        "planned_hunting": "#81B3FF",
+        "vague": "black"
     }
+
     data = np.load("energizer_weight_dynamic.npy", allow_pickle=True).item()
     # plot agent weight
     all_accidental_weight = np.array(data["accidental"])

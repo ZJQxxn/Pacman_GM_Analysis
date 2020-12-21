@@ -23,6 +23,7 @@ import sys
 sys.path.append("./")
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from PathTreeAgent import PathTree
+# from NewPathTreeAgent import PathTree
 from ApproachingAgent import ApproachingAgent
 from EnergizerAgent import EnergizerAgent
 
@@ -328,7 +329,7 @@ def preEstimation():
         # "../common_data/trial/new_100_trial_data_Omega.pkl",
         # "../common_data/trial/accidental_100_trial_data_Omega.pkl",
         # "../common_data/trial/test_planned_trial_data_Omega.pkl",
-        "../common_data/trial/test_suicide_trial_data_Omega.pkl",
+        # "../common_data/trial/test_suicide_trial_data_Omega.pkl",
         # "../common_data/trial/suicide_100_trial_data_Omega.pkl",
         # "../common_data/trial/global_100_trial_data_Omega.pkl",
 

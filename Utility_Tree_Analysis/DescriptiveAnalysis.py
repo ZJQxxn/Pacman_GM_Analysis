@@ -2402,8 +2402,9 @@ def _suicideIndex(label_suicide):
     suicide_start = np.where(np.diff(label_suicide) == 1)[0] + 1
     temp_suicide_start = []
     for each in suicide_start:
-        if length - each <= 20 :
-            temp_suicide_start.append(each)
+        # if length - each <= 20 :
+        if np.all(label_suicide[each:min(length, each+10)]==1):
+            temp_suicide_start.append(min(length, each+10))
     return temp_suicide_start
 
 
