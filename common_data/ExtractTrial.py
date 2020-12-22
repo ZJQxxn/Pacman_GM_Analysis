@@ -217,7 +217,7 @@ def _extractOneTrial():
 
 
 def _extractMultiTrial(trial_num = 100):
-    with open("trial/7000_trial_data_Patamon-with_Q.pkl", "rb") as file:
+    with open("trial/7000_trial_data_Patamon-with_Q-descriptive-with_weight-window3-new_agents.pkl", "rb") as file:
         data = pickle.load(file)
     data = data.sort_index()
     print("All data shape : ", data.shape)
@@ -228,7 +228,7 @@ def _extractMultiTrial(trial_num = 100):
     trial_index = np.where(is_need == 1)
     trial_data = data.iloc[trial_index].reset_index(drop = True)
     print("{} trial data shape : ".format(trial_num), trial_data.shape)
-    with open("trial/{}_trial_data_Patamon-with_Q.pkl".format(trial_num), "wb") as file:
+    with open("trial/{}_trial_data_Patamon-with_Q-descriptive.pkl".format(trial_num), "wb") as file:
         pickle.dump(trial_data, file)
     print("Finished saving data.")
 
@@ -473,7 +473,7 @@ if __name__ == '__main__':
 
     # _extractOneTrial()
 
-    # _extractMultiTrial(trial_num = 1000)
+    _extractMultiTrial(trial_num = 1000)
 
     # transferTrialData()
     # with open("trial/200trial_Omega_videos.pkl", "rb") as file:
@@ -489,7 +489,7 @@ if __name__ == '__main__':
 
     # extractPlannedTrial(trial_num=100)
     # extractAccidentalTrial(trial_num=100)
-    extractSuicideTrial(trial_num=100)
+    # extractSuicideTrial(trial_num=100)
     # extractGlobalTrial(trial_num=100)
 
     # extractMultiTrial()

@@ -2105,23 +2105,30 @@ def plotStateComparison(config):
     width = 0.4
     color = RdBu_8.mpl_colors
 
-    state_cr = np.load("./common_data/state_comparison/state_cr.npy", allow_pickle=True).item()
-    state_names = list(state_cr.keys())
-    state_names[state_names.index("pessimistic")] = "evade"
-    state_names[state_names.index("planned_hunting")] = "attack"
+    state_cr = np.load("common_data/state_comparison/100trial_Omega_diff_state_agent_cr.npy", allow_pickle=True)
+    state_names = ["global", "local", "evade", "suicide", "attack", "vague"]
 
-    only_local = [state_cr[each][0] if state_cr[each] is not None else None for each in state_cr]
-    all_agents = [state_cr[each][-1] if state_cr[each] is not None else None for each in state_cr]
-    plt.bar(x = np.arange(0, 6) - width, height = only_local, width = width, label = "Local Agent", align="edge", color = color[0])
-    plt.bar(x=np.arange(0, 6), height=all_agents, width = 0.4, label = "All Agents", align="edge", color = color[-1])
+    only_local = [[] for _ in range(6)]
+    all_agents = [[] for _ in range(6)]
+    for i in range(6):
+        only_local[i] = [each[0] for each in state_cr[i]]
+        all_agents[i] = [each[1] for each in state_cr[i]]
+    avg_only_local = [np.nanmean(each) for each in only_local]
+    std_only_local = [np.nanstd(each) for each in only_local]
+    avg_all_agents = [np.nanmean(each) for each in all_agents]
+    std_all_agents = [np.nanstd(each) for each in all_agents]
 
-    plt.plot(np.arange(0, 5), [state_cr[each][1] for each in list(state_cr.keys())[:-1]], "o", ms = 10, color = "black")
+    plt.figure(figsize=(10,7))
+    # plt.bar(x = np.arange(0, 6) - width, height = avg_only_local, width = width, label = "Local Agent", color = color[0], yerr = std_only_local)
+    # plt.bar(x = np.arange(0, 6), height=avg_all_agents, width = 0.4, label = "All Agents", color = color[-1], yerr = std_all_agents)
+    plt.bar(x=np.arange(0, 6) - width, height=avg_only_local, width=width, label="Local Agent", color=color[0])
+    plt.bar(x=np.arange(0, 6), height=avg_all_agents, width=0.4, label="All Agents", color=color[-1])
 
-    plt.xticks(np.arange(0, 6), state_names, fontsize = 20)
-    plt.ylim(0.8, 1.0)
-    plt.yticks([0.80, 0.85, 0.90, 0.95, 1.0], [0.80, 0.85, 0.90, 0.95, 1.00], fontsize = 20)
+    plt.xticks(np.arange(0, 6)-width/2, state_names, fontsize = 20)
+    plt.ylim(0.7, 1.0)
+    plt.yticks([0.70, 0.80, 0.90, 1.0], [0.7, 0.8, 0.9, 1.0], fontsize = 20)
     plt.ylabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
-    plt.legend(frameon = False, fontsize = 20)
+    plt.legend(frameon = False, fontsize = 20, ncol = 2)
     plt.show()
 
 
@@ -2203,13 +2210,13 @@ if __name__ == '__main__':
     # plotLocalEvadeSuicideMatching(config)
     # plotAllAgentMatching(config)
 
-    plotWeightVariation(config)
+    # plotWeightVariation(config)
     # plotTestWeight()
 
     # plotIncremental(config)
     # plotOneAgent(config)
     # plotDecremental(config)
-    # plotStateComparison(config)
+    plotStateComparison(config)
 
     # singleTrialMultiFitting(config)
 

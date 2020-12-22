@@ -224,6 +224,62 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status, PG):
     return temp_suicide_Q
 
 
+def _globalProcesing(global_Q, PR_global):
+    if np.any(np.concatenate(global_Q) < 0):
+        temp_global_Q = np.concatenate(global_Q)
+        temp_global_Q[temp_global_Q > 0] = 0.0
+        offset = np.max(np.abs(temp_global_Q))  # TODO: max absolute value of negative values
+    else:
+        offset = 0.0
+    temp_global_Q = copy.deepcopy(global_Q)
+    for index in range(len(temp_global_Q)):
+        non_zero = np.where(temp_global_Q[index] != 0)
+        if PR_global[index] == 0: # no reward in the range of 10-15
+            temp_global_Q[index][non_zero] = 0.0
+        else:
+            temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
+    return temp_global_Q
+
+
+def _localProcesing(local_Q, PR):
+    if np.any(np.concatenate(local_Q) < 0):
+        temp_local_Q = np.concatenate(local_Q)
+        temp_local_Q[temp_local_Q > 0] = 0.0
+        offset = np.max(np.abs(temp_local_Q))  # TODO: max absolute value of negative values
+    else:
+        offset = 0.0
+    temp_local_Q = copy.deepcopy(local_Q)
+    for index in range(len(temp_local_Q)):
+        non_zero = np.where(temp_local_Q[index] != 0)
+        if PR[index] > 10:
+            temp_local_Q[index][non_zero] = 0.0
+        else:
+            temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
+    return temp_local_Q
+
+# TODO: =====================================
+# TODO: local and global processing
+def _PRDistGlobal(x, locs_df):
+    # beans, energizers, fruits, scared ghosts
+    PR_dist = []
+    if x.beans is not None and x.beans != [] and not isinstance(x.beans, float):
+        PR_dist.extend(x.beans)
+    if x.energizers is not None and x.energizers != [] and not isinstance(x.energizers, float):
+        PR_dist.extend(x.energizers)
+    if x.fruitPos is not None and x.fruitPos != [] and not  isinstance(x.fruitPos, float):
+        PR_dist.append(x.fruitPos)
+    if x.ifscared1 > 3:
+        PR_dist.append(x.ghost1Pos)
+    if x.ifscared2 > 3:
+        PR_dist.append(x.ghost2Pos)
+    # Compute distance
+    PR_dist = [locs_df[x.pacmanPos][each] if each != x.pacmanPos else 0 for each in PR_dist]
+    cnt = 0
+    for each in PR_dist:
+        if 10<=each<=15:
+            cnt+=1
+    return cnt
+
 def readTransitionData(filename):
     '''
     Read data for MLE analysis.
@@ -290,17 +346,24 @@ def readTransitionData(filename):
         lambda x: _PR(x, locs_df),
         axis=1
     )
+    PR_global = all_data[
+        ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
+        lambda x: _PRDistGlobal(x, locs_df),
+        axis=1
+    )
     RR = all_data[
         ["pacmanPos", "energizers", "beans", "fruitPos", "ghost1Pos", "ghost2Pos", "ifscared1", "ifscared2"]].apply(
         lambda x: _RR(x, locs_df),
         axis=1
     )
     print("Finished extracting features.")
-    # TODO: planned hunting and suicide Q value
+    # TODO: local and global
     all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
-    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE,
-                                                          PG_wo_dead)
-    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG)
+    all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num,
+                                                          PE, PG_wo_dead)
+    all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG_wo_dead)
+    # all_data.local_Q = _localProcesing(all_data.local_Q, PR)
+    # all_data.global_Q = _globalProcesing(all_data.global_Q, PR_global)
     print("Finished Q-value pre-processing.")
     # Split into trajectories
     trajectory_data = []
@@ -327,6 +390,7 @@ def readTransitionData(filename):
         trajectory_data.append([name, group, true_prob, group.iloc[0]["trajectory_shape"]])
     # temp = trajectory_data[0]
     return trajectory_data
+# TODO: =====================================
 
 
 def readTrialData(filename):
@@ -2681,225 +2745,351 @@ def controlledMLE(config):
     np.save("../common_data/controlled/trial_cr.npy", trial_cr)
 
 
-def _extractDiffState():
-    print("=" * 40)
-    print("Extracting Different State Analysis")
-    print("=" * 40)
-    local_X = []
-    local_Y = []
-    # Read global data
-    local2global_data = readTransitionData("../common_data/transition/local_to_global-with_Q.pkl")
-    global2local_data = readTransitionData("../common_data/transition/global_to_local-with_Q.pkl")
-    global_X = []
-    global_Y = []
-    for each in local2global_data:
-        length = each[1].shape[0]
-        global_X.append(each[1].iloc[length // 2:])
-        global_Y.append(each[2][length // 2:])
-        local_X.append(each[1].iloc[:length // 2])
-        local_Y.append(each[2][:length // 2])
-    for each in global2local_data:
-        length = each[1].shape[0]
-        global_X.append(each[1].iloc[:length // 2])
-        global_Y.append(each[2][:length // 2])
-        local_X.append(each[1].iloc[length // 2:])
-        local_Y.append(each[2][length // 2:])
-    global_X = pd.concat(global_X).reset_index(drop=True)
-    global_Y = pd.concat(global_Y).reset_index(drop=True)
-    print("Finished global.")
-    # Read evade data
-    local2evade_data = readTransitionData("../common_data/transition/local_to_evade-with_Q.pkl")
-    evade2local_data = readTransitionData("../common_data/transition/evade_to_local-with_Q.pkl")
-    evade_X = []
-    evade_Y = []
-    for each in local2evade_data:
-        length = each[1].shape[0]
-        evade_X.append(each[1].iloc[length // 2:])
-        evade_Y.append(each[2][length // 2:])
-        local_X.append(each[1].iloc[:length // 2])
-        local_Y.append(each[2][:length // 2])
-    for each in evade2local_data:
-        length = each[1].shape[0]
-        evade_X.append(each[1].iloc[:length // 2])
-        evade_Y.append(each[2][:length // 2])
-        local_X.append(each[1].iloc[length // 2:])
-        local_Y.append(each[2][length // 2:])
-    evade_X = pd.concat(evade_X).reset_index(drop=True)
-    evade_Y = pd.concat(evade_Y).reset_index(drop=True)
-    print("Finished evade.")
-    # Read attack data
-    local2attack_data = readTransitionData("../common_data/transition/local_to_planned-with_Q.pkl")
-    attack_X = []
-    attack_Y = []
-    for each in local2attack_data:
-        length = each[1].shape[0]
-        attack_X.append(each[1].iloc[length // 2:])
-        attack_Y.append(each[2][length // 2:])
-        local_X.append(each[1].iloc[:length // 2])
-        local_Y.append(each[2][:length // 2])
-    attack_X = pd.concat(attack_X).reset_index(drop=True)
-    attack_Y = pd.concat(attack_Y).reset_index(drop=True)
-    print("Finished attack.")
-    # Read suicide data
-    local2suicide_data = readTransitionData("../common_data/transition/local_to_suicide-with_Q.pkl")
-    suicide_X = []
-    suicide_Y = []
-    for each in local2suicide_data:
-        length = each[1].shape[0]
-        suicide_X.append(each[1].iloc[length // 2:])
-        suicide_Y.append(each[2][length // 2:])
-        local_X.append(each[1].iloc[:length // 2])
-        local_Y.append(each[2][:length // 2])
-    suicide_X = pd.concat(suicide_X).reset_index(drop=True)
-    suicide_Y = pd.concat(suicide_Y).reset_index(drop=True)
-    print("Finished suicide.")
-    # Read local data
-    local_X = pd.concat(local_X).reset_index(drop=True)
-    local_Y = pd.concat(local_Y).reset_index(drop=True)
-    # Read vague data
-    trial_data = readTrialData("../common_data/trial/1000_trial_data_Omega-with_Q.pkl")
+# def _extractDiffState():
+#     print("=" * 40)
+#     print("Extracting Different State Analysis")
+#     print("=" * 40)
+#     local_X = []
+#     local_Y = []
+#     # Read global data
+#     local2global_data = readTransitionData("../common_data/transition/local_to_global-with_Q.pkl")
+#     global2local_data = readTransitionData("../common_data/transition/global_to_local-with_Q.pkl")
+#     global_X = []
+#     global_Y = []
+#     for each in local2global_data:
+#         length = each[1].shape[0]
+#         global_X.append(each[1].iloc[length // 2:])
+#         global_Y.append(each[2][length // 2:])
+#         local_X.append(each[1].iloc[:length // 2])
+#         local_Y.append(each[2][:length // 2])
+#     for each in global2local_data:
+#         length = each[1].shape[0]
+#         global_X.append(each[1].iloc[:length // 2])
+#         global_Y.append(each[2][:length // 2])
+#         local_X.append(each[1].iloc[length // 2:])
+#         local_Y.append(each[2][length // 2:])
+#     global_X = pd.concat(global_X).reset_index(drop=True)
+#     global_Y = pd.concat(global_Y).reset_index(drop=True)
+#     print("Finished global.")
+#     # Read evade data
+#     local2evade_data = readTransitionData("../common_data/transition/local_to_evade-with_Q.pkl")
+#     evade2local_data = readTransitionData("../common_data/transition/evade_to_local-with_Q.pkl")
+#     evade_X = []
+#     evade_Y = []
+#     for each in local2evade_data:
+#         length = each[1].shape[0]
+#         evade_X.append(each[1].iloc[length // 2:])
+#         evade_Y.append(each[2][length // 2:])
+#         local_X.append(each[1].iloc[:length // 2])
+#         local_Y.append(each[2][:length // 2])
+#     for each in evade2local_data:
+#         length = each[1].shape[0]
+#         evade_X.append(each[1].iloc[:length // 2])
+#         evade_Y.append(each[2][:length // 2])
+#         local_X.append(each[1].iloc[length // 2:])
+#         local_Y.append(each[2][length // 2:])
+#     evade_X = pd.concat(evade_X).reset_index(drop=True)
+#     evade_Y = pd.concat(evade_Y).reset_index(drop=True)
+#     print("Finished evade.")
+#     # Read attack data
+#     local2attack_data = readTransitionData("../common_data/transition/local_to_planned-with_Q.pkl")
+#     attack_X = []
+#     attack_Y = []
+#     for each in local2attack_data:
+#         length = each[1].shape[0]
+#         attack_X.append(each[1].iloc[length // 2:])
+#         attack_Y.append(each[2][length // 2:])
+#         local_X.append(each[1].iloc[:length // 2])
+#         local_Y.append(each[2][:length // 2])
+#     attack_X = pd.concat(attack_X).reset_index(drop=True)
+#     attack_Y = pd.concat(attack_Y).reset_index(drop=True)
+#     print("Finished attack.")
+#     # Read suicide data
+#     local2suicide_data = readTransitionData("../common_data/transition/local_to_suicide-with_Q.pkl")
+#     suicide_X = []
+#     suicide_Y = []
+#     for each in local2suicide_data:
+#         length = each[1].shape[0]
+#         suicide_X.append(each[1].iloc[length // 2:])
+#         suicide_Y.append(each[2][length // 2:])
+#         local_X.append(each[1].iloc[:length // 2])
+#         local_Y.append(each[2][:length // 2])
+#     suicide_X = pd.concat(suicide_X).reset_index(drop=True)
+#     suicide_Y = pd.concat(suicide_Y).reset_index(drop=True)
+#     print("Finished suicide.")
+#     # Read local data
+#     local_X = pd.concat(local_X).reset_index(drop=True)
+#     local_Y = pd.concat(local_Y).reset_index(drop=True)
+#     # Read vague data
+#     trial_data = readTrialData("../common_data/trial/1000_trial_data_Omega-with_Q.pkl")
+#     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+#                   "label_global_optimal", "label_global_notoptimal", "label_global",
+#                   "label_evade",
+#                   "label_suicide",
+#                   "label_true_accidental_hunting",
+#                   "label_true_planned_hunting"]
+#     vague_X = []
+#     vague_Y = []
+#     for each in trial_data:
+#         length = each[1].shape[0]
+#         handcrafted_label = [_handcraftLabeling(each[1][label_list].iloc[index]) for index in range(length)]
+#         is_vague = [len(label) > 1 if label is not None and not isinstance(label, float) else False for label in
+#                     handcrafted_label]
+#         is_vague = np.where(np.array(is_vague) == 1)[0]
+#         if len(is_vague) > 0:
+#             vague_X.append(each[1].iloc[is_vague])
+#             vague_Y.append(each[2][is_vague])
+#     if len(vague_X) > 0:
+#         vague_X = pd.concat(vague_X).reset_index(drop=True)
+#         vague_Y = pd.concat(vague_Y).reset_index(drop=True)
+#     else:
+#         vague_X = None
+#         vague_Y = None
+#     print("Finished vague.")
+#     # Save data
+#     print("-"*40)
+#     if "state_comparison" not in os.listdir("../common_data"):
+#         os.mkdir("../common_data/state_comparison")
+#     np.save("../common_data/state_comparison/local_data.npy", (local_X, local_Y))
+#     np.save("../common_data/state_comparison/global_data.npy", (global_X, global_Y))
+#     np.save("../common_data/state_comparison/evade_data.npy", (evade_X, evade_Y))
+#     np.save("../common_data/state_comparison/attack_data.npy", (attack_X, attack_Y))
+#     np.save("../common_data/state_comparison/suicide_data.npy", (suicide_X, suicide_Y))
+#     np.save("../common_data/state_comparison/vague_data.npy", (vague_X, vague_Y))
+#     print("Finished saving!")
+#     print("Local shape : ", local_X.shape)
+#     print("Global shape : ", global_X.shape)
+#     print("Evade shape : ", evade_X.shape)
+#     print("Attack shape : ", attack_X.shape)
+#     print("Suicide shape : ", suicide_X.shape)
+#     print("Vague shape : ", vague_X.shape)
+
+
+def diffLabelAnalysis():
+    print("="*20, " Diff State Analysis ", "="*20)
+    filename = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
+    print(filename)
+    data = readTrialData(filename)
+    # data = [data[i] for i in range(10)]
+    print("Num of trials : ", len(data))
+    window = 3
     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
                   "label_global_optimal", "label_global_notoptimal", "label_global",
-                  "label_evade",
+                  "label_evade", "label_evade1",
                   "label_suicide",
                   "label_true_accidental_hunting",
                   "label_true_planned_hunting"]
-    vague_X = []
-    vague_Y = []
-    for each in trial_data:
-        length = each[1].shape[0]
-        handcrafted_label = [_handcraftLabeling(each[1][label_list].iloc[index]) for index in range(length)]
-        is_vague = [len(label) > 1 if label is not None and not isinstance(label, float) else False for label in
-                    handcrafted_label]
-        is_vague = np.where(np.array(is_vague) == 1)[0]
-        if len(is_vague) > 0:
-            vague_X.append(each[1].iloc[is_vague])
-            vague_Y.append(each[2][is_vague])
-    if len(vague_X) > 0:
-        vague_X = pd.concat(vague_X).reset_index(drop=True)
-        vague_Y = pd.concat(vague_Y).reset_index(drop=True)
-    else:
-        vague_X = None
-        vague_Y = None
-    print("Finished vague.")
-    # Save data
-    print("-"*40)
-    if "state_comparison" not in os.listdir("../common_data"):
-        os.mkdir("../common_data/state_comparison")
-    np.save("../common_data/state_comparison/local_data.npy", (local_X, local_Y))
-    np.save("../common_data/state_comparison/global_data.npy", (global_X, global_Y))
-    np.save("../common_data/state_comparison/evade_data.npy", (evade_X, evade_Y))
-    np.save("../common_data/state_comparison/attack_data.npy", (attack_X, attack_Y))
-    np.save("../common_data/state_comparison/suicide_data.npy", (suicide_X, suicide_Y))
-    np.save("../common_data/state_comparison/vague_data.npy", (vague_X, vague_Y))
-    print("Finished saving!")
-    print("Local shape : ", local_X.shape)
-    print("Global shape : ", global_X.shape)
-    print("Evade shape : ", evade_X.shape)
-    print("Attack shape : ", attack_X.shape)
-    print("Suicide shape : ", suicide_X.shape)
-    print("Vague shape : ", vague_X.shape)
-
-
-def diffStateAnalysis(config):
-    print("="*40)
-    print("Different State Analysis")
-    print("=" * 40)
-    local_X, local_Y = np.load("../common_data/state_comparison/local_data.npy", allow_pickle=True)
-    global_X, global_Y = np.load("../common_data/state_comparison/global_data.npy", allow_pickle=True)
-    evade_X, evade_Y = np.load("../common_data/state_comparison/evade_data.npy", allow_pickle=True)
-    attack_X, attack_Y = np.load("../common_data/state_comparison/attack_data.npy", allow_pickle=True)
-    suicide_X, suicide_Y = np.load("../common_data/state_comparison/suicide_data.npy", allow_pickle=True)
-    vague_X, vague_Y = np.load("../common_data/state_comparison/vague_data.npy", allow_pickle=True)
-    print("Finished reading data.")
-    # Analysis
-    state_cr = {
-        "global": None,
-        "local":None,
-        "pessimistic": None,
-        "planned_hunting":None,
-        "suicide":None,
-        "vague":None
-    }
-    state_data = {
-        "vague": (vague_X, vague_Y),
-        "global":(global_X, global_Y),
-        "local":(local_X, local_Y),
-        "pessimistic": (evade_X, evade_Y),
-        "planned_hunting":(attack_X, attack_Y),
-        "suicide":(suicide_X, suicide_Y),
-    }
-    for state in state_data:
-        print("="*15, " {} Analysis".format(state), "="*15)
-        X, Y = state_data[state]
-        if X is None:
-            print("No data for state \"{}\"".format(state))
-            state_cr[state] = None
-            continue
-        temp_cr = []
-        for agent_name in [["local"], ["local", state], ["global", "local", "pessimistic", "suicide", "planned_hunting"]]:
-            if agent_name == ["local", "vague"]:
-                temp_cr.append(np.nan)
-                continue
-            print("Agent name : ", agent_name)
-            # agents_list = ["{}_Q".format(each) for each in agent_name]
-            print("Data shape : ", X.shape)
-            # Construct optimizer
-            params = [0 for _ in range(len(agent_name))]
-            bounds = [[0, 10] for _ in range(len(agent_name))]
-            params.append(1)
-            bounds.append([-1000, 1000])
-            cons = []  # construct the bounds in the form of constraints
-            for par in range(len(bounds)):
-                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-                cons.append(l)
-                cons.append(u)
-            func = lambda params: negativeLikelihood(
-                params,
-                X,
-                Y,
-                agent_name,
-                return_trajectory = False,
-                need_intercept = True
-            )
-            is_success = False
-            retry_num = 0
-            while not is_success and retry_num < 5:
-                res = scipy.optimize.minimize(
-                    func,
-                    x0 = params,
-                    method = "SLSQP",
-                    bounds = bounds,
-                    tol = 1e-5,
-                    constraints = cons
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    agent_name_list = [["local"], ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    local_cr = []
+    global_cr = []
+    evade_cr = []
+    suicide_cr = []
+    attack_cr = []
+    vague_cr = []
+    for index, each in enumerate(data):
+        trial_name = each[0]
+        print("-"*40)
+        print("|{}| Trial Name : {}".format(index + 1, trial_name))
+        trial_X = each[1]
+        trial_Y = each[2]
+        handcrafted_label = [_handcraftLabeling(trial_X[label_list].iloc[index]) for index in range(trial_X.shape[0])]
+        # handcrafted_label = handcrafted_label[window:-window]
+        # Moving window analysis
+        agent_cr = []
+        trial_length = trial_X.shape[0]
+        print("Length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            sub_X = trial_X[centering_point - window:centering_point + window + 1]
+            sub_Y = trial_Y[centering_point - window:centering_point + window + 1]
+            for agent_name in agent_name_list:
+                # Construct optimizer
+                params = [0 for _ in range(len(agent_name))]
+                bounds = [[0, 10] for _ in range(len(agent_name))]
+                params.append(1)
+                bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=True
                 )
-                is_success = res.success
-                if not is_success:
-                    print("Fail, retrying...")
-                    retry_num += 1
-            # correct rate in the window
-            _, estimated_prob = negativeLikelihood(
-                res.x,
-                X,
-                Y,
-                agent_name,
-                return_trajectory=True,
-                need_intercept=True
-            )
-            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
-            true_dir = Y.apply(lambda x: np.argmax(x)).values
-            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-            print("Weight : ", res.x)
-            print("Correct rate : ", correct_rate)
-            temp_cr.append(correct_rate)
-        state_cr[state] = temp_cr
-    print("="*40)
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < 5:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                # correct rate in the window
+                _, estimated_prob = negativeLikelihood(
+                    res.x,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=True
+                )
+                # estimated_dir = np.array([np.argmax(each) for each in estimated_prob])
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                agent_cr.append(correct_rate)
+            # Assign label
+            if handcrafted_label[centering_point] is None:
+                continue
+            else:
+                if len(handcrafted_label[centering_point]) > 1:
+                    vague_cr.append(agent_cr)
+                elif handcrafted_label[centering_point] == ["local"]:
+                    local_cr.append(agent_cr)
+                elif handcrafted_label[centering_point] == ["global"]:
+                    global_cr.append(agent_cr)
+                elif handcrafted_label[centering_point] == ["pessimistic"]:
+                    evade_cr.append(agent_cr)
+                elif handcrafted_label[centering_point] == ["suicide"]:
+                    suicide_cr.append(agent_cr)
+                elif handcrafted_label[centering_point] == ["planned_hunting"]:
+                    attack_cr.append(agent_cr)
+                else:
+                    continue
+    # Summary & Save
+    print("-"*40)
     print("Summary : ")
-    print(state_cr)
+    print("Local num : ", len(local_cr))
+    print("Global num : ", len(global_cr))
+    print("Evade num : ", len(evade_cr))
+    print("Suicide num : ", len(suicide_cr))
+    print("Attack num : ", len(attack_cr))
+    print("Vague num : ", len(vague_cr))
+    state_cr = [global_cr, local_cr, evade_cr, suicide_cr, attack_cr, vague_cr]
     if "state_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/state_comparison")
-    np.save("../common_data/state_comparison/state_cr.npy", state_cr)
+    np.save("../common_data/state_comparison/100trial_Omega_diff_state_agent_cr.npy", state_cr)
+
+
+
+
+
+# def diffStateAnalysis(config):
+#     print("="*40)
+#     print("Different State Analysis")
+#     print("=" * 40)
+#     local_X, local_Y = np.load("../common_data/state_comparison/local_data.npy", allow_pickle=True)
+#     global_X, global_Y = np.load("../common_data/state_comparison/global_data.npy", allow_pickle=True)
+#     evade_X, evade_Y = np.load("../common_data/state_comparison/evade_data.npy", allow_pickle=True)
+#     attack_X, attack_Y = np.load("../common_data/state_comparison/attack_data.npy", allow_pickle=True)
+#     suicide_X, suicide_Y = np.load("../common_data/state_comparison/suicide_data.npy", allow_pickle=True)
+#     vague_X, vague_Y = np.load("../common_data/state_comparison/vague_data.npy", allow_pickle=True)
+#     print("Finished reading data.")
+#     # Analysis
+#     state_cr = {
+#         "global": None,
+#         "local":None,
+#         "pessimistic": None,
+#         "planned_hunting":None,
+#         "suicide":None,
+#         "vague":None
+#     }
+#     state_data = {
+#         "vague": (vague_X, vague_Y),
+#         "global":(global_X, global_Y),
+#         "local":(local_X, local_Y),
+#         "pessimistic": (evade_X, evade_Y),
+#         "planned_hunting":(attack_X, attack_Y),
+#         "suicide":(suicide_X, suicide_Y),
+#     }
+#     for state in state_data:
+#         print("="*15, " {} Analysis".format(state), "="*15)
+#         X, Y = state_data[state]
+#         if X is None:
+#             print("No data for state \"{}\"".format(state))
+#             state_cr[state] = None
+#             continue
+#         temp_cr = []
+#         for agent_name in [["local"], ["local", state], ["global", "local", "pessimistic", "suicide", "planned_hunting"]]:
+#             if agent_name == ["local", "vague"]:
+#                 temp_cr.append(np.nan)
+#                 continue
+#             print("Agent name : ", agent_name)
+#             # agents_list = ["{}_Q".format(each) for each in agent_name]
+#             print("Data shape : ", X.shape)
+#             # Construct optimizer
+#             params = [0 for _ in range(len(agent_name))]
+#             bounds = [[0, 10] for _ in range(len(agent_name))]
+#             params.append(1)
+#             bounds.append([-1000, 1000])
+#             cons = []  # construct the bounds in the form of constraints
+#             for par in range(len(bounds)):
+#                 l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+#                 u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+#                 cons.append(l)
+#                 cons.append(u)
+#             func = lambda params: negativeLikelihood(
+#                 params,
+#                 X,
+#                 Y,
+#                 agent_name,
+#                 return_trajectory = False,
+#                 need_intercept = True
+#             )
+#             is_success = False
+#             retry_num = 0
+#             while not is_success and retry_num < 5:
+#                 res = scipy.optimize.minimize(
+#                     func,
+#                     x0 = params,
+#                     method = "SLSQP",
+#                     bounds = bounds,
+#                     tol = 1e-5,
+#                     constraints = cons
+#                 )
+#                 is_success = res.success
+#                 if not is_success:
+#                     print("Fail, retrying...")
+#                     retry_num += 1
+#             # correct rate in the window
+#             _, estimated_prob = negativeLikelihood(
+#                 res.x,
+#                 X,
+#                 Y,
+#                 agent_name,
+#                 return_trajectory=True,
+#                 need_intercept=True
+#             )
+#             estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+#             true_dir = Y.apply(lambda x: np.argmax(x)).values
+#             correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+#             print("Weight : ", res.x)
+#             print("Correct rate : ", correct_rate)
+#             temp_cr.append(correct_rate)
+#         state_cr[state] = temp_cr
+#     print("="*40)
+#     print("Summary : ")
+#     print(state_cr)
+#     if "state_comparison" not in os.listdir("../common_data"):
+#         os.mkdir("../common_data/state_comparison")
+#     np.save("../common_data/state_comparison/state_cr.npy", state_cr)
 
 
 
@@ -3105,6 +3295,7 @@ if __name__ == '__main__':
 
     # _extractDiffState()
     # diffStateAnalysis(config)
+    diffLabelAnalysis()
 
     # simpleMLE(config)
     # controlledMLE(config)

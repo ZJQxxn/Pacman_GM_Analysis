@@ -662,36 +662,14 @@ def _local2Accidental(trial_data):
 
 
 def _scaredLocal2Hunt(trial_data):
-    # scared_plan = trial_data.label_scared_plan
-    # reward_num = trial_data[["beans", "energizers", "fruitPos"]].apply(
-    #     lambda x: _rewardNum(x),
-    #     axis=1
-    # )
-    # length = 8
-    # print("Scared Graze to Hunt length : ", length)
-    # trajectory_point = _findScaredTransition(scared_plan, reward_num, length)
-    # if len(trajectory_point) == 0:
-    #     return None
-    # else:
-    #     trajectory_data = []
-    #     for trajectory_index, each in enumerate(trajectory_point):
-    #         for index in range(each[0], each[2] + 1):
-    #             each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
-    #             trajectory_data.append(each_step)
-    # return trajectory_data
-
-    is_graze = trial_data[["label_local_graze", "label_scared_plan"]].apply(
-        lambda x: x.label_local_graze == 1 and x.label_scared_plan == 1,
+    scared_plan = trial_data.label_scared_plan
+    reward_num = trial_data[["beans", "energizers", "fruitPos"]].apply(
+        lambda x: _rewardNum(x),
         axis=1
     )
-    is_hunt = trial_data[["label_hunt1", "label_hunt2", "label_scared_plan"]].apply(
-        lambda x: x.label_scared_plan == 1 and (x.label_hunt1 == 1 or x.label_hunt2 == 1),
-        axis=1
-    )
-    length = 5
-    print("Graze_to_hunt length : ", length)
-    trajectory_point = _findTransitionPoint(is_graze, is_hunt, length)
-    # trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
+    length = 10
+    print("Scared Graze to Hunt length : ", length)
+    trajectory_point = _findScaredTransition(scared_plan, reward_num, length)
     if len(trajectory_point) == 0:
         return None
     else:
@@ -701,6 +679,28 @@ def _scaredLocal2Hunt(trial_data):
                 each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
                 trajectory_data.append(each_step)
     return trajectory_data
+
+    # is_graze = trial_data[["label_hunt1", "label_hunt2", "label_scared_plan", "ifscared1", "ifscared2"]].apply(
+    #     lambda x: (x.label_hunt1 == 0 and x.label_hunt2 == 0) and (x.ifscared1 > 3 or x.ifscared2 > 3),
+    #     axis=1
+    # )
+    # is_hunt = trial_data[["label_hunt1", "label_hunt2", "label_scared_plan", "ifscared1", "ifscared2"]].apply(
+    #     lambda x: (x.ifscared1 > 3 or x.ifscared2 > 3) and (x.label_hunt1 == 1 or x.label_hunt2 == 1),
+    #     axis=1
+    # )
+    # length = 5
+    # print("Graze_to_hunt length : ", length)
+    # trajectory_point = _findTransitionPoint(is_graze, is_hunt, length)
+    # # trajectory_point = _findTransitionWOBreak(is_local, is_planned, length)
+    # if len(trajectory_point) == 0:
+    #     return None
+    # else:
+    #     trajectory_data = []
+    #     for trajectory_index, each in enumerate(trajectory_point):
+    #         for index in range(each[0], each[2] + 1):
+    #             each_step = np.append(trial_data.iloc[index].values, [trajectory_index, each])
+    #             trajectory_data.append(each_step)
+    # return trajectory_data
 
 
 def _extractTrialData(trial_data, transition_type):
