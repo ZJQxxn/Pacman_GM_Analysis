@@ -16,6 +16,7 @@ import scipy.optimize
 import scipy.stats
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+import matplotlib.gridspec as gridspec
 
 # plt.rc('font', family='CMU Serif', weight="roman")
 # plt.rc('font', family='Myriad Pro')
@@ -272,6 +273,8 @@ def singleTrialMultiFitting(config):
     agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
     # Construct optimizer
     for trial_index, each in enumerate(trial_data):
+        if trial_index > 20:
+            break
         temp_record = []
         print("-"*15)
         trial_name = each[0]
@@ -382,7 +385,7 @@ def singleTrialMultiFitting(config):
 
 
         estimated_label = [
-            _estimationThresholdLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
+            _estimationVagueLabeling(temp_contribution[index] / np.linalg.norm(temp_contribution[index]), agent_name)
             for index in range(len(temp_contribution))
         ]
 
@@ -390,9 +393,15 @@ def singleTrialMultiFitting(config):
         for index in range(temp_weight.shape[0]):
             temp_weight[index, :] = temp_weight[index, :] / np.linalg.norm(temp_weight[index, :])
 
-        plt.figure(figsize = (18,13))
-        plt.subplot(2, 1, 1)
-        plt.title(trial_name, fontsize = 10)
+        if "descriptive" in config["single_trial_data_filename"]:
+            label_name["suicide"] = "approach"
+            label_name["planned_hunting"] = "energizer"
+
+        fig = plt.figure(figsize = (15,8), constrained_layout = True)
+        spec = fig.add_gridspec(3, 1)
+        # plt.subplot(2, 1, 1)
+        ax1 = fig.add_subplot(spec[:2,:])
+        # plt.title(trial_name, fontsize = 10)
         # plt.title(trial_name, fontsize = 15)
         for index in range(len(agent_name)):
             plt.plot(temp_weight[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
@@ -410,26 +419,31 @@ def singleTrialMultiFitting(config):
         # plt.show()
 
         # plt.figure(figsize=(13,5))
-        plt.subplot(2, 1, 2)
+        # plt.subplot(2, 1, 2)
+        ax2 = fig.add_subplot(spec[-1, :])
         for i in range(len(handcrafted_label)):
             if handcrafted_label[i] is not None:
-                seq = np.linspace(-0.1, 0.0, len(handcrafted_label[i]) + 1)
-                for j, h in enumerate(handcrafted_label[i]):
-                    plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
-                seq = np.linspace(-0.2, -0.1, len(estimated_label[i]) + 1)
+                # seq = np.linspace(-0.1, 0.0, len(handcrafted_label[i]) + 1)
+                # for j, h in enumerate(handcrafted_label[i]):
+                #     plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+                seq = np.linspace(-0.02, 0.0, len(estimated_label[i]) + 1)
                 for j, h in enumerate(estimated_label[i]):
                     plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
         plt.xlim(0, temp_weight.shape[0])
         # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
         # x_ticks = [window + int(each) for each in x_ticks_index]
         # plt.xticks(x_ticks_index, x_ticks, fontsize=20)
-        plt.yticks([-0.05, -0.15], ["Rule-Based Label", "Fitted Label"], fontsize=10)
+        # plt.yticks([-0.05, -0.15], ["Rule-Based Label", "Fitted Label"], fontsize=10)
         # plt.ylim(-0.05, 0.35)
-        # plt.axis('off')
-        plt.show()
-        print()
-    print()
-    print()
+        plt.axis('off')
+        if "descriptive" in config["single_trial_data_filename"]:
+            base = "descriptive_agents"
+        else:
+            base = "detail_agents"
+        plt.savefig("./common_data/single_trial/{}/{}.pdf".format(base, trial_name))
+        # plt.show()
+        plt.close(fig)
+        plt.clf()
     # # Save data
     # np.save("../common_data/single_trial/records.npy", record)
     # np.save("../common_data/single_trial/estimated_labels.npy", all_estimated)
@@ -1839,6 +1853,10 @@ def plotAllAgentMatching(config):
 
 def plotIncremental(config):
     print("-"*15)
+    # random correct rate
+    random_cr = np.load("./common_data/incremental/100trial-window3-random_is_correct.npy", allow_pickle=True).item()
+    # avg_random_cr = np.nanmean([np.nanmean(each) for each in random_cr])
+    avg_random_cr = {each:np.nanmean(random_cr[each]) for each in random_cr}
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["bean_vs_cr_filename"], allow_pickle = True)
     bean_num = []
@@ -1868,6 +1886,8 @@ def plotIncremental(config):
 
     # plotting
     x_ticks = ["local", "+global", "+evade", "+attack", "+suicide"]
+    if "descriptive" in config["bean_vs_cr_filename"]:
+        x_ticks = ["local", "+global", "+evade", "+energizer", "+approach"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     # colors = RdYlBu_5.mpl_colors
     # colors[2] = Balance_6.mpl_colors[2]
@@ -1880,7 +1900,7 @@ def plotIncremental(config):
         agent_color["suicide"]
     ]
 
-    plt.figure(figsize=(18, 5))
+    plt.figure(figsize=(22, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1891,10 +1911,12 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw = 5, color = "grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.8, 0.85, 0.9, 0.95, 1.0], [0.8, 0.85, 0.9, 0.95, 1.0], fontsize = 15)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 15)
     plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
-    plt.ylim(0.8, 1.0)
+    plt.ylim(0.4, 1.05)
 
     plt.subplot(1, 3, 2)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1905,9 +1927,11 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.80, 0.85, 0.90, 0.95, 1.00], [], fontsize=15)
-    plt.ylim(0.8, 1.0)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.4, 1.05)
 
     plt.subplot(1, 3, 3)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1919,13 +1943,19 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.8, 0.85, 0.9, 0.95, 1.0], [], fontsize=15)
-    plt.ylim(0.8, 1.0)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.4, 1.05)
     plt.show()
 
 
 def plotDecremental(config):
+    # random correct rate
+    random_cr = np.load("./common_data/incremental/100trial-window3-random_is_correct.npy", allow_pickle=True).item()
+    # avg_random_cr = np.nanmean([np.nanmean(each) for each in random_cr])
+    avg_random_cr = {each: np.nanmean(random_cr[each]) for each in random_cr}
     print("-"*15)
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["decremental_filename"], allow_pickle = True)
@@ -1955,7 +1985,9 @@ def plotDecremental(config):
             third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
 
     # plotting
-    x_ticks = ["- local", "- global", "- evade", "- suicide", "- attack"]
+    x_ticks = ["-local", "-global", "-evade", "-suicide", "-attack"]
+    if "descriptive" in config["decremental_filename"]:
+        x_ticks = ["-local", "-global", "-evade", "-approach", "-energizer"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     # colors = RdYlBu_5.mpl_colors
     # colors[2] = Balance_6.mpl_colors[2]
@@ -1968,7 +2000,7 @@ def plotDecremental(config):
         agent_color["planned_hunting"]
     ]
 
-    plt.figure(figsize=(18, 5))
+    plt.figure(figsize=(22, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1979,10 +2011,12 @@ def plotDecremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.6, 0.7, 0.8, 0.9, 1.0], [0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 15)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.4, 1.05)
     plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
-    plt.ylim(0.6, 1.0)
 
     plt.subplot(1, 3, 2)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1993,9 +2027,11 @@ def plotDecremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
-    plt.ylim(0.6, 1.0)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.4, 1.05)
 
     plt.subplot(1, 3, 3)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -2007,13 +2043,19 @@ def plotDecremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
-    plt.ylim(0.6, 1.0)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.4, 1.05)
     plt.show()
 
 
 def plotOneAgent(config):
+    # random correct rate
+    random_cr = np.load("./common_data/incremental/100trial-window3-random_is_correct.npy", allow_pickle=True).item()
+    # avg_random_cr = np.nanmean([np.nanmean(each) for each in random_cr])
+    avg_random_cr = {each: np.nanmean(random_cr[each]) for each in random_cr}
     print("-"*15)
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["one_agent_filename"], allow_pickle = True)
@@ -2044,6 +2086,8 @@ def plotOneAgent(config):
 
     # plotting
     x_ticks = ["local", "global", "evade", "suicide", "attack"]
+    if "descriptive" in config["one_agent_filename"]:
+        x_ticks = ["local", "global", "evade", "approach", "energizer"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     # colors = RdYlBu_5.mpl_colors
     # colors[2] = Balance_6.mpl_colors[2]
@@ -2056,7 +2100,7 @@ def plotOneAgent(config):
         agent_color["planned_hunting"]
     ]
 
-    plt.figure(figsize=(18, 5))
+    plt.figure(figsize=(22, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -2067,10 +2111,12 @@ def plotOneAgent(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.0, 1.05)
     plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
-    plt.ylim(0.0, 1.0)
 
     plt.subplot(1, 3, 2)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -2081,9 +2127,12 @@ def plotOneAgent(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
-    plt.ylim(0.0, 1.0)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+               fontsize=15)
+    plt.ylim(0.0, 1.05)
 
     plt.subplot(1, 3, 3)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -2095,38 +2144,136 @@ def plotOneAgent(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 15)
-    plt.ylim(0.0, 1.0)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+               fontsize=15)
+    plt.ylim(0.0, 1.05)
+    plt.show()
+
+
+def plotStateTogether(config):
+    # random correct rate
+    random_cr = np.load("./common_data/incremental/100trial-window3-random_is_correct.npy", allow_pickle=True).item()
+    # avg_random_cr = np.nanmean([np.nanmean(each) for each in random_cr])
+    avg_random_cr = {each: np.nanmean(random_cr[each]) for each in random_cr}
+    print("-"*15)
+    # trial name, pacman pos, beans, window cr for different agents
+    bean_vs_cr = np.load(config["stage_together_filename"], allow_pickle = True).item()
+
+    agent_index = [1, 0, 2, 3, 4] # (global, local, pessimistic, suicide, planned hunting)
+    first_phase_agent_cr = np.array(bean_vs_cr["end"])[agent_index] # num of beans <= 10
+    second_phase_agent_cr = np.array(bean_vs_cr["medium"])[agent_index] # 10 < num of beans < 80
+    third_phase_agent_cr = np.array(bean_vs_cr["early"])[agent_index] # num of beans > 80
+    # plotting
+    x_ticks = ["local", "+global", "+evade", "+suicide", "+attack"]
+    if "descriptive" in config["one_agent_filename"]:
+        x_ticks = ["local", "+global", "+evade", "+approach", "+energizer"]
+    x_index = np.arange(0, len(x_ticks) / 2, 0.5)
+    # colors = RdYlBu_5.mpl_colors
+    # colors[2] = Balance_6.mpl_colors[2]
+    # colors = [colors[0], colors[-1], colors[1], colors[3], colors[2]]
+    colors = [
+        agent_color["local"],
+        agent_color["global"],
+        agent_color["pessimistic"],
+        agent_color["suicide"],
+        agent_color["planned_hunting"]
+    ]
+
+    plt.figure(figsize=(22, 5))
+
+    plt.subplot(1, 3, 1)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Early Stage (Pellets >= 80)", fontsize=20)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], third_phase_agent_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
+    plt.ylim(0.0, 1.05)
+    plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
+
+    plt.subplot(1, 3, 2)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
+    avg_cr = np.mean(second_phase_agent_cr, axis=0)
+    var_cr = np.var(second_phase_agent_cr, axis=0)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], second_phase_agent_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec = colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+               fontsize=15)
+    plt.ylim(0.0, 1.05)
+
+    plt.subplot(1, 3, 3)
+    # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
+    plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
+    avg_cr = np.mean(first_phase_agent_cr, axis=0)
+    var_cr = np.var(first_phase_agent_cr, axis=0)
+    # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], first_phase_agent_cr[index],
+                     color=colors[index], linestyle="", ms=20, elinewidth=4,
+                     mfc=colors[index], mec=colors[index], marker="o")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.xlim(-0.25, 2.25)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+               fontsize=15)
+    plt.ylim(0.0, 1.05)
     plt.show()
 
 
 def plotStateComparison(config):
     width = 0.4
     color = RdBu_8.mpl_colors
+    random_data = np.load("./common_data/state_comparison/1000trial-random_is_correct.npy", allow_pickle=True).item()
+    avg_random_cr = {each:np.nanmean(random_data[each]) for each in random_data}
+    filename = "common_data/state_comparison/descriptive-1000trial_Patamon_diff_state_agent_cr.npy"
+    # filename = "common_data/state_comparison/1000trial_Patamon_diff_state_agent_cr.npy"
 
-    state_cr = np.load("common_data/state_comparison/100trial_Omega_diff_state_agent_cr.npy", allow_pickle=True)
+    state_cr = np.load(filename, allow_pickle=True)
     state_names = ["global", "local", "evade", "suicide", "attack", "vague"]
+    if "descriptive" in filename:
+        state_names = ["global", "local", "evade", "approach", "energizer", "vague"]
 
-    only_local = [[] for _ in range(6)]
-    all_agents = [[] for _ in range(6)]
+    only_local = []
+    all_agents = []
     for i in range(6):
-        only_local[i] = [each[0] for each in state_cr[i]]
-        all_agents[i] = [each[1] for each in state_cr[i]]
+        only_local.append([np.nanmean([j[0] for j in each]) for each in state_cr[i]])
+        all_agents.append([np.nanmean([j[1] for j in each]) for each in state_cr[i]])
     avg_only_local = [np.nanmean(each) for each in only_local]
     std_only_local = [np.nanstd(each) for each in only_local]
+    sem_only_local = [scipy.stats.sem(each) for each in only_local]
     avg_all_agents = [np.nanmean(each) for each in all_agents]
     std_all_agents = [np.nanstd(each) for each in all_agents]
+    sem_all_agents = [scipy.stats.sem(each) for each in all_agents]
 
     plt.figure(figsize=(10,7))
-    # plt.bar(x = np.arange(0, 6) - width, height = avg_only_local, width = width, label = "Local Agent", color = color[0], yerr = std_only_local)
-    # plt.bar(x = np.arange(0, 6), height=avg_all_agents, width = 0.4, label = "All Agents", color = color[-1], yerr = std_all_agents)
-    plt.bar(x=np.arange(0, 6) - width, height=avg_only_local, width=width, label="Local Agent", color=color[0])
-    plt.bar(x=np.arange(0, 6), height=avg_all_agents, width=0.4, label="All Agents", color=color[-1])
-
+    plt.bar(x = np.arange(0, 6) - width, height = avg_only_local, width = width, label = "Local Agent",
+            color = color[0], yerr = sem_only_local, capsize = 7, error_kw = {"capthick":3, "elinewidth":3})
+    plt.bar(x = np.arange(0, 6), height=avg_all_agents, width = 0.4, label = "All Agents",
+            color = color[-1], yerr = sem_all_agents, capsize = 7, error_kw = {"capthick":3, "elinewidth":3})
+    # plt.bar(x=np.arange(0, 6) - width, height=avg_only_local, width=width, label="Local Agent", color=color[0])
+    # plt.bar(x=np.arange(0, 6), height=avg_all_agents, width=0.4, label="All Agents", color=color[-1])
+    x_index = [[i-3*width/2, i+width/2] for i in range(6)]
+    label_list = ["global", "local", "evade", "suicide", "attack", "vague"]
+    for i in range(6):
+        plt.plot(x_index[i], [avg_random_cr[label_list[i]], avg_random_cr[label_list[i]]], "--", lw = 4, color="k")
     plt.xticks(np.arange(0, 6)-width/2, state_names, fontsize = 20)
-    plt.ylim(0.7, 1.0)
-    plt.yticks([0.70, 0.80, 0.90, 1.0], [0.7, 0.8, 0.9, 1.0], fontsize = 20)
+    # plt.ylim(0.0, 1.2)
+    # plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 20)
+    plt.ylim(0.4, 1.0)
+    plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=20)
     plt.ylabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
     plt.legend(frameon = False, fontsize = 20, ncol = 2)
     plt.show()
@@ -2145,7 +2292,7 @@ if __name__ == '__main__':
         "need_intercept" : True,
         "maximum_try": 5,
 
-        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q.pkl",
+        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q-descriptive.pkl",
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
@@ -2195,9 +2342,15 @@ if __name__ == '__main__':
         # ------------------------------------------------------------------------------------
 
         # "bean_vs_cr_filename" : "./common_data/incremental/100trial-Omega-window3-incremental_cr-w_intercept.npy",
-        "bean_vs_cr_filename": "./common_data/incremental/descriptive-window3-incremental_cr-w_intercept.npy",
+        # "bean_vs_cr_filename": "./common_data/incremental/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
+        # "one_agent_filename": "./common_data/one_agent/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
+        # "decremental_filename": "./common_data/decremental/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
+        # "stage_together_filename": "./common_data/stage_together/descriptive-100trial-cr.npy",
+
+        "bean_vs_cr_filename": "./common_data/incremental/100trial-window3-incremental_cr-w_intercept.npy",
         "one_agent_filename": "./common_data/one_agent/100trial-window3-incremental_cr-w_intercept.npy",
         "decremental_filename": "./common_data/decremental/100trial-window3-incremental_cr-w_intercept.npy",
+        "stage_together_filename": "./common_data/stage_together/100trial-cr.npy",
 
     }
 
@@ -2216,9 +2369,11 @@ if __name__ == '__main__':
     # plotIncremental(config)
     # plotOneAgent(config)
     # plotDecremental(config)
-    plotStateComparison(config)
+    # plotStateTogether(config)
 
-    # singleTrialMultiFitting(config)
+    # plotStateComparison(config)
+
+    singleTrialMultiFitting(config)
 
 
     # Best trials:

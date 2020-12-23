@@ -1721,6 +1721,95 @@ def oneAgentAnalysis(config):
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
+def stageAnalysis(config):
+    # Read trial data
+    print("=== Stage Together Analysis ====")
+    print(config["incremental_data_filename"])
+    data = readTrialData(config["incremental_data_filename"])
+    all_X = pd.concat([each[1] for each in data])
+    all_Y = pd.concat([each[2] for each in data])
+    print("Shape of data : ", all_X.shape)
+    beans_num = all_X.beans.apply(lambda x: len(x) if not isinstance(x, float) else 0)
+    early_index = np.where(beans_num >= 80)[0]
+    medium_index = np.intersect1d(np.where(10 < beans_num)[0], np.where(beans_num < 80)[0])
+    end_index = np.where(beans_num <= 10)[0]
+    stage_index = [early_index, medium_index, end_index]
+    stage_name = ["early", "medium", "end"]
+    # Incremental analysis
+    incremental_agents_list = [
+        ["local"],
+        ["local", "pessimistic"],
+        ["local", "global"],
+        ["local", "pessimistic", "global"],
+        ["local", "pessimistic", "global", "planned_hunting"],
+        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+    ]
+    all_cr = {"early":[], "medium":[], "end":[]}
+    for i, index in enumerate(stage_index):
+        print("-" * 15)
+        print(stage_name[i])
+        X = all_X.iloc[index]
+        Y = all_Y.iloc[index]
+        stage_length = X.shape[0]
+        print("Stage length : ", stage_length)
+        for agent_name in incremental_agents_list:
+            # Construct optimizer
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
+            if config["need_intercept"]:
+                params.append(1)
+                bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                X,
+                Y,
+                agent_name,
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            # correct rate in the window
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                X,
+                Y,
+                agent_name,
+                return_trajectory=True,
+                need_intercept=config["need_intercept"]
+            )
+            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+            true_dir = Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            print("{} | {}".format(agent_name, correct_rate))
+            all_cr[stage_name[i]].append(correct_rate)
+    # save correct rate data
+    if "stage_together" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/stage_together")
+    filename = "../common_data/stage_together/descriptive-{}trial-cr.npy".format(config["incremental_num_trial"])
+    np.save(filename, all_cr)
+
+
 def diffLabelAnalysis():
     print("="*20, " Diff State Analysis ", "="*20)
     filename = "../common_data/trial/1000_trial_data_Patamon-with_Q-descriptive.pkl"
@@ -1752,12 +1841,18 @@ def diffLabelAnalysis():
         handcrafted_label = [_handcraftLabeling(trial_X[label_list].iloc[index]) for index in range(trial_X.shape[0])]
         # handcrafted_label = handcrafted_label[window:-window]
         # Moving window analysis
-        agent_cr = []
+        trial_local_cr = []
+        trial_global_cr = []
+        trial_evade_cr = []
+        trial_suicide_cr = []
+        trial_attack_cr = []
+        trial_vague_cr = []
         trial_length = trial_X.shape[0]
         print("Length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
+            temp_cr = []
             print("Window at {}...".format(centering_point))
             sub_X = trial_X[centering_point - window:centering_point + window + 1]
             sub_Y = trial_Y[centering_point - window:centering_point + window + 1]
@@ -1810,25 +1905,38 @@ def diffLabelAnalysis():
                 estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
                 true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
                 correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-                agent_cr.append(correct_rate)
+                temp_cr.append(correct_rate)
             # Assign label
             if handcrafted_label[centering_point] is None:
                 continue
             else:
                 if len(handcrafted_label[centering_point]) > 1:
-                    vague_cr.append(agent_cr)
+                    trial_vague_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["local"]:
-                    local_cr.append(agent_cr)
+                    trial_local_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["global"]:
-                    global_cr.append(agent_cr)
+                    trial_global_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["pessimistic"]:
-                    evade_cr.append(agent_cr)
+                    trial_evade_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["suicide"]:
-                    suicide_cr.append(agent_cr)
+                    trial_suicide_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["planned_hunting"]:
-                    attack_cr.append(agent_cr)
+                    trial_attack_cr.append(copy.deepcopy(temp_cr))
                 else:
                     continue
+        # Trial
+        if len(trial_local_cr) > 0:
+            local_cr.append(copy.deepcopy(trial_local_cr))
+        if len(trial_global_cr) > 0:
+            global_cr.append(copy.deepcopy(trial_global_cr))
+        if len(trial_evade_cr) > 0:
+            evade_cr.append(copy.deepcopy(trial_evade_cr))
+        if len(trial_attack_cr) > 0:
+            attack_cr.append(copy.deepcopy(trial_attack_cr))
+        if len(trial_suicide_cr) > 0:
+            suicide_cr.append(copy.deepcopy(trial_suicide_cr))
+        if len(trial_vague_cr) > 0:
+            vague_cr.append(copy.deepcopy(trial_vague_cr))
     # Summary & Save
     print("-"*40)
     print("Summary : ")
@@ -2924,8 +3032,8 @@ def plotCentering():
         "local": "local",
         "pessimistic": "evade",
         "global": "global",
-        "suicide": "suicide",
-        "planned_hunting": "attack"
+        "suicide": "approach",
+        "planned_hunting": "energizer"
     }
     agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     plt.figure(figsize=(18, 13))
@@ -2934,7 +3042,9 @@ def plotCentering():
     plt.title("Planned Hunting", fontsize = 15)
     planned_redundant_weight = np.array(planned_redundant_weight)
     avg_planned_redundant_weight = np.nanmean(planned_redundant_weight, axis = 0)
-    std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
+    # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
+    std_planned_redundant_weight = scipy.stats.sem(planned_redundant_weight, axis = 0)
+
     # plt.title(trial_name, fontsize = 15)
     for index in range(len(agent_name)):
         plt.plot(avg_planned_redundant_weight[index, :], color=agent_color[agent_name[index]], ms=3, lw=5,
@@ -2949,7 +3059,7 @@ def plotCentering():
         # )
     plt.ylabel("Normalized Agent Weight", fontsize=15)
     plt.xlim(0, avg_planned_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-10", "c", "10"], fontsize = 15)
+    plt.xticks([0, 11, 21], ["-10", "$\mathbf{c}$", "10"], fontsize = 15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon = False, fontsize = 10)
@@ -2958,7 +3068,7 @@ def plotCentering():
     plt.title("Accidental Hunting", fontsize = 15)
     accidental_redundant_weight = np.array(accidental_redundant_weight)
     avg_accidental_redundant_weight = np.nanmean(accidental_redundant_weight, axis=0)
-    std_accidental_redundant_weight = np.nanstd(accidental_redundant_weight, axis=0)
+    std_accidental_redundant_weight = scipy.stats.sem(accidental_redundant_weight, axis=0)
     # plt.title(trial_name, fontsize = 15)
     for index in range(len(agent_name)):
         plt.plot(avg_accidental_redundant_weight[index, :], color=agent_color[agent_name[index]], ms=3, lw=5,
@@ -2974,7 +3084,7 @@ def plotCentering():
     # for pessimistic agent
     plt.ylabel("Normalized Agent Weight", fontsize=15)
     plt.xlim(0, avg_accidental_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-10", "c", "10"], fontsize=15)
+    plt.xticks([0, 11, 21], ["-10", "$\mathbf{c}$", "10"], fontsize=15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon=False, fontsize=10)
@@ -2983,7 +3093,7 @@ def plotCentering():
     plt.title("Suicide", fontsize=15)
     suicide_redundant_weight = np.array(suicide_redundant_weight)
     avg_suicide_redundant_weight = np.nanmean(suicide_redundant_weight, axis=0)
-    std_suicide_redundant_weight = np.nanstd(suicide_redundant_weight, axis=0)
+    std_suicide_redundant_weight = scipy.stats.sem(suicide_redundant_weight, axis=0)
     # plt.title(trial_name, fontsize = 15)
     for index in range(len(agent_name)):
         plt.plot(avg_suicide_redundant_weight[index, :], color=agent_color[agent_name[index]], ms=3, lw=5,
@@ -2999,7 +3109,7 @@ def plotCentering():
     # for pessimistic agent
     plt.ylabel("Normalized Agent Weight", fontsize=15)
     plt.xlim(0, avg_suicide_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-20", "-10", "c"], fontsize=15)
+    plt.xticks([0, 11, 21], ["-20", "-10", "$\mathbf{c}$"], fontsize=15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon=False, fontsize=10)
@@ -3008,7 +3118,7 @@ def plotCentering():
     plt.title("Global", fontsize = 15)
     global_redundant_weight = np.array(global_redundant_weight)
     avg_global_redundant_weight = np.nanmean(global_redundant_weight, axis=0)
-    std_global_redundant_weight = np.nanstd(global_redundant_weight, axis=0)
+    std_global_redundant_weight = scipy.stats.sem(global_redundant_weight, axis=0)
     # plt.title(trial_name, fontsize = 15)
     for index in range(len(agent_name)):
         plt.plot(avg_global_redundant_weight[index, :], color=agent_color[agent_name[index]], ms=3, lw=5,
@@ -3024,7 +3134,7 @@ def plotCentering():
     # for pessimistic agent
     plt.ylabel("Normalized Agent Weight", fontsize=15)
     plt.xlim(0, avg_global_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-10", "c", "10"], fontsize=15)
+    plt.xticks([0, 11, 21], ["-10", "$\mathbf{c}$", "10"], fontsize=15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon=False, fontsize=10)
@@ -3068,7 +3178,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-descriptive.pkl".format(type),
+        "trial_data_filename": "../common_data/trial/{}_200_trial_data_Omega-with_Q-descriptive.pkl".format(type),
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -3098,13 +3208,14 @@ if __name__ == '__main__':
     # plotAccidentalHunting()
     # plotSuicide()
     # plotGlobal()
-    # plotCentering()
+    plotCentering()
 
     # incrementalAnalysis(config)
     # decrementalAnalysis(config)
     # oneAgentAnalysis(config)
+    # stageAnalysis(config)
 
-    diffLabelAnalysis()
+    # diffLabelAnalysis()
 
     # singleTrial4Hunting(config)
     # singleTrial4Suicide(config)

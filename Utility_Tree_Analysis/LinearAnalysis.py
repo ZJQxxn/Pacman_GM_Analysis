@@ -116,11 +116,21 @@ def extractFeature(trial_data):
             else (0 if x.pacmanPos == x.fruitPos else locs_df[x.pacmanPos][x.fruitPos]),
             axis = 1
         )
-        beans_15step = trial[["pacmanPos", "beans"]].apply(
+        beans_10_to_15step = trial[["pacmanPos", "beans"]].apply(
+            lambda x : 0 if isinstance(x.beans, float)
+            else np.sum(
+                np.intersect1d(
+                    np.where(10 < np.array([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.beans]))[0],
+                    np.where(np.array([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.beans])< 15)[0]
+                )
+            ),
+            axis = 1
+        )
+        beans_within10 = trial[["pacmanPos", "beans"]].apply(
             lambda x : 0 if isinstance(x.beans, float)
             else np.sum(
                 np.where(
-                    np.array([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.beans]) <= 15
+                    np.array([0 if x.pacmanPos == each else locs_df[x.pacmanPos][each] for each in x.beans]) <= 10
                 )
             ),
             axis = 1
@@ -149,7 +159,8 @@ def extractFeature(trial_data):
                 "PG2" : PG2,
                 "min_PE" : min_PE,
                 "PF" : PF,
-                "beans_15step" : beans_15step,
+                "beans_within10": beans_within10,
+                "beans_10_t_15step" : beans_10_to_15step,
                 "beans_diff" : beans_diff
             }
         )
@@ -697,11 +708,11 @@ def showDistPlot():
     # plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
     #          label = ["Perceptron (local)", "Perceptron (global)", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
     #          rwidth = 1.0, color=[color[-3], color[-2], color[-1], color[1], color[0]])
-    sbn.distplot(omega_cr[:, 0], kde = False, label = "Perceptron (local)", color = color[-3])
-    sbn.distplot(omega_cr[:, 1], kde=False, label = "Perceptron (all)", color = color[-2])
-    sbn.distplot(omega_cr[:, 2], kde=False, label = "Perceptron (dir)", color = color[-1])
-    sbn.distplot(omega_cr[:, 3], kde=False, label = "Multi-Agent (local)", color = color[1])
-    sbn.distplot(omega_cr[:, 4], kde=False, label = "Multi-Agent (all)", color = color[0])
+    # sbn.distplot(omega_cr[:, 0], kde = False, label = "Perceptron (local)", color = color[-3])
+    sbn.distplot(omega_cr[:, 1], kde=False, label = "Perceptron", color = color[-1]) # Perceptron all features
+    # sbn.distplot(omega_cr[:, 2], kde=False, label = "Perceptron (dir)", color = color[-1])
+    # sbn.distplot(omega_cr[:, 3], kde=False, label = "Multi-Agent (local)", color = color[1])
+    sbn.distplot(omega_cr[:, 4], kde=False, label = "Multi-Agent", color = color[0]) # Multi-agent all agents
     plt.xlabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
     plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
     plt.xlim(0.3, 1.0)
@@ -714,11 +725,11 @@ def showDistPlot():
     # plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
     #          label = ["Perceptron (local)", "Perceptron (global)", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
     #          rwidth = 1.0, color=[color[-3], color[-2], color[-1], color[1], color[0]])
-    sbn.distplot(patamon_cr[:, 0], kde=False, label="Perceptron (local)", color=color[-3])
-    sbn.distplot(patamon_cr[:, 1], kde=False, label="Perceptron (all)", color=color[-2])
-    sbn.distplot(patamon_cr[:, 2], kde=False, label="Perceptron (dir)", color=color[-1])
-    sbn.distplot(patamon_cr[:, 3], kde=False, label="Multi-Agent (local)", color=color[1])
-    sbn.distplot(patamon_cr[:, 4], kde=False, label="Multi-Agent (all)", color=color[0])
+    # sbn.distplot(patamon_cr[:, 0], kde = False, label = "Perceptron (local)", color = color[-3])
+    sbn.distplot(patamon_cr[:, 1], kde=False, label="Perceptron", color=color[-1])  # Perceptron all features
+    # sbn.distplot(patamon_cr[:, 2], kde=False, label = "Perceptron (dir)", color = color[-1])
+    # sbn.distplot(patamon_cr[:, 3], kde=False, label = "Multi-Agent (local)", color = color[1])
+    sbn.distplot(patamon_cr[:, 4], kde=False, label="Multi-Agent", color=color[0])  # Multi-agent all agents
     plt.xlabel("Joystick Movement Estimation Correct Rate", fontsize=20)
     plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=20)
     plt.xlim(0.3, 1.0)
@@ -832,12 +843,11 @@ if __name__ == '__main__':
         "trial_num" : None,
         "need_intercept" : True,
         # "analysis" : ["features-all", "features-local", "features_wrt_dir", "multi-agent"],
-        "analysis": ["multi-agent"],
+        "analysis": ["features-all"],
         "agents" : ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     }
 
     # comparison(config)
-    #
     # config["data_filename"] = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
     # comparison(config)
     # showResults("Patamon")

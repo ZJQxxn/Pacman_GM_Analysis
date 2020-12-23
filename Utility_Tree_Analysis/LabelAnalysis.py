@@ -702,6 +702,41 @@ def readAllData(filename, trial_num):
     return all_data, true_prob
 
 
+def readSimpleTrialData(filename):
+    '''
+        Read data for MLE analysis.
+        :param filename: Filename.
+        '''
+    # Read data and pre-processing
+    with open(filename, "rb") as file:
+        all_data = pickle.load(file)
+    if "level_0" not in all_data.columns.values:
+        all_data = all_data.reset_index(drop=True)
+    # Split into trials
+    trial_data = []
+    trial_name_list = np.unique(all_data.file.values)
+    for each in trial_name_list:
+        each_trial = all_data[all_data.file == each].reset_index(drop = True)
+        # True moving directions
+        true_prob = each_trial.next_pacman_dir_fill
+        # Fill nan direction for optimization use
+        start_index = 0
+        while pd.isna(true_prob[start_index]):
+            start_index += 1
+            if start_index == len(true_prob):
+                break
+        if start_index == len(true_prob):
+            print("Moving direciton of trial {} is all nan.".format(each))
+            continue
+        if start_index > 0:
+            true_prob[:start_index + 1] = true_prob[start_index + 1]
+        for index in range(1, true_prob.shape[0]):
+            if pd.isna(true_prob[index]):
+                true_prob[index] = true_prob[index - 1]
+        true_prob = true_prob.apply(lambda x: np.array(oneHot(x)))
+        trial_data.append([each, each_trial, true_prob])
+    return trial_data
+
 
 # ===================================
 #       INDIVIDUAL ESTIMATION
@@ -1836,6 +1871,268 @@ def oneAgentAnalysis(config):
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
+def stageAnalysis(config):
+    # Read trial data
+    print("=== Stage Together Analysis ====")
+    print(config["incremental_data_filename"])
+    data = readTrialData(config["incremental_data_filename"])
+    all_X = pd.concat([each[1] for each in data])
+    all_Y = pd.concat([each[2] for each in data])
+    print("Shape of data : ", all_X.shape)
+    beans_num = all_X.beans.apply(lambda x: len(x) if not isinstance(x, float) else 0)
+    early_index = np.where(beans_num >= 80)[0]
+    medium_index = np.intersect1d(np.where(10 < beans_num)[0], np.where(beans_num < 80)[0])
+    end_index = np.where(beans_num <= 10)[0]
+    stage_index = [early_index, medium_index, end_index]
+    stage_name = ["early", "medium", "end"]
+    # Incremental analysis
+    incremental_agents_list = [
+        ["local"],
+        ["local", "pessimistic"],
+        ["local", "global"],
+        ["local", "pessimistic", "global"],
+        ["local", "pessimistic", "global", "planned_hunting"],
+        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+    ]
+    all_cr = {"early":[], "medium":[], "end":[]}
+    for i, index in enumerate(stage_index):
+        print("-" * 15)
+        print(stage_name[i])
+        X = all_X.iloc[index]
+        Y = all_Y.iloc[index]
+        stage_length = X.shape[0]
+        print("Stage length : ", stage_length)
+        for agent_name in incremental_agents_list:
+            # Construct optimizer
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
+            if config["need_intercept"]:
+                params.append(1)
+                bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                X,
+                Y,
+                agent_name,
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            # correct rate in the window
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                X,
+                Y,
+                agent_name,
+                return_trajectory=True,
+                need_intercept=config["need_intercept"]
+            )
+            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+            true_dir = Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            print("{} | {}".format(agent_name, correct_rate))
+            all_cr[stage_name[i]].append(correct_rate)
+    # save correct rate data
+    if "stage_together" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/stage_together")
+    filename = "../common_data/stage_together/{}trial-cr.npy".format(config["incremental_num_trial"])
+    np.save(filename, all_cr)
+
+
+def randomAnalysis(config):
+    print("=== Random Analysis ====")
+    adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readSimpleTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    all_cr = []
+    for trial_index, each in enumerate(trial_data):
+        print("-" * 15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("|{}| Trial name : ".format(trial_index), trial_name)
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        trial_cr = []
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            estimated_Y = []
+            true_Y = []
+            for i in range(len(sub_Y)):
+                if sub_X.pacmanPos.values[i] not in adjacent_data:
+                    continue
+                true_Y.append(list(sub_Y.values[i]).index(1))
+                available_dir = []
+                for dir in adjacent_data[sub_X.pacmanPos.values[i]]:
+                    if not isinstance(adjacent_data[sub_X.pacmanPos.values[i]][dir], float):
+                        available_dir.append(dir)
+                estimated_Y.append(["left", "right", "up", "down"].index(np.random.choice(available_dir, 1).item()))
+            if len(true_Y) > 0:
+                estimated_Y = np.array(estimated_Y)
+                true_Y = np.array(true_Y)
+                cr = np.sum(true_Y == estimated_Y) / len(true_Y)
+                trial_cr.append(cr)
+        print("Average correct rate for trial : ", np.nanmean([trial_cr]))
+        all_cr.append(copy.deepcopy(trial_cr))
+    # save correct rate data
+    if "incremental" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/incremental")
+    np.save("../common_data/incremental/{}trial-window{}-random_cr.npy".format(config["incremental_num_trial"], window), all_cr)
+
+
+def stageRandomAnalysis(config):
+    print("=== Stage Random Analysis ====")
+    adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readSimpleTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    early_is_correct = []
+    middle_is_correct = []
+    end_is_correct = []
+
+    for trial_index, each in enumerate(trial_data):
+        print("-" * 15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("|{}| Trial name : ".format(trial_index), trial_name)
+        print("Trial length : ", trial_length)
+        beans_num = X.beans.apply(lambda x: len(x) if not isinstance(x, float) else 0)
+        for i in range(X.shape[0]):
+            if X.pacmanPos.values[i] not in adjacent_data:
+                    continue
+            available_dir = []
+            for dir in adjacent_data[X.pacmanPos.values[i]]:
+                if not isinstance(adjacent_data[X.pacmanPos.values[i]][dir], float):
+                    available_dir.append(dir)
+            estimated_Y = ["left", "right", "up", "down"].index(np.random.choice(available_dir, 1).item())
+            true_Y = list(Y.values[i]).index(1)
+            if beans_num[i] <= 10:
+                end_is_correct.append(true_Y == estimated_Y)
+            elif 10 < beans_num[i] < 80:
+                middle_is_correct.append(true_Y == estimated_Y)
+            else:
+                early_is_correct.append(true_Y == estimated_Y)
+    # save correct rate data
+    if "incremental" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/incremental")
+    np.save("../common_data/incremental/{}trial-window{}-random_is_correct.npy".format(config["incremental_num_trial"], window),
+            {"early" : early_is_correct, "middle": middle_is_correct, "end":end_is_correct})
+
+
+def labelRandomAnalysis(config):
+    label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+                  "label_global_optimal", "label_global_notoptimal", "label_global",
+                  "label_evade", "label_evade1",
+                  "label_suicide",
+                  "label_true_accidental_hunting",
+                  "label_true_planned_hunting"]
+    print("=== Label Random Analysis ====")
+    adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
+    filename = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
+    # filename = "../common_data/trial/50_trial_data_Omega-with_Q.pkl"
+    print(filename)
+    with open(filename, "rb") as file:
+        trial_data= pickle.load(file)
+    trial_Y = trial_data.next_pacman_dir_fill
+    for index in range(1, trial_Y.shape[0]):
+        if pd.isna(trial_Y[index]):
+            trial_Y[index] = trial_Y[index - 1]
+    trial_Y = trial_Y.apply(lambda x: np.array(oneHot(x)))
+    handcrafted_label = [_handcraftLabeling(trial_data[label_list].iloc[index]) for index in range(trial_data.shape[0])]
+    print("Shape of data : ", trial_data.shape)
+
+    global_is_correct = []
+    local_is_correct = []
+    evade_is_correct = []
+    suicide_is_correct = []
+    attack_is_correct = []
+    vague_is_correct = []
+
+    for i in range(trial_data.shape[0]):
+        if i % 100 == 0:
+            print("At index {}".format(i))
+        if trial_data.pacmanPos.values[i] not in adjacent_data:
+            continue
+        if isinstance(trial_Y[i], float):
+            continue
+        available_dir = []
+        for dir in adjacent_data[trial_data.pacmanPos.values[i]]:
+            if not isinstance(adjacent_data[trial_data.pacmanPos.values[i]][dir], float):
+                available_dir.append(dir)
+        estimated_Y = ["left", "right", "up", "down"].index(np.random.choice(available_dir, 1).item())
+        true_Y = list(trial_Y.values[i]).index(1)
+        if handcrafted_label[i] is None:
+            continue
+        if len(handcrafted_label[i]) > 1:
+            vague_is_correct.append(true_Y == estimated_Y)
+        elif handcrafted_label[i] == ["local"]:
+            local_is_correct.append(true_Y == estimated_Y)
+        elif handcrafted_label[i] == ["global"]:
+            global_is_correct.append(true_Y == estimated_Y)
+        elif handcrafted_label[i] == ["pessimistic"]:
+            evade_is_correct.append(true_Y == estimated_Y)
+        elif handcrafted_label[i] == ["suicide"]:
+            suicide_is_correct.append(true_Y == estimated_Y)
+        elif handcrafted_label[i] == ["planned_hunting"]:
+            attack_is_correct.append(true_Y == estimated_Y)
+        else:
+            continue
+    # save correct rate data
+    if "state_comparison" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/state_comparison")
+    np.save("../common_data/state_comparison/1000trial-random_is_correct.npy",
+            {"local": local_is_correct, "global": global_is_correct,
+             "evade": evade_is_correct, "suicide":suicide_is_correct,
+             "attack":attack_is_correct, "vague":vague_is_correct})
+
+# =================================================
+
 def singleTrialThreeFitting(config):
     # Read trial data
     agent_name = config["single_trial_agents"]
@@ -2868,9 +3165,11 @@ def controlledMLE(config):
 def diffLabelAnalysis():
     print("="*20, " Diff State Analysis ", "="*20)
     filename = "../common_data/trial/1000_trial_data_Patamon-with_Q.pkl"
+    # filename = "../common_data/trial/50_trial_data_Omega-with_Q.pkl"
+
     print(filename)
     data = readTrialData(filename)
-    # data = [data[i] for i in range(10)]
+    data = [data[i] for i in range(2)]
     print("Num of trials : ", len(data))
     window = 3
     label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
@@ -2894,14 +3193,19 @@ def diffLabelAnalysis():
         trial_X = each[1]
         trial_Y = each[2]
         handcrafted_label = [_handcraftLabeling(trial_X[label_list].iloc[index]) for index in range(trial_X.shape[0])]
-        # handcrafted_label = handcrafted_label[window:-window]
         # Moving window analysis
-        agent_cr = []
+        trial_local_cr = []
+        trial_global_cr = []
+        trial_evade_cr = []
+        trial_suicide_cr = []
+        trial_attack_cr = []
+        trial_vague_cr = []
         trial_length = trial_X.shape[0]
         print("Length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
+            temp_cr = []
             print("Window at {}...".format(centering_point))
             sub_X = trial_X[centering_point - window:centering_point + window + 1]
             sub_Y = trial_Y[centering_point - window:centering_point + window + 1]
@@ -2954,25 +3258,38 @@ def diffLabelAnalysis():
                 estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
                 true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
                 correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-                agent_cr.append(correct_rate)
+                temp_cr.append(correct_rate)
             # Assign label
             if handcrafted_label[centering_point] is None:
                 continue
             else:
                 if len(handcrafted_label[centering_point]) > 1:
-                    vague_cr.append(agent_cr)
+                    trial_vague_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["local"]:
-                    local_cr.append(agent_cr)
+                    trial_local_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["global"]:
-                    global_cr.append(agent_cr)
+                    trial_global_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["pessimistic"]:
-                    evade_cr.append(agent_cr)
+                    trial_evade_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["suicide"]:
-                    suicide_cr.append(agent_cr)
+                    trial_suicide_cr.append(copy.deepcopy(temp_cr))
                 elif handcrafted_label[centering_point] == ["planned_hunting"]:
-                    attack_cr.append(agent_cr)
+                    trial_attack_cr.append(copy.deepcopy(temp_cr))
                 else:
                     continue
+        # Trial
+        if len(trial_local_cr) > 0:
+            local_cr.append(copy.deepcopy(trial_local_cr))
+        if len(trial_global_cr) > 0:
+            global_cr.append(copy.deepcopy(trial_global_cr))
+        if len(trial_evade_cr) > 0:
+            evade_cr.append(copy.deepcopy(trial_evade_cr))
+        if len(trial_attack_cr) > 0:
+            attack_cr.append(copy.deepcopy(trial_attack_cr))
+        if len(trial_suicide_cr) > 0:
+            suicide_cr.append(copy.deepcopy(trial_suicide_cr))
+        if len(trial_vague_cr) > 0:
+            vague_cr.append(copy.deepcopy(trial_vague_cr))
     # Summary & Save
     print("-"*40)
     print("Summary : ")
@@ -2985,7 +3302,7 @@ def diffLabelAnalysis():
     state_cr = [global_cr, local_cr, evade_cr, suicide_cr, attack_cr, vague_cr]
     if "state_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/state_comparison")
-    np.save("../common_data/state_comparison/100trial_Omega_diff_state_agent_cr.npy", state_cr)
+    np.save("../common_data/state_comparison/1000trial_Patamon_diff_state_agent_cr.npy", state_cr)
 
 
 
@@ -3269,11 +3586,6 @@ if __name__ == '__main__':
         "integration_evade_to_local_agent_weight": "../common_data/integration_transition/evade_to_local-agent_weight-w_intercept.npy",
         "integration_evade_to_local_cr": "../common_data/integration_transition/evade_to_local-cr-w_intercept.npy",
         "integration_evade_to_local_Q": "../common_data/integration_transition/evade_to_local-Q-w_intercept.npy",
-
-        # ------------------------------------------------------------------------------------
-
-        "bean_vs_cr_filename" : "../common_data/incremental/500trial-window3-incremental_cr-w_intercept.npy",
-        "bin_size" : 10,
     }
 
 
@@ -3290,12 +3602,18 @@ if __name__ == '__main__':
     # incrementalAnalysis(config)
     # decrementalAnalysis(config)
     # oneAgentAnalysis(config)
+    # randomAnalysis(config)
+    # stageRandomAnalysis(config)
+    labelRandomAnalysis(config)
+
+    # stageAnalysis(config)
+
 
     # multiAgentAnalysis(config)
 
     # _extractDiffState()
     # diffStateAnalysis(config)
-    diffLabelAnalysis()
+    # diffLabelAnalysis()
 
     # simpleMLE(config)
     # controlledMLE(config)
