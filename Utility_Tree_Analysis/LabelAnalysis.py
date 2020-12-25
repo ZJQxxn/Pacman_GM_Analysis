@@ -1970,7 +1970,7 @@ def stageCombineAnalysis(config):
     data = readTrialData(config["incremental_data_filename"])
     all_X = pd.concat([each[1] for each in data])
     all_Y = pd.concat([each[2] for each in data])
-    print("Shape of data : ", all_X.shape)
+    print("Shape of data : ", len(data))
     # Incremental analysis
     incremental_agents_list = [
         ["global"],
@@ -2019,34 +2019,40 @@ def stageCombineAnalysis(config):
             if not is_success:
                 print("Fail, retrying...")
                 retry_num += 1
-        # correct rate in the window
-        _, estimated_prob = negativeLikelihood(
-            res.x,
-            all_X,
-            all_Y,
-            agent_name,
-            return_trajectory=True,
-            need_intercept=config["need_intercept"]
-        )
-        estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
-        true_dir = all_Y.apply(lambda x: np.argmax(x)).values
-        correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-        print("{} | {}".format(agent_name, correct_rate))
-        all_cr.append(correct_rate)
         # compute contribution
         Q_list = ["{}_Q".format(each) for each in agent_name]
         cur_weight = res.x[:-1]
-        for i,j in enumerate(Q_list):
+        for i, j in enumerate(Q_list):
             Q_value = all_X[j].values
             Q_scale = scaleOfNumber(np.concatenate(np.abs(Q_value)).max())
             cur_weight[i] *= Q_scale
         weight.append(cur_weight)
+        # correct rate for each trial
+        trial_cr = []
+        for each_trial in data:
+            trial_X = each_trial[1]
+            trial_Y = each_trial[2]
+            _, estimated_prob = negativeLikelihood(
+                res.x,
+                trial_X,
+                trial_Y,
+                agent_name,
+                return_trajectory=True,
+                need_intercept=config["need_intercept"]
+            )
+            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+            true_dir = trial_Y.apply(lambda x: np.argmax(x)).values
+            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+            trial_cr.append(correct_rate)
+        all_cr.append(copy.deepcopy(trial_cr))
+        print("{} | Avg Cr : {}".format(agent_name, np.nanmean(trial_cr)))
+
     # save correct rate data
     if "stage_together" not in os.listdir("../common_data"):
         os.mkdir("../common_data/stage_together")
-    filename = "../common_data/stage_together/all-{}trial-cr.npy".format(config["incremental_num_trial"])
+    filename = "../common_data/stage_together/all-100trial-cr.npy"
     np.save(filename, all_cr)
-    np.save("../common_data/stage_together/all-{}trial-weight.npy".format(config["incremental_num_trial"]), weight)
+    np.save("../common_data/stage_together/all-100trial-weight.npy", weight)
 
 
 def specialCaseAnalysis(config):
@@ -2068,9 +2074,13 @@ def specialCaseAnalysis(config):
     ]
     locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
     print("Finished reading distance file")
-    cr_dict = {"end":[], "close-normal":[], "close-scared":[]}
+    # cr_dict = {"end":[], "close-normal":[], "close-scared":[]}
     end_index = all_X.beans.apply(lambda x: len(x) <= 10 if not isinstance(x, float) else True)
     end_index = np.where(end_index== True)[0]
+    early_index = all_X.beans.apply(lambda x: len(x) >= 80 if not isinstance(x, float) else False)
+    early_index = np.where(early_index == True)[0]
+    middle_index = all_X.beans.apply(lambda x: 10 < len(x) < 80 if not isinstance(x, float) else False)
+    middle_index = np.where(middle_index == True)[0]
     scared_index = all_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 > 3 or x.ifscared2 > 3, axis = 1)
     scared_index = np.where(scared_index== True)[0]
     normal_index = all_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 < 3 or x.ifscared2 < 3, axis = 1)
@@ -2081,16 +2091,38 @@ def specialCaseAnalysis(config):
     )
     close_index = np.where(close_index== True)[0]
     cr_index = {
+        "early":early_index,
+        "middle":middle_index,
         "end":end_index,
         "close-normal":np.intersect1d(close_index, normal_index),
         "close-scared":np.intersect1d(close_index, scared_index)
+    }
+    cr_weight = {
+        "early": [],
+        "middle": [],
+        "end": [],
+        "close-normal": [],
+        "close-scared": []
+    }
+    cr_contribuion = {
+        "early": [],
+        "middle": [],
+        "end": [],
+        "close-normal": [],
+        "close-scared": []
+    }
+    cr_trial = {
+        "early": [],
+        "middle": [],
+        "end": [],
+        "close-normal": [],
+        "close-scared": []
     }
     for case in cr_index:
         print("-"*20)
         print("Case : ", case)
         X = all_X.iloc[cr_index[case]]
         Y = all_Y.iloc[cr_index[case]]
-        all_cr = []
         for agent_name in incremental_agents_list:
             # Construct optimizer
             params = [0 for _ in range(len(agent_name))]
@@ -2128,35 +2160,209 @@ def specialCaseAnalysis(config):
                 if not is_success:
                     print("Fail, retrying...")
                     retry_num += 1
-            # correct rate in the window
-            _, estimated_prob = negativeLikelihood(
-                res.x,
-                X,
-                Y,
-                agent_name,
-                return_trajectory=True,
-                need_intercept=config["need_intercept"]
-            )
-            estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
-            true_dir = Y.apply(lambda x: np.argmax(x)).values
-            correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-            print("{} | {}".format(agent_name, correct_rate))
-            all_cr.append(correct_rate)
-        cr_dict[case] = all_cr
-        # # compute contribution
-        # Q_list = ["{}_Q".format(each) for each in agent_name]
-        # cur_weight = res.x[:-1]
-        # for i,j in enumerate(Q_list):
-        #     Q_value = all_X[j].values
-        #     Q_scale = scaleOfNumber(np.concatenate(np.abs(Q_value)).max())
-        #     cur_weight[i] *= Q_scale
-        # weight.append(cur_weight)
+            cr_weight[case].append(copy.deepcopy(res.x))
+            # compute contribution
+            Q_list = ["{}_Q".format(each) for each in agent_name]
+            cur_weight = res.x[:-1]
+            for i,j in enumerate(Q_list):
+                Q_value = all_X[j].values
+                Q_scale = scaleOfNumber(np.concatenate(np.abs(Q_value)).max())
+                cur_weight[i] *= Q_scale
+            cr_contribuion[case].append(copy.deepcopy(cur_weight))
+    # correct rate in the window
+    for each_trial in data:
+        trial_X = each_trial[1]
+        trial_Y = each_trial[2]
+        end_index = trial_X.beans.apply(lambda x: len(x) <= 10 if not isinstance(x, float) else True)
+        end_index = np.where(end_index == True)[0]
+        early_index = trial_X.beans.apply(lambda x: len(x) >= 80 if not isinstance(x, float) else True)
+        early_index = np.where(early_index == True)[0]
+        middle_index = trial_X.beans.apply(lambda x: 10 < len(x) < 80 if not isinstance(x, float) else True)
+        middle_index = np.where(middle_index == True)[0]
+        scared_index = trial_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 > 3 or x.ifscared2 > 3, axis=1)
+        scared_index = np.where(scared_index == True)[0]
+        normal_index = trial_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 < 3 or x.ifscared2 < 3, axis=1)
+        normal_index = np.where(normal_index == True)[0]
+        close_index = trial_X[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+            axis=1
+        )
+        close_index = np.where(close_index == True)[0]
+        trial_index = {
+            "early": early_index,
+            "middle": middle_index,
+            "end": end_index,
+            "close-normal": np.intersect1d(close_index, normal_index),
+            "close-scared": np.intersect1d(close_index, scared_index)
+        }
+        for case in trial_index:
+            sub_X = trial_X.iloc[trial_index[case]]
+            sub_Y = trial_Y.iloc[trial_index[case]]
+            trial_cr = []
+            for agent_index, agent_name in enumerate(incremental_agents_list):
+                _, estimated_prob = negativeLikelihood(
+                    cr_weight[case][agent_index],
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                trial_cr.append(correct_rate)
+            cr_trial[case].append(copy.deepcopy(trial_cr))
     # save correct rate data
     if "special_case" not in os.listdir("../common_data"):
         os.mkdir("../common_data/special_case")
-    filename = "../common_data/special_case/100trial-cr.npy".format(config["incremental_num_trial"])
-    np.save(filename, cr_dict)
-    # np.save("../common_data/stage_together/all-{}trial-weight.npy".format(config["incremental_num_trial"]), weight)
+    filename = "../common_data/special_case/100trial-cr.npy"
+    np.save(filename, cr_trial)
+    np.save("../common_data/special_case/100trial-contribution.npy", cr_contribuion)
+
+
+def specialCaseMovingAnalysis(config):
+    # Read trial data
+    print("=== Stage Combine Analysis (use all for MLE) ====")
+    print(config["incremental_data_filename"])
+    data = readTrialData(config["incremental_data_filename"])
+    window = 3
+    # Incremental analysis
+    incremental_agents_list = [
+        ["global"],
+        ["local"],
+        ["pessimistic"],
+        ["suicide"],
+        ["planned_hunting"],
+        ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    ]
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    print("Finished reading distance file")
+    cr_trial = {
+        "early": [],
+        "middle": [],
+        "end": [],
+        "close-normal": [],
+        "close-scared": []
+    }
+
+    # for each trial
+    for trial_index, each_trial in enumerate(data):
+        print("|{}| Trial Name : {}".format(trial_index, each_trial[0]))
+        all_X = each_trial[1]
+        all_Y = each_trial[2]
+        trial_length = all_X.shape[0]
+        end_index = all_X.beans.apply(lambda x: len(x) <= 10 if not isinstance(x, float) else True)
+        end_index = np.where(end_index == True)[0]
+        early_index = all_X.beans.apply(lambda x: len(x) >= 80 if not isinstance(x, float) else False)
+        early_index = np.where(early_index == True)[0]
+        middle_index = all_X.beans.apply(lambda x: 10 < len(x) < 80 if not isinstance(x, float) else False)
+        middle_index = np.where(middle_index == True)[0]
+        scared_index = all_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 > 3 or x.ifscared2 > 3, axis=1)
+        scared_index = np.where(scared_index == True)[0]
+        normal_index = all_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 < 3 or x.ifscared2 < 3, axis=1)
+        normal_index = np.where(normal_index == True)[0]
+        close_index = all_X[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+            axis=1
+        )
+        close_index = np.where(close_index == True)[0]
+        cr_index = {
+            "early": early_index,
+            "middle": middle_index,
+            "end": end_index,
+            "close-normal": np.intersect1d(close_index, normal_index),
+            "close-scared": np.intersect1d(close_index, scared_index)
+        }
+        print("Trial length : ", trial_length)
+        trial_early_cr = []
+        trial_middle_cr = []
+        trial_end_cr = []
+        trial_close_normal_cr = []
+        trial_close_scared_cr = []
+        window_index = np.arange(window, trial_length - window)
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            sub_X = all_X[centering_point - window:centering_point + window + 1]
+            sub_Y = all_Y[centering_point - window:centering_point + window + 1]
+            agent_cr = []
+            for agent_index, agent_name in enumerate(incremental_agents_list):
+                params = [0 for _ in range(len(agent_name))]
+                bounds = [[0, 10] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < 5:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                # estimation
+                _, estimated_prob = negativeLikelihood(
+                    res.x,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                agent_cr.append(correct_rate)
+            # Check the type of this data
+            if centering_point in cr_index["early"]:
+                trial_early_cr.append(copy.deepcopy(agent_cr))
+            if centering_point in cr_index["middle"]:
+                trial_middle_cr.append(copy.deepcopy(agent_cr))
+            if centering_point in cr_index["end"]:
+                trial_end_cr.append(copy.deepcopy(agent_cr))
+            if centering_point in cr_index["close-normal"]:
+                trial_close_normal_cr.append(copy.deepcopy(agent_cr))
+            if centering_point in cr_index["close-scared"]:
+                trial_close_scared_cr.append(copy.deepcopy(agent_cr))
+        # Assign types
+        if len(trial_end_cr) > 0:
+            cr_trial["end"].append(copy.deepcopy(trial_end_cr))
+        if len(trial_middle_cr) > 0:
+            cr_trial["middle"].append(copy.deepcopy(trial_middle_cr))
+        if len(trial_early_cr) > 0:
+            cr_trial["early"].append(copy.deepcopy(trial_early_cr))
+        if len(trial_close_scared_cr) > 0:
+            cr_trial["close-scared"].append(copy.deepcopy(trial_close_scared_cr))
+        if len(trial_close_normal_cr) > 0:
+            cr_trial["close-normal"].append(copy.deepcopy(trial_close_normal_cr))
+    # save correct rate data
+    if "special_case" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/special_case")
+    filename = "../common_data/special_case/100trial-moving_window-cr.npy"
+    np.save(filename, cr_trial)
 
 
 def randomAnalysis(config):
@@ -2386,6 +2592,78 @@ def specialRandomAnalysis(config):
         os.mkdir("../common_data/special_case")
     np.save("../common_data/special_case/100trial-random_is_correct.npy",
             {"end" : end_is_correct, "close-scared": scared_is_correct, "close-normal":normal_is_correct})
+
+
+def specialAllRandomAnalysis(config):
+    print("=== Stage Random Analysis (All) ====")
+    adjacent_data = readAdjacentMap("extracted_data/adjacent_map.csv")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readSimpleTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    end_is_correct = []
+    early_is_correct = []
+    middle_is_correct = []
+    scared_is_correct = []
+    normal_is_correct = []
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+
+    for trial_index, each in enumerate(trial_data):
+        print("-" * 15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("|{}| Trial name : ".format(trial_index), trial_name)
+        print("Trial length : ", trial_length)
+        end_index = X.beans.apply(lambda x: len(x) <= 10 if not isinstance(x, float) else True)
+        early_index = X.beans.apply(lambda x: len(x) >= 10 if not isinstance(x, float) else False)
+        middle_index = X.beans.apply(lambda x: len(x) <= 10 if not isinstance(x, float) else False)
+        scared_index = X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 > 3 or x.ifscared2 > 3, axis=1)
+        normal_index = X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 < 3 or x.ifscared2 < 3, axis=1)
+        close_index = X[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+            axis=1
+        )
+        for i in range(X.shape[0]):
+            if X.pacmanPos.values[i] not in adjacent_data:
+                    continue
+            available_dir = []
+            for dir in adjacent_data[X.pacmanPos.values[i]]:
+                if not isinstance(adjacent_data[X.pacmanPos.values[i]][dir], float):
+                    available_dir.append(dir)
+            estimated_Y = ["left", "right", "up", "down"].index(np.random.choice(available_dir, 1).item())
+            true_Y = list(Y.values[i]).index(1)
+            if end_index.values[i] == 1:
+                end_is_correct.append(true_Y == estimated_Y)
+            if early_index.values[i] == 1:
+                early_is_correct.append(true_Y == estimated_Y)
+            if middle_index.values[i] == 1:
+                middle_is_correct.append(true_Y == estimated_Y)
+            if scared_index.values[i] == 1 and close_index.values[i] == 1:
+                scared_is_correct.append(true_Y == estimated_Y)
+            if normal_index.values[i] == 1 and close_index.values[i] == 1:
+                normal_is_correct.append(true_Y == estimated_Y)
+    # save correct rate data
+    if "special_case" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/special_case")
+    np.save("../common_data/special_case/100trial-all_random_is_correct.npy",
+            {
+                "end" : end_is_correct,
+                "early":early_is_correct,
+                "middle":middle_is_correct,
+                "close-scared": scared_is_correct,
+                "close-normal":normal_is_correct
+            }
+    )
 
 # =================================================
 
@@ -3642,9 +3920,13 @@ if __name__ == '__main__':
     # labelRandomAnalysis(config)
 
     # stageAnalysis(config)
-    # stageCombineAnalysis(config)
+
+    stageCombineAnalysis(config)
     specialCaseAnalysis(config)
-    specialRandomAnalysis(config)
+    specialCaseMovingAnalysis(config)
+
+    # specialRandomAnalysis(config)
+    # specialAllRandomAnalysis(config)
 
     # multiAgentAnalysis(config)
 

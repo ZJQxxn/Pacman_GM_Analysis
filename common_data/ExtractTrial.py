@@ -456,6 +456,29 @@ def extractMultiTrial():
     print("Finished saving trial data.")
 
 
+def extractPAorAATrial():
+    # Read data
+    data_filename = "/home/qlyang/Documents/pacman/constants/all_data_new.pkl"  # TODO: new data
+    with open(data_filename, "rb") as file:
+        data = pickle.load(file)
+    data = data["df_total"]
+    data = data.sort_index()
+    trial_name = [
+        "23-1-Omega-21-Aug-2019",
+        "1-1-Patamon-14-Jul-2019"
+    ]
+
+    is_need = data.file.apply(lambda x : trial_name[0] in x or trial_name[1] in x)
+    need_index = np.where(is_need.values == 1)
+    trial_data = data.iloc[need_index]
+    trial_data = trial_data.reset_index(drop = True)
+    print(trial_data.shape)
+    print("Finished extracting trial data.")
+    with open("trial/PA_AA_data.pkl", "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving trial data.")
+
+
 if __name__ == '__main__':
     # Extract transition data
     # extractTrialData(trial_num = 500)
@@ -487,10 +510,11 @@ if __name__ == '__main__':
     #     data = pickle.load(file)
     # print(data.keys())
 
-    extractPlannedTrial(trial_num=200)
-    extractAccidentalTrial(trial_num=200)
-    extractSuicideTrial(trial_num=200)
-    extractGlobalTrial(trial_num=200)
+    # extractPlannedTrial(trial_num=200)
+    # extractAccidentalTrial(trial_num=200)
+    # extractSuicideTrial(trial_num=200)
+    # extractGlobalTrial(trial_num=200)
 
     # extractMultiTrial()
+    extractPAorAATrial()
     pass
