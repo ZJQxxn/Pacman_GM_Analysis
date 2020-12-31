@@ -1571,9 +1571,10 @@ def incrementalAnalysis(config):
     trial_num = len(trial_data)
     print("Num of trials : ", trial_num)
     trial_index = np.arange(trial_num)
-    if config["incremental_num_trial"] is not None:
-        if config["incremental_num_trial"] < trial_num:
-            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    # trial_data.sort(key = lambda x: x[0])
+    all_trial_names = [each[0] for each in trial_data]
+    np.save("../common_data/trial/1000trial_name.npy", all_trial_names)
+
     trial_data = [trial_data[each] for each in trial_index]
     trial_num = len(trial_data)
     print("Num of used trials : ", trial_num)
@@ -3804,7 +3805,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Incremental Analysis
         # Filename
-        "incremental_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q.pkl",
+        "incremental_data_filename": "../common_data/trial/1000_trial_data_Omega-with_Q.pkl",
         # Window size for correlation analysis
         "incremental_window": 3,
         "incremental_num_trial" : None,
@@ -3921,8 +3922,8 @@ if __name__ == '__main__':
 
     # stageAnalysis(config)
 
-    stageCombineAnalysis(config)
-    specialCaseAnalysis(config)
+    # stageCombineAnalysis(config)
+    # specialCaseAnalysis(config)
     specialCaseMovingAnalysis(config)
 
     # specialRandomAnalysis(config)

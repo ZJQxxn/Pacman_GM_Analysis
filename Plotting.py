@@ -73,6 +73,7 @@ agent_color = {
         "planned_hunting": "#81B3FF",
         "vague": "black"
     }
+    
 label_name = {
         "local": "local",
         "pessimistic": "evade",
@@ -897,7 +898,7 @@ def singleTrialMultiFitting(config):
         spec = fig.add_gridspec(3, 1)
         # plt.subplot(2, 1, 1)
         ax1 = fig.add_subplot(spec[:2,:])
-        # plt.title(trial_name, fontsize = 10)
+        plt.title(trial_name, fontsize = 10)
         # plt.title(trial_name, fontsize = 15)
         for index in range(len(agent_name)):
             plt.plot(temp_contribution[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
@@ -906,7 +907,8 @@ def singleTrialMultiFitting(config):
         plt.ylabel("Normalized Strategy Weight", fontsize=20)
         plt.xlim(0, temp_contribution.shape[0] - 1)
         plt.xlabel("Time Step", fontsize = 20)
-        x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
+        # x_ticks_index = np.linspace(0, len(temp_contribution), 5)
+        x_ticks_index = np.arange(0, len(temp_contribution), 10)
         x_ticks = [window + int(each) for each in x_ticks_index]
         plt.xticks(x_ticks_index, x_ticks, fontsize=20)
         plt.yticks(fontsize=20)
@@ -935,9 +937,9 @@ def singleTrialMultiFitting(config):
             base = "descriptive_agents"
         else:
             base = "detail_agents"
-        plt.savefig("./common_data/single_trial/{}/{}.pdf".format(base, trial_name))
+        # plt.savefig("./common_data/single_trial/{}/{}.pdf".format(base, trial_name))
         # pprint.pprint(estimated_label)
-        # plt.show()
+        plt.show()
         plt.close(fig)
         plt.clf()
 
@@ -951,6 +953,8 @@ def singleTrialPAorAA(config):
     trial_data = descriptiveRead(filename)
     trial_num = len(trial_data)
     print("Num of trials : ", trial_num)
+
+    all_temp_contributon = []
 
     trial_name_list = None
     all_trial_names = np.array([each[0] for each in trial_data])
@@ -979,6 +983,9 @@ def singleTrialPAorAA(config):
     all_weight_rest = []
     all_Q = []
 
+    # trial_data = [trial_data[0], trial_data[2]]
+    # all_trial_names = [each[0] for each in  trial_data]
+
     # agent_name = ["global", "local", "pessimistic"]
     agent_name = config["single_trial_agents"]
     agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
@@ -993,6 +1000,22 @@ def singleTrialPAorAA(config):
         X = each[1]
         Y = each[2]
         trial_length = X.shape[0]
+
+        if trial_name == "1-1-Patamon-14-Jul-2019-1.csv": # PA
+            start_index_1 = 95 -3
+            for i in range(start_index_1, trial_length):
+                if np.all(X.iloc[i][["ifscared1", "ifscared2"]] == 3):
+                    break
+            end_index_1 = i -3
+        else: # AA
+            start_index_2 = 93 - 3
+            # for i in range(start_index_2, trial_length):
+            #     if np.all(X.iloc[i][["ifscared1", "ifscared2"]] <= 3) and np.all(X.iloc[i-1][["ifscared1", "ifscared2"]] >= 3):
+            #         break
+            # if i == trial_length:
+            #     end_index_2 = trial_length-1
+            end_index_2 = 139 -3
+        # print("Start index : {} | End index : {}".format(start_index, end_index))
         print("Index ", trial_index, " Trial name : ", trial_name)
         # Hand-crafted label
         # handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
@@ -1109,49 +1132,49 @@ def singleTrialPAorAA(config):
             label_name["suicide"] = "approach"
             label_name["planned_hunting"] = "energizer"
 
-        fig = plt.figure(figsize = (15,8), constrained_layout = True)
-        spec = fig.add_gridspec(3, 1)
-        # plt.subplot(2, 1, 1)
-        ax1 = fig.add_subplot(spec[:2,:])
-        # plt.title(trial_name, fontsize = 10)
-        # plt.title(trial_name, fontsize = 15)
-        for index in range(len(agent_name)):
-            plt.plot(temp_contribution[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
-                     label=label_name[agent_name[index]])
-        # for pessimistic agent
-        plt.ylabel("Normalized Strategy Weight", fontsize=20)
-        plt.xlim(0, temp_contribution.shape[0] - 1)
-        plt.xlabel("Time Step", fontsize = 20)
-        x_ticks_index = np.linspace(0, len(estimated_label), 5)
-        x_ticks = [window + int(each) for each in x_ticks_index]
-        plt.xticks(x_ticks_index, x_ticks, fontsize=20)
-        plt.yticks(fontsize=20)
-        plt.ylim(-0.01, 1.02)
-        plt.legend(loc="upper center", fontsize=20, ncol = len(agent_name), frameon = False, bbox_to_anchor = (0.5, 1.2))
-        # plt.show()
+        all_temp_contributon.append(copy.deepcopy(temp_contribution))
 
-        # plt.figure(figsize=(13,5))
-        # plt.subplot(2, 1, 2)
-        ax2 = fig.add_subplot(spec[-1, :])
-        for i in range(len(estimated_label)):
-                # seq = np.linspace(-0.1, 0.0, len(handcrafted_label[i]) + 1)
-                # for j, h in enumerate(handcrafted_label[i]):
-                #     plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
-            seq = np.linspace(-0.02, 0.0, len(estimated_label[i]) + 1)
-            for j, h in enumerate(estimated_label[i]):
-                plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
-        plt.xlim(0, len(estimated_label))
-        # x_ticks_index = np.linspace(0, len(handcrafted_label), 5)
-        # x_ticks = [window + int(each) for each in x_ticks_index]
-        # plt.xticks(x_ticks_index, x_ticks, fontsize=20)
-        # plt.yticks([-0.05, -0.15], ["Rule-Based Label", "Fitted Label"], fontsize=10)
-        # plt.ylim(-0.05, 0.35)
-        plt.axis('off')
-        # plt.savefig("./common_data/single_trial/{}/{}.pdf".format(base, trial_name))
-        # pprint.pprint(estimated_label)
-        plt.show()
-        plt.close(fig)
-        plt.clf()
+    plt.figure(figsize=(18, 10))
+    # plt.subplot(2, 1, 1)
+    # plt.title(trial_name, fontsize = 10)
+    # plt.title("-".join(trial_data[0][0].split("-")[:-1]), fontsize=15)
+    for index in range(len(agent_name)):
+        plt.plot(all_temp_contributon[0][start_index_1:end_index_1 + 1, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                 label=label_name[agent_name[index]])
+    # for pessimistic agent
+    plt.ylabel("Normalized Strategy Weight", fontsize=20)
+    plt.xlim(0, end_index_1 - start_index_1)
+    plt.xlabel("Time Step", fontsize=20)
+    x_ticks_index = np.linspace(0, end_index_1 - start_index_1, 5)
+    x_ticks_index = np.arange(0, end_index_1 - start_index_1 + 1, 5)
+    x_ticks = [window + int(each) + start_index_1 for each in x_ticks_index]
+    plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(-0.01, 1.02)
+    plt.legend(loc="upper center", fontsize=20, ncol=len(agent_name), frameon=False, bbox_to_anchor=(0.5, 1.1))
+    plt.show()
+
+    plt.figure(figsize=(18, 10))
+    # plt.subplot(2, 1, 2)
+    # plt.title(trial_name, fontsize = 10)
+    # plt.title("-".join(trial_data[1][0].split("-")[:-1]), fontsize=15)
+    for index in range(len(agent_name)):
+        plt.plot(all_temp_contributon[1][start_index_2:end_index_2 + 1, index], color=agent_color[agent_name[index]], ms=3, lw=5,
+                 label=label_name[agent_name[index]])
+    # for pessimistic agent
+    plt.ylabel("Normalized Strategy Weight", fontsize=20)
+    plt.xlim(0, end_index_2 - start_index_2)
+    plt.xlabel("Time Step", fontsize=20)
+    x_ticks_index = np.linspace(0, end_index_2 - start_index_2, 5)
+    x_ticks_index = np.arange(0, end_index_2 - start_index_2 + 1, 5)
+    x_ticks = [window + int(each) + start_index_2 for each in x_ticks_index]
+    plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(-0.01, 1.02)
+    plt.legend(loc="upper center", fontsize=20, ncol=len(agent_name), frameon=False, bbox_to_anchor=(0.5, 1.1))
+
+    plt.show()
+
 
 # ===================================================
 
@@ -1822,22 +1845,32 @@ def plotAllAgentMatching(config):
 
 def plotIncremental(config):
     print("-"*15)
+    # filename index
+    trial_names = np.load("./common_data/trial/100_trial_name.npy", allow_pickle=True)
+    trial_indices = []
+    for index, each in enumerate(trial_names):
+        if each.split(".")[-2][-1]=="1":
+            trial_indices.append(index)
     # random correct rate
     random_cr = np.load("./common_data/incremental/100trial-window3-random_is_correct.npy", allow_pickle=True).item()
     # avg_random_cr = np.nanmean([np.nanmean(each) for each in random_cr])
     avg_random_cr = {each:np.nanmean(random_cr[each]) for each in random_cr}
     # trial name, pacman pos, beans, window cr for different agents
-    bean_vs_cr = np.load(config["bean_vs_cr_filename"], allow_pickle = True)
+    bean_vs_cr = np.load(config["bean_vs_cr_filename"], allow_pickle = True)[trial_indices]
     bean_num = []
     agent_cr = []
     for i in bean_vs_cr:
+        temp_cr = []
+        temp_bean_num = []
         for j in i:
-            bean_num.append(len(j[2]))
-            agent_cr.append(j[3])
+            temp_bean_num.append(len(j[2]))
+            temp_cr.append(j[3])
+        bean_num.append(copy.deepcopy(temp_bean_num))
+        agent_cr.append(copy.deepcopy(temp_cr))
     # bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
     # agent_cr  = [each[3] for each in bean_vs_cr]
-    max_bean_num = max(bean_num)
-    min_bean_num = min(bean_num)
+    max_bean_num = max(max(bean_num))
+    min_bean_num = min(min(bean_num))
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
     agent_index = [0, 2, 3, 4, 5] # (local, + global, + pessimistic, + planned hunting, +suicide)
@@ -1845,13 +1878,25 @@ def plotIncremental(config):
     second_phase_agent_cr = [] # 10 < num of beans < 80
     third_phase_agent_cr = [] # num of beans > 80
     # every bin
-    for index, each in enumerate(bean_num):
-        if each <= 10:
-            first_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
-        elif 10 < each < 80:
-            second_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
-        else:
-            third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+    for i in range(len(bean_num)):
+        trial_bean_num = bean_num[i]
+        trial_cr = agent_cr[i]
+        trial_early = []
+        trial_middle = []
+        trial_end = []
+        for j in range(len(trial_bean_num)):
+            if trial_bean_num[j] <= 10:
+                trial_end.append(trial_cr[j])
+            elif 10 < trial_bean_num[j] < 80:
+                trial_middle.append(trial_cr[j])
+            else:
+                trial_early.append(trial_cr[j])
+        if len(trial_early) > 0:
+            third_phase_agent_cr.append(np.mean(trial_early, axis = 0)[agent_index])
+        if len(trial_middle) > 0:
+            second_phase_agent_cr.append(np.mean(trial_middle, axis = 0)[agent_index])
+        if len(trial_end) > 0:
+            first_phase_agent_cr.append(np.mean(trial_end, axis = 0)[agent_index])
 
     # plotting
     x_ticks = ["local", "+global", "+evade", "+attack", "+suicide"]
@@ -1875,7 +1920,8 @@ def plotIncremental(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Early Stage (Pellets >= 80)", fontsize=20)
     avg_cr = np.mean(third_phase_agent_cr, axis=0)
-    var_cr = np.var(third_phase_agent_cr, axis=0)
+    # var_cr = scipy.stats.sem(third_phase_agent_cr, axis=0, nan_policy="omit")
+    var_cr = np.nanstd(third_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
@@ -1891,7 +1937,7 @@ def plotIncremental(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
     avg_cr = np.mean(second_phase_agent_cr, axis=0)
-    var_cr = np.var(second_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(second_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
@@ -1906,7 +1952,7 @@ def plotIncremental(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
     avg_cr = np.mean(first_phase_agent_cr, axis=0)
-    var_cr = np.var(first_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(first_phase_agent_cr, axis=0)
     # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
@@ -1930,28 +1976,46 @@ def plotDecremental(config):
     bean_vs_cr = np.load(config["decremental_filename"], allow_pickle = True)
     bean_num = []
     agent_cr = []
+    bean_num = []
+    agent_cr = []
     for i in bean_vs_cr:
+        temp_cr = []
+        temp_bean_num = []
         for j in i:
-            bean_num.append(len(j[2]))
-            agent_cr.append(j[3])
+            temp_bean_num.append(len(j[2]))
+            temp_cr.append(j[3])
+        bean_num.append(copy.deepcopy(temp_bean_num))
+        agent_cr.append(copy.deepcopy(temp_cr))
     # bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
     # agent_cr  = [each[3] for each in bean_vs_cr]
-    max_bean_num = max(bean_num)
-    min_bean_num = min(bean_num)
+    max_bean_num = max(max(bean_num))
+    min_bean_num = min(min(bean_num))
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
-    agent_index = [1, 0, 2, 3, 4] # (local, glbal, pessimistic, suicide, planned hunting)
-    first_phase_agent_cr = [] # num of beans <= 10
-    second_phase_agent_cr = [] # 10 < num of beans < 80
-    third_phase_agent_cr = [] # num of beans > 80
+    agent_index = [1, 0 ,2, 3, 4]
+    first_phase_agent_cr = []  # num of beans <= 10
+    second_phase_agent_cr = []  # 10 < num of beans < 80
+    third_phase_agent_cr = []  # num of beans > 80
     # every bin
-    for index, each in enumerate(bean_num):
-        if each <= 10:
-            first_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
-        elif 10 < each < 80:
-            second_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
-        else:
-            third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+    for i in range(len(bean_num)):
+        trial_bean_num = bean_num[i]
+        trial_cr = agent_cr[i]
+        trial_early = []
+        trial_middle = []
+        trial_end = []
+        for j in range(len(trial_bean_num)):
+            if trial_bean_num[j] <= 10:
+                trial_end.append(trial_cr[j])
+            elif 10 < trial_bean_num[j] < 80:
+                trial_middle.append(trial_cr[j])
+            else:
+                trial_early.append(trial_cr[j])
+        if len(trial_early) > 0:
+            third_phase_agent_cr.append(np.mean(trial_early, axis=0)[agent_index])
+        if len(trial_middle) > 0:
+            second_phase_agent_cr.append(np.mean(trial_middle, axis=0)[agent_index])
+        if len(trial_end) > 0:
+            first_phase_agent_cr.append(np.mean(trial_end, axis=0)[agent_index])
 
     # plotting
     x_ticks = ["-local", "-global", "-evade", "-suicide", "-attack"]
@@ -1975,7 +2039,7 @@ def plotDecremental(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Early Stage (Pellets >= 80)", fontsize=20)
     avg_cr = np.mean(third_phase_agent_cr, axis=0)
-    var_cr = np.var(third_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(third_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
@@ -1991,7 +2055,7 @@ def plotDecremental(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
     avg_cr = np.mean(second_phase_agent_cr, axis=0)
-    var_cr = np.var(second_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(second_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
@@ -2006,7 +2070,7 @@ def plotDecremental(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
     avg_cr = np.mean(first_phase_agent_cr, axis=0)
-    var_cr = np.var(first_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(first_phase_agent_cr, axis=0)
     # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
@@ -2031,27 +2095,43 @@ def plotOneAgent(config):
     bean_num = []
     agent_cr = []
     for i in bean_vs_cr:
+        temp_cr = []
+        temp_bean_num = []
         for j in i:
-            bean_num.append(len(j[2]))
-            agent_cr.append(j[3])
+            temp_bean_num.append(len(j[2]))
+            temp_cr.append(j[3])
+        bean_num.append(copy.deepcopy(temp_bean_num))
+        agent_cr.append(copy.deepcopy(temp_cr))
     # bean_num = [len(each[2]) if isinstance(each[2], list) else 0 for each in bean_vs_cr]
     # agent_cr  = [each[3] for each in bean_vs_cr]
-    max_bean_num = max(bean_num)
-    min_bean_num = min(bean_num)
+    max_bean_num = max(max(bean_num))
+    min_bean_num = min(min(bean_num))
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
-    agent_index = [1, 0, 2, 3, 4] # (global, local, pessimistic, suicide, planned hunting)
-    first_phase_agent_cr = [] # num of beans <= 10
-    second_phase_agent_cr = [] # 10 < num of beans < 80
-    third_phase_agent_cr = [] # num of beans > 80
+    agent_index = [1, 0, 2, 3, 4]
+    first_phase_agent_cr = []  # num of beans <= 10
+    second_phase_agent_cr = []  # 10 < num of beans < 80
+    third_phase_agent_cr = []  # num of beans > 80
     # every bin
-    for index, each in enumerate(bean_num):
-        if each <= 10:
-            first_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
-        elif 10 < each < 80:
-            second_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
-        else:
-            third_phase_agent_cr.append(np.array(agent_cr[index])[agent_index])
+    for i in range(len(bean_num)):
+        trial_bean_num = bean_num[i]
+        trial_cr = agent_cr[i]
+        trial_early = []
+        trial_middle = []
+        trial_end = []
+        for j in range(len(trial_bean_num)):
+            if trial_bean_num[j] <= 10:
+                trial_end.append(trial_cr[j])
+            elif 10 < trial_bean_num[j] < 80:
+                trial_middle.append(trial_cr[j])
+            else:
+                trial_early.append(trial_cr[j])
+        if len(trial_early) > 0:
+            third_phase_agent_cr.append(np.mean(trial_early, axis=0)[agent_index])
+        if len(trial_middle) > 0:
+            second_phase_agent_cr.append(np.mean(trial_middle, axis=0)[agent_index])
+        if len(trial_end) > 0:
+            first_phase_agent_cr.append(np.mean(trial_end, axis=0)[agent_index])
 
     # plotting
     x_ticks = ["local", "global", "evade", "suicide", "attack"]
@@ -2075,7 +2155,7 @@ def plotOneAgent(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Early Stage (Pellets >= 80)", fontsize=20)
     avg_cr = np.mean(third_phase_agent_cr, axis=0)
-    var_cr = np.var(third_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(third_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
@@ -2091,7 +2171,7 @@ def plotOneAgent(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Middle Stage (10 < Pellets < 80)", fontsize=20)
     avg_cr = np.mean(second_phase_agent_cr, axis=0)
-    var_cr = np.var(second_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(second_phase_agent_cr, axis=0)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
@@ -2107,7 +2187,7 @@ def plotOneAgent(config):
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
     plt.title("Ending Stage (Pellets <= 10)", fontsize=20)
     avg_cr = np.mean(first_phase_agent_cr, axis=0)
-    var_cr = np.var(first_phase_agent_cr, axis=0)
+    var_cr = np.nanstd(first_phase_agent_cr, axis=0)
     # plt.errorbar(x_index, avg_cr, yerr = var_cr, fmt = "k", mfc = "r", marker = "o", linestyle = "", ms = 15, elinewidth = 5)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
@@ -2396,7 +2476,7 @@ def specialANDComparison(config):
     ax1 = fig.add_subplot(spec[0, 0])
     plt.title("All Data", fontsize=15)
     for index, each in enumerate(x_index):
-        plt.errorbar(x_index[index], np.nanmean(bean_vs_cr[:, index]), yerr = np.nanstd(bean_vs_cr[:, index]),
+        plt.errorbar(x_index[index], np.nanmean(bean_vs_cr[index, :]), yerr = np.nanstd(bean_vs_cr[index, :]),
                      color=temp_agent_color[agent_name[index]], linestyle="", ms=20, elinewidth=4,
                      mfc=temp_agent_color[agent_name[index]], mec=temp_agent_color[agent_name[index]], marker="o")
     plt.plot([-0.5, 3.0], [avg_random_cr, avg_random_cr], "--", lw=5, color="grey")
@@ -2569,7 +2649,7 @@ def _extractDescriptiveLabel(config):
             # find where a ghost is eaten
             first_dead_index = None
             for j in range(e_i + 1, trial_length):
-                # Until scared time ends
+                # Until a ghost is eaten
                 if np.all(np.array(ghost_status.values[j]) <= 3):
                     break
                 if (ghost_status.values[j - 1][0] != 3 and ghost_status.values[j][0] == 3) or \
@@ -2677,7 +2757,7 @@ def plotDescriptiveLabel(config):
     for traj_index, trajectory in enumerate(PA):
         contribution = trajectory[0]
         center_index = trajectory[2]
-        start_index = max(0, center_index - 10)
+        start_index = max(trajectory[1], center_index - 10)
         before_num = center_index - start_index
         for i in range(before_num):
             PA_at_ghost[traj_index, 9 - i, :] = copy.deepcopy(contribution[center_index - 1 - i])
@@ -2688,7 +2768,7 @@ def plotDescriptiveLabel(config):
     for traj_index, trajectory in enumerate(AAG):
         contribution = trajectory[0]
         center_index = trajectory[2]
-        start_index = max(0, center_index - 10)
+        start_index = max(trajectory[1], center_index - 10)
         before_num = center_index - start_index
         for i in range(before_num):
             AAG_at_ghost[traj_index, 9 - i, :] = copy.deepcopy(contribution[center_index - 1 - i])
@@ -2743,6 +2823,8 @@ def plotDescriptiveLabel(config):
 
     # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
     sem_weight = scipy.stats.sem(PA_at_energizer, axis=0, nan_policy="omit")
+    # sem_weight = np.nanstd(PA_at_energizer, axis=0)
+
     for index in range(len(agent_name)):
         plt.plot(avg_PA_at_energizer[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
@@ -2887,6 +2969,132 @@ def plotDescriptiveLabel(config):
     plt.savefig("./common_data/descriptive_label_analysis/3.4_PA_AA.pdf")
     plt.show()
 
+# ===================================================
+def singleTrialForVideo():
+    print("=" * 20, " Single Trial For Video ", "=" * 20)
+    # Read trial data
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    window = config["single_trial_window"]
+    filename = "./common_data/trial/suicide_100_trial_data_Omega-with_Q-descriptive.pkl"
+    if "descriptive" in filename:
+        trial_data = descriptiveRead(filename)
+    else:
+        trial_data = detailedRead(filename)
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+
+    trial_name_list = ["10-4-Omega-18-Jul-2019-2.csv"]
+    # trial_name_list = None
+    if trial_name_list is not None and len(trial_name_list) > 0:
+        temp_trial_Data = []
+        for each in trial_data:
+            if each[0] in trial_name_list:
+                temp_trial_Data.append(each)
+        trial_data = temp_trial_Data
+    print("Num of trials : ", len(trial_data))
+    label_list = ["label_local_graze", "label_local_graze_noghost", "label_global_ending",
+                  "label_global_optimal", "label_global_notoptimal", "label_global",
+                  "label_evade",
+                  "label_suicide",
+                  "label_true_accidental_hunting",
+                  "label_true_planned_hunting"]
+
+    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
+    # Construct optimizer
+    for trial_index, each in enumerate(trial_data):
+        if trial_index > 20:
+            break
+        temp_record = []
+        print("-" * 15)
+        trial_name = each[0]
+        temp_record.append(trial_name)
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("Index ", trial_index, " Trial name : ", trial_name)
+        # Estimating label through moving window analysis
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        # (num of windows, num of agents)
+        temp_weight = np.zeros(
+            (len(window_index), len(agent_name) if not config["need_intercept"] else len(agent_name)))
+        # temp_weight_rest = np.zeros((len(window_index), 3 if not config["need_intercept"] else 4))
+        # temp_Q = []
+        temp_contribution = np.zeros((len(window_index), len(agent_name)))
+        # temp_contribution_rest = np.zeros((len(window_index), 3))
+        cr = np.zeros((len(window_index),))
+        # (num of windows, window size, num of agents, num pf directions)
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        # For each trial, estimate agent weights through sliding windows
+        trial_fitted_label = []
+        trial_estimated_label = []
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            Q_value = sub_X[agents_list].values
+            for i in range(window * 2 + 1):  # num of samples in a window
+                for j in range(5):  # number of agents
+                    temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
+            # estimation in the window
+            window_estimated_label = []
+            # Construct optimizer
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
+            if config["need_intercept"]:
+                params.append(1)
+                bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                sub_X,
+                sub_Y,
+                agent_name,
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+
+            temp_weight[centering_index, :] = res.x[:-1]
+            contribution = temp_weight[centering_index, :] * \
+                           [scaleOfNumber(each) for each in
+                            np.max(np.abs(temp_trial_Q[centering_index, :, agent_index, :]), axis=(1, 2))]
+            temp_contribution[centering_index, :] = contribution
+
+        for index in range(temp_contribution.shape[0]):
+            temp_contribution[index, :] = temp_contribution[index, :] / np.linalg.norm(temp_contribution[index, :])
+
+        estimated_label = [np.nan for _ in range(window)]
+        estimated_label.extend([
+            _estimationVagueLabeling(temp_contribution[index, :], agent_name)
+            for index in range(len(temp_contribution))
+        ])
+        estimated_label.extend([np.nan for _ in range(window)])
+        X["estimated_label"] = estimated_label
+        X.to_csv(trial_name)
+
 
 
 if __name__ == '__main__':
@@ -2900,7 +3108,7 @@ if __name__ == '__main__':
         "need_intercept" : True,
         "maximum_try": 5,
 
-        "single_trial_data_filename": "./common_data/trial/new_100_trial_data_Omega-with_Q.pkl",
+        "single_trial_data_filename": "./common_data/trial/new_100_trial_data_Omega-with_Q-descriptive.pkl",
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
@@ -2949,16 +3157,15 @@ if __name__ == '__main__':
 
         # ------------------------------------------------------------------------------------
 
-        # "bean_vs_cr_filename" : "./common_data/incremental/100trial-Omega-window3-incremental_cr-w_intercept.npy",
-        # "bean_vs_cr_filename": "./common_data/incremental/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
-        # "one_agent_filename": "./common_data/one_agent/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
-        # "decremental_filename": "./common_data/decremental/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
-        # "stage_together_filename": "./common_data/stage_together/descriptive-100trial-cr.npy",
+        "bean_vs_cr_filename": "./common_data/incremental/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
+        "one_agent_filename": "./common_data/one_agent/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
+        "decremental_filename": "./common_data/decremental/descriptive-1000trial-window3-incremental_cr-w_intercept.npy",
+        "stage_together_filename": "./common_data/stage_together/descriptive-100trial-cr.npy",
 
-        "bean_vs_cr_filename": "./common_data/incremental/100trial-window3-incremental_cr-w_intercept.npy",
-        "one_agent_filename": "./common_data/one_agent/100trial-window3-incremental_cr-w_intercept.npy",
-        "decremental_filename": "./common_data/decremental/100trial-window3-incremental_cr-w_intercept.npy",
-        "stage_together_filename": "./common_data/stage_together/100trial-cr.npy",
+        # "bean_vs_cr_filename": "./common_data/incremental/100trial-window3-incremental_cr-w_intercept.npy",
+        # "one_agent_filename": "./common_data/one_agent/100trial-window3-incremental_cr-w_intercept.npy",
+        # "decremental_filename": "./common_data/decremental/100trial-window3-incremental_cr-w_intercept.npy",
+        # "stage_together_filename": "./common_data/stage_together/100trial-cr.npy",
 
         "stage_combine_filename": "./common_data/stage_together/all-100trial-cr.npy",
         "stage_combine_weight_filename": "./common_data/stage_together/all-100trial-weight.npy",
@@ -2969,7 +3176,9 @@ if __name__ == '__main__':
         "special_case_filename": "./common_data/special_case/100trial-cr.npy",
         # "special_case_filename": "./common_data/special_case/descriptive-100trial-cr.npy",
 
-        "descriptive_label_filename" : "./common_data/descriptive_label_analysis/all_200_trial_data_Omega-descriptive-record.npy",
+        # "descriptive_label_filename" : "./common_data/descriptive_label_analysis/all_200_trial_data_Omega-descriptive-record.npy",
+        # "descriptive_extracted_filename": "./common_data/descriptive_label_analysis/all_200_trial_data_Omega-descriptive-extracted_label.npy",
+        "descriptive_label_filename" : "./common_data/descriptive_label_analysis/all_trial_data-descriptive-record.npy",
         "descriptive_extracted_filename": "./common_data/descriptive_label_analysis/all_200_trial_data_Omega-descriptive-extracted_label.npy",
 
         # "option_hybrid_filename": "./common_data/special_case/descriptive-100trial-cr.npy",
@@ -3011,6 +3220,16 @@ if __name__ == '__main__':
     # config["single_trial_data_filename"] = "./common_data/trial/suicide_100_trial_data_Omega-with_Q.pkl"
     # singleTrialMultiFitting(config)
     # config["single_trial_data_filename"] = "./common_data/trial/suicide_100_trial_data_Omega-with_Q-descriptive.pkl"
-    # singleTrialMultiFitting(config)
 
-    singleTrialPAorAA(config)
+    # singleTrialMultiFitting(config)
+    #
+    # singleTrialPAorAA(config)
+
+    # singleTrialForVideo()
+
+    # data1 = pd.read_csv("1-1-Omega-09-Jul-2019-1.csv")
+    # data2 = pd.read_csv("1-1-Patamon-14-Jul-2019-1.csv")
+    # data3 = pd.read_csv("10-4-Omega-18-Jul-2019-2.csv")
+    # data4 = pd.read_csv("23-1-Omega-21-Aug-2019-1.csv")
+    # res = pd.concat([data1, data2, data3, data4])
+    # res.to_csv("all_trial.csv")

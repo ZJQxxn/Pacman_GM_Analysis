@@ -464,15 +464,16 @@ def extractPAorAATrial():
     data = data["df_total"]
     data = data.sort_index()
     trial_name = [
-        "23-1-Omega-21-Aug-2019",
-        "1-1-Patamon-14-Jul-2019"
+        "23-1-Omega-21-Aug-2019-1.csv",
+        "1-1-Patamon-14-Jul-2019-1.csv"
     ]
 
-    is_need = data.file.apply(lambda x : trial_name[0] in x or trial_name[1] in x)
+    is_need = data.file.apply(lambda x : x in trial_name)
     need_index = np.where(is_need.values == 1)
     trial_data = data.iloc[need_index]
     trial_data = trial_data.reset_index(drop = True)
     print(trial_data.shape)
+    print(np.unique(trial_data.file.values))
     print("Finished extracting trial data.")
     with open("trial/PA_AA_data.pkl", "wb") as file:
         pickle.dump(trial_data, file)

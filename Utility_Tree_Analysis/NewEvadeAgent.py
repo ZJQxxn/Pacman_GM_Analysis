@@ -28,7 +28,7 @@ sys.path.append('./')
 from TreeAnalysisUtils import unitStepFunc, scaleOfNumber
 
 
-class PathTree:
+class NewEvade:
 
     def __init__(self, adjacent_data, locs_df, reward_amount, root, energizer_data, bean_data, ghost_data, reward_type, fruit_pos, ghost_status, last_dir,
                  depth = 10, ignore_depth = 0, ghost_attractive_thr = 34, ghost_repulsive_thr = 10, fruit_attractive_thr = 10,
@@ -80,9 +80,6 @@ class PathTree:
         self.adjacent_data = adjacent_data
         self.locs_df = locs_df
         self.reward_amount = reward_amount
-        # TODO: ignore energizer
-        self.reward_amount[2] = 0
-        # TODO: ================
         self.existing_bean = bean_data
         self.existing_energizer = energizer_data
         self.existing_fruit = fruit_pos
@@ -368,9 +365,7 @@ class PathTree:
                 if cur_position == self.ghost_data[1]:
                     exact_risk = -self.reward_amount[9]
                     self.is_eaten = True
-
-                    exact_risk = 0.0 #TODO: for testing single ghost pessimistic
-
+                    # exact_risk = 0.0 #TODO: for testing single ghost pessimistic
                     return exact_risk, potential_risk
                 ghost_dist = self.locs_df[cur_position][self.ghost_data[1]]
             elif 3 == ifscared2:
@@ -385,10 +380,8 @@ class PathTree:
                 if cur_position == self.ghost_data[0] or cur_position == self.ghost_data[1]:
                     exact_risk = -self.reward_amount[9]
                     self.is_eaten = True
-
-                    if cur_position == self.ghost_data[1]:
-                        exact_risk = 0.0  # TODO: for testing single ghost pessimistic
-
+                    # if cur_position == self.ghost_data[1]:
+                    #     exact_risk = 0.0  # TODO: for testing single ghost pessimistic
                     return exact_risk, potential_risk
                 # Potential risk
                 else:
@@ -485,58 +478,8 @@ if __name__ == '__main__':
     fruit_pos = (3,30)
     last_dir = None
 
-    # Global agent
-    agent = PathTree(
-        adjacent_data,
-        locs_df,
-        reward_amount,
-        cur_pos,
-        energizer_data,
-        bean_data,
-        ghost_data,
-        reward_type,
-        fruit_pos,
-        ghost_status,
-        last_dir,
-        15,
-        5,
-        34,
-        34,
-        34,
-        reward_coeff=1.0, risk_coeff=0.0,
-        randomness_coeff=1.0, laziness_coeff=1.0
-    )
-    _, Q = agent.nextDir(return_Q=True)
-    choice = agent.dir_list[makeChoice(Q)]
-    print("Global Choice : ", choice, Q)
-
-    # Local agent
-    agent = PathTree(
-        adjacent_data,
-        locs_df,
-        reward_amount,
-        cur_pos,
-        energizer_data,
-        bean_data,
-        ghost_data,
-        reward_type,
-        fruit_pos,
-        ghost_status,
-        last_dir,
-        5,
-        0,
-        5,
-        5,
-        5,
-        reward_coeff=1.0, risk_coeff=0.0,
-        randomness_coeff=1.0, laziness_coeff=1.0
-    )
-    _, Q = agent.nextDir(return_Q=True)
-    choice = agent.dir_list[makeChoice(Q)]
-    print("Local Choice : ", choice, Q)
-
     # Pessimistic
-    agent = PathTree(
+    agent = NewEvade(
         adjacent_data,
         locs_df,
         reward_amount,

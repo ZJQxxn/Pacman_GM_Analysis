@@ -22,9 +22,6 @@ import sys
 
 sys.path.append("./")
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
-from PathTreeAgent import PathTree
-from EnergizerAgent import EnergizerAgent
-from ApproachingAgent import ApproachingAgent
 
 
 # ===================================
@@ -385,7 +382,7 @@ def readTrialData(filename):
     all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE, PG_wo_dead)
     all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG_wo_dead)
     all_data.local_Q = _localProcesing(all_data.local_Q, PR)
-    all_data.global_Q = _globalProcesing(all_data.global_Q, PR_global)
+    # all_data.global_Q = _globalProcesing(all_data.global_Q, PR_global)
     print("Finished Q-value pre-processing.")
     # Split into trials
     trial_data = []
@@ -909,111 +906,6 @@ def suicideMultiAgentAnalysis(config):
     np.save("../common_data/{}/{}_descriptive_records.npy".format(dir_names, data_type), record)
 
 
-def incrementalAnalysis(config):
-    # Read trial data
-    # agent_name = config["incremental_data_filename"]
-    # agents_list = ["{}_Q".format(each) for each in agent_name]
-    print("=== Incremental Analysis ====")
-    print(config["incremental_data_filename"])
-    window = config["incremental_window"]
-    trial_data = readTrialData(config["incremental_data_filename"])
-    trial_num = len(trial_data)
-    print("Num of trials : ", trial_num)
-    trial_index = np.arange(trial_num)
-    if config["incremental_num_trial"] is not None:
-        if config["incremental_num_trial"] < trial_num:
-            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
-    trial_data = [trial_data[each] for each in trial_index]
-    trial_num = len(trial_data)
-    print("Num of used trials : ", trial_num)
-    # Incremental analysis
-    incremental_agents_list = [
-        ["local"],
-        ["local", "pessimistic"],
-        ["local", "global"],
-        ["local", "pessimistic", "global"],
-        ["local", "pessimistic", "global", "planned_hunting"],
-        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
-    ]
-    all_cr = []
-    for trial_index, each in enumerate(trial_data):
-        print("-"*15)
-        trial_name = each[0]
-        X = each[1]
-        Y = each[2]
-        trial_length = X.shape[0]
-        print("Trial name : ", trial_name)
-        print("Trial length : ", trial_length)
-        window_index = np.arange(window, trial_length - window)
-        trial_cr = []
-        # For each trial, estimate agent weights through sliding windows
-        for centering_index, centering_point in enumerate(window_index):
-            print("Window at {}...".format(centering_point))
-            cur_step = X.iloc[centering_point]
-            sub_X = X[centering_point - window:centering_point + window + 1]
-            sub_Y = Y[centering_point - window:centering_point + window + 1]
-            agent_cr = []
-            for agent_name in incremental_agents_list:
-                # Construct optimizer
-                params = [0 for _ in range(len(agent_name))]
-                bounds = [[0, 10] for _ in range(len(agent_name))]
-                if config["need_intercept"]:
-                    params.append(1)
-                    bounds.append([-1000, 1000])
-                cons = []  # construct the bounds in the form of constraints
-                for par in range(len(bounds)):
-                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
-                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
-                    cons.append(l)
-                    cons.append(u)
-                # estimation in the window
-                func = lambda params: negativeLikelihood(
-                    params,
-                    sub_X,
-                    sub_Y,
-                    agent_name,
-                    return_trajectory=False,
-                    need_intercept=config["need_intercept"]
-                )
-                is_success = False
-                retry_num = 0
-                while not is_success and retry_num < 5:
-                    res = scipy.optimize.minimize(
-                        func,
-                        x0=params,
-                        method="SLSQP",
-                        bounds=bounds,
-                        tol=1e-5,
-                        constraints=cons
-                    )
-                    is_success = res.success
-                    if not is_success:
-                        print("Fail, retrying...")
-                        retry_num += 1
-                # correct rate in the window
-                _, estimated_prob = negativeLikelihood(
-                    res.x,
-                    sub_X,
-                    sub_Y,
-                    agent_name,
-                    return_trajectory=True,
-                    need_intercept=config["need_intercept"]
-                )
-                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
-                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
-                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
-                agent_cr.append(correct_rate)
-            trial_cr.append([cur_step.file, cur_step.pacmanPos, cur_step.beans, agent_cr]) #TODO: save cur_step for later use
-            print(agent_cr)
-        print("Average correct rate for trial : ", np.nanmean([temp[-1] for temp in trial_cr]))
-        all_cr.append(trial_cr)
-    # save correct rate data
-    if "incremental" not in os.listdir("../common_data"):
-        os.mkdir("../common_data/incremental")
-    np.save("../common_data/incremental/descriptive-window{}-incremental_cr-{}_intercept.npy".format(
-        window, "w" if config["need_intercept"] else "wo"), all_cr)
-
-
 def singleTrial4Hunting(config):
     orginal_weight = np.load(
         "../common_data/global_local_pessimistic_suicide_planned_hunting/new_100_trial_data_Omega-with_Q-window3-w_intercept-contribution.npy",
@@ -1514,6 +1406,110 @@ def singleTrial4Suicide(config):
         print()
 
 # ===============================================
+def incrementalAnalysis(config):
+    # Read trial data
+    # agent_name = config["incremental_data_filename"]
+    # agents_list = ["{}_Q".format(each) for each in agent_name]
+    print("=== Incremental Analysis ====")
+    print(config["incremental_data_filename"])
+    window = config["incremental_window"]
+    trial_data = readTrialData(config["incremental_data_filename"])
+    trial_num = len(trial_data)
+    print("Num of trials : ", trial_num)
+    trial_index = np.arange(trial_num)
+    if config["incremental_num_trial"] is not None:
+        if config["incremental_num_trial"] < trial_num:
+            trial_index = np.random.choice(trial_index, config["incremental_num_trial"], replace=False)
+    trial_data = [trial_data[each] for each in trial_index]
+    trial_num = len(trial_data)
+    print("Num of used trials : ", trial_num)
+    # Incremental analysis
+    incremental_agents_list = [
+        ["local"],
+        ["local", "pessimistic"],
+        ["local", "global"],
+        ["local", "pessimistic", "global"],
+        ["local", "pessimistic", "global", "planned_hunting"],
+        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+    ]
+    all_cr = []
+    for trial_index, each in enumerate(trial_data):
+        print("-"*15)
+        trial_name = each[0]
+        X = each[1]
+        Y = each[2]
+        trial_length = X.shape[0]
+        print("Trial name : ", trial_name)
+        print("Trial length : ", trial_length)
+        window_index = np.arange(window, trial_length - window)
+        trial_cr = []
+        # For each trial, estimate agent weights through sliding windows
+        for centering_index, centering_point in enumerate(window_index):
+            print("Window at {}...".format(centering_point))
+            cur_step = X.iloc[centering_point]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            agent_cr = []
+            for agent_name in incremental_agents_list:
+                # Construct optimizer
+                params = [0 for _ in range(len(agent_name))]
+                bounds = [[0, 10] for _ in range(len(agent_name))]
+                if config["need_intercept"]:
+                    params.append(1)
+                    bounds.append([-1000, 1000])
+                cons = []  # construct the bounds in the form of constraints
+                for par in range(len(bounds)):
+                    l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                    u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                    cons.append(l)
+                    cons.append(u)
+                # estimation in the window
+                func = lambda params: negativeLikelihood(
+                    params,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=False,
+                    need_intercept=config["need_intercept"]
+                )
+                is_success = False
+                retry_num = 0
+                while not is_success and retry_num < 5:
+                    res = scipy.optimize.minimize(
+                        func,
+                        x0=params,
+                        method="SLSQP",
+                        bounds=bounds,
+                        tol=1e-5,
+                        constraints=cons
+                    )
+                    is_success = res.success
+                    if not is_success:
+                        print("Fail, retrying...")
+                        retry_num += 1
+                # correct rate in the window
+                _, estimated_prob = negativeLikelihood(
+                    res.x,
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                agent_cr.append(correct_rate)
+            trial_cr.append([cur_step.file, cur_step.pacmanPos, cur_step.beans, agent_cr]) #TODO: save cur_step for later use
+            print(agent_cr)
+        print("Average correct rate for trial : ", np.nanmean([temp[-1] for temp in trial_cr]))
+        all_cr.append(trial_cr)
+    # save correct rate data
+    if "incremental" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/incremental")
+    np.save("../common_data/incremental/simple-window{}-incremental_cr-{}_intercept.npy".format(
+        window, "w" if config["need_intercept"] else "wo"), all_cr)
+
 
 def decrementalAnalysis(config):
     # Read trial data
@@ -1616,7 +1612,7 @@ def decrementalAnalysis(config):
     # save correct rate data
     if "decremental" not in os.listdir("../common_data"):
         os.mkdir("../common_data/decremental")
-    np.save("../common_data/decremental/descriptive-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+    np.save("../common_data/decremental/simple-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
@@ -1720,7 +1716,7 @@ def oneAgentAnalysis(config):
     # save correct rate data
     if "one_agent" not in os.listdir("../common_data"):
         os.mkdir("../common_data/one_agent")
-    np.save("../common_data/one_agent/descriptive-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+    np.save("../common_data/one_agent/simple-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
@@ -1809,7 +1805,7 @@ def stageAnalysis(config):
     # save correct rate data
     if "stage_together" not in os.listdir("../common_data"):
         os.mkdir("../common_data/stage_together")
-    filename = "../common_data/stage_together/descriptive-{}trial-cr.npy".format(config["incremental_num_trial"])
+    filename = "../common_data/stage_together/simple-{}trial-cr.npy".format(config["incremental_num_trial"])
     np.save(filename, all_cr)
 
 
@@ -1900,14 +1896,14 @@ def stageCombineAnalysis(config):
     # save correct rate data
     if "stage_together" not in os.listdir("../common_data"):
         os.mkdir("../common_data/stage_together")
-    filename = "../common_data/stage_together/descriptive-all-1000trial-cr.npy"
+    filename = "../common_data/stage_together/simple-all-100trial-cr.npy"
     np.save(filename, all_cr)
-    np.save("../common_data/stage_together/descriptive-all-1000trial-weight.npy", weight)
+    np.save("../common_data/stage_together/simple-all-100trial-weight.npy", weight)
 
 
 def specialCaseAnalysis(config):
     # Read trial data
-    print("=== Stage Combine Analysis (use all for MLE) ====")
+    print("=== Special Case Analysis ====")
     print(config["incremental_data_filename"])
     data = readTrialData(config["incremental_data_filename"])
     all_X = pd.concat([each[1] for each in data])
@@ -2066,9 +2062,9 @@ def specialCaseAnalysis(config):
     # save correct rate data
     if "special_case" not in os.listdir("../common_data"):
         os.mkdir("../common_data/special_case")
-    filename = "../common_data/special_case/descriptive-1000trial-cr.npy"
+    filename = "../common_data/special_case/simple-100trial-cr.npy"
     np.save(filename, cr_trial)
-    np.save("../common_data/special_case/descriptive-1000trial-contribution.npy", cr_contribuion)
+    np.save("../common_data/special_case/simple-100trial-contribution.npy", cr_contribuion)
 
 
 def specialCaseMovingAnalysis(config):
@@ -2211,13 +2207,13 @@ def specialCaseMovingAnalysis(config):
     # save correct rate data
     if "special_case" not in os.listdir("../common_data"):
         os.mkdir("../common_data/special_case")
-    filename = "../common_data/special_case/descriptive-1000trial-moving_window-cr.npy"
+    filename = "../common_data/special_case/simple-1000trial-moving_window-cr.npy"
     np.save(filename, cr_trial)
 
 
 def diffLabelAnalysis():
     print("="*20, " Diff State Analysis ", "="*20)
-    filename = "../common_data/trial/1000_trial_data_Patamon-with_Q-descriptive.pkl"
+    filename = "../common_data/trial/100_trial_data_Omega-with_Q-simple.pkl"
     print(filename)
     data = readTrialData(filename)
     # data = [data[i] for i in range(10)]
@@ -2354,7 +2350,7 @@ def diffLabelAnalysis():
     state_cr = [global_cr, local_cr, evade_cr, suicide_cr, attack_cr, vague_cr]
     if "state_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/state_comparison")
-    np.save("../common_data/state_comparison/descriptive-1000trial_Patamon_diff_state_agent_cr.npy", state_cr)
+    np.save("../common_data/state_comparison/simple-100trial_Omega_diff_state_agent_cr.npy", state_cr)
 
 # ===============================================
 def readSimpleTrialData(filename):
@@ -3561,7 +3557,7 @@ def plotCentering():
 
 # =================================================
 
-def descriptiveLabelAnalysis(config):
+def simpleLabelAnalysis(config):
     print("="*20, " Descriptive Label Analysis ", "="*20)
     # Read trial data
     agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
@@ -3650,10 +3646,10 @@ def descriptiveLabelAnalysis(config):
             X[["ifscared1", "ifscared2"]][window:-window]
         ])
     # Save data
-    if "descriptive_label_analysis" not in os.listdir("../common_data"):
-        os.mkdir("../common_data/descriptive_label_analysis")
+    if "simple_label_analysis" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/simple_label_analysis")
     np.save(
-        "../common_data/descriptive_label_analysis/{}-record.npy".format(
+        "../common_data/simple_label_analysis/{}-record.npy".format(
             config["descriptive_filename"].split("/")[-1].split(".")[-2]
         ), record)
 
@@ -3684,7 +3680,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/{}_200_trial_data_Omega-with_Q-descriptive.pkl".format(type),
+        "trial_data_filename": "../common_data/trial/{}_200_trial_data_Omega-with_Q-simple.pkl".format(type),
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -3692,15 +3688,15 @@ if __name__ == '__main__':
         "multi_agent_list" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
         # ==================================================================================
         "incremental_window" : 3,
-        "incremental_data_filename" : "../common_data/trial/1000_trial_data_Omega-with_Q-descriptive.pkl",
+        "incremental_data_filename" : "../common_data/trial/100_trial_data_Omega-with_Q-simple.pkl",
         "incremental_num_trial" : None,
 
-        "single_trial_data_filename" : "../common_data/trial/test_suicide_trial_data_Omega-with_Q-descriptive.pkl",
+        "single_trial_data_filename" : "../common_data/trial/test_suicide_trial_data_Omega-with_Q-simple.pkl",
         "single_trial_window" : 3,
 
         # ==================================================================================
         # "descriptive_filename" : "../common_data/trial/accidental_200_trial_data_Omega-with_Q-descriptive.pkl",
-        "descriptive_filename" : "../common_data/trial/7000_trial_data_Patamon-with_Q-descriptive.pkl",
+        "descriptive_filename" : "../common_data/trial/7000_trial_data_Patamon-with_Q-simple.pkl",
         "descriptive_window" : 3,
     }
 
@@ -3726,7 +3722,7 @@ if __name__ == '__main__':
     # stageAnalysis(config)
     # stageCombineAnalysis(config)
     # specialCaseAnalysis(config)
-    specialCaseMovingAnalysis(config)
+    # specialCaseMovingAnalysis(config)
 
     # diffLabelAnalysis()
 
