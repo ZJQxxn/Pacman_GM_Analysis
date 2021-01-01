@@ -326,14 +326,17 @@ def preEstimation():
         # "../common_data/simulation/single_trial_record.pkl",
         # "../common_data/trial/500_trial_data_Omega.pkl",
         # "../common_data/trial/100_trial_data_Omega.pkl",
+        # "../common_data/trial/100_trial_data_Patamon.pkl",
         # "../common_data/trial/8000_trial_data_Omega.pkl",
-        # "../common_data/trial/7000_trial_data_Patamon.pkl",
-        "../common_data/trial/new_100_trial_data_Omega.pkl",
-        "../common_data/trial/accidental_100_trial_data_Omega.pkl",
+        "../common_data/trial/7000_trial_data_Patamon.pkl",
         # "../common_data/trial/test_planned_trial_data_Omega.pkl",
         # "../common_data/trial/test_suicide_trial_data_Omega.pkl",
-        "../common_data/trial/suicide_100_trial_data_Omega.pkl",
-        "../common_data/trial/global_100_trial_data_Omega.pkl",
+
+        # "../common_data/trial/new_100_trial_data_Omega.pkl",
+        # "../common_data/trial/accidental_100_trial_data_Omega.pkl",
+        # "../common_data/trial/suicide_100_trial_data_Omega.pkl",
+        # "../common_data/trial/global_100_trial_data_Omega.pkl",
+
         # "../common_data/trial/PA_AA_data.pkl",
 
         # For suicide agents

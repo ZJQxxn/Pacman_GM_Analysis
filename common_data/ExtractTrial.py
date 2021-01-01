@@ -517,5 +517,21 @@ if __name__ == '__main__':
     # extractGlobalTrial(trial_num=200)
 
     # extractMultiTrial()
-    extractPAorAATrial()
+    # extractPAorAATrial()
     pass
+
+    trial_num = 100
+    with open("trial/7000_trial_data_Patamon.pkl", "rb") as file:
+        data = pickle.load(file)
+    data = data.sort_index()
+    print("All data shape : ", data.shape)
+    trial_name_list = np.unique(data.file.values)
+    if trial_num < len(trial_name_list):
+        trial_name_list = np.random.choice(trial_name_list, trial_num)
+    is_need = data.file.apply(lambda x: x in trial_name_list)
+    trial_index = np.where(is_need == 1)
+    trial_data = data.iloc[trial_index].reset_index(drop = True)
+    print("{} trial data shape : ".format(trial_num), trial_data.shape)
+    with open("trial/{}_trial_data_Patamon-with_Q-simple.pkl".format(trial_num), "wb") as file:
+        pickle.dump(trial_data, file)
+    print("Finished saving data.")

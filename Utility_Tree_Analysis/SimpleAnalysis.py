@@ -290,7 +290,7 @@ def _localProcesing(local_Q, PR):
     temp_local_Q = copy.deepcopy(local_Q)
     for index in range(len(temp_local_Q)):
         non_zero = np.where(temp_local_Q[index] != 0)
-        if PR[index] > 10:
+        if PR[index] > 5:
             temp_local_Q[index][non_zero] = 0.0
         else:
             temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
@@ -663,17 +663,17 @@ def multiAgentAnalysis(config):
     if dir_names not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format(dir_names))
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/{}/{}-window{}-{}_intercept-multi_labels.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-multi_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-handcrafted_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-matching_rate.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-matching_rate.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-trial_weight.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-trial_weight.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-Q.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-Q.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-contribution.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-contribution.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
     # Save Records
     data_type = None
@@ -687,7 +687,7 @@ def multiAgentAnalysis(config):
         data_type = "global"
     else:
         data_type = None
-    np.save("../common_data/{}/{}_descriptive_records.npy".format(dir_names, data_type), record)
+    np.save("../common_data/{}/{}_simple_records.npy".format(dir_names, data_type), record)
 
 
 def suicideMultiAgentAnalysis(config):
@@ -879,17 +879,17 @@ def suicideMultiAgentAnalysis(config):
     if dir_names not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format(dir_names))
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/{}/{}-window{}-{}_intercept-multi_labels.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-multi_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-handcrafted_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-matching_rate.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-matching_rate.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-trial_weight.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-trial_weight.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-Q.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-Q.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
-    np.save("../common_data/{}/{}-window{}-{}_intercept-contribution.npy".format(
+    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-contribution.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
     # Save Records
     data_type = None
@@ -903,7 +903,7 @@ def suicideMultiAgentAnalysis(config):
         data_type = "global"
     else:
         data_type = None
-    np.save("../common_data/{}/{}_descriptive_records.npy".format(dir_names, data_type), record)
+    np.save("../common_data/{}/{}_simple_records.npy".format(dir_names, data_type), record)
 
 
 def singleTrial4Hunting(config):
@@ -2069,7 +2069,7 @@ def specialCaseAnalysis(config):
 
 def specialCaseMovingAnalysis(config):
     # Read trial data
-    print("=== Stage Combine Analysis (use all for MLE) ====")
+    print("=== Special Case (Moving Window) ====")
     print(config["incremental_data_filename"])
     data = readTrialData(config["incremental_data_filename"])
     window = 3
@@ -2207,7 +2207,7 @@ def specialCaseMovingAnalysis(config):
     # save correct rate data
     if "special_case" not in os.listdir("../common_data"):
         os.mkdir("../common_data/special_case")
-    filename = "../common_data/special_case/simple-1000trial-moving_window-cr.npy"
+    filename = "../common_data/special_case/simple-100trial-moving_window-cr.npy"
     np.save(filename, cr_trial)
 
 
@@ -3268,7 +3268,7 @@ def plotCentering():
     #           For Planned Hunting
     planned_data = readSimpleTrialData("../common_data/trial/new_100_trial_data_Omega-with_Q.pkl")
     planned_descriptive_weight = np.load(
-        "../common_data/global_local_pessimistic_suicide_planned_hunting/new_100_trial_data_Omega-with_Q-descriptive-window3-w_intercept-contribution.npy",
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/simple-new_100_trial_data_Omega-with_Q-simple-window3-w_intercept-contribution.npy",
         allow_pickle=True
     )
     planned_redundant_weight = []
@@ -3307,7 +3307,7 @@ def plotCentering():
     #           For Accidental Hunting
     accidental_data = readSimpleTrialData("../common_data/trial/accidental_100_trial_data_Omega-with_Q.pkl")
     accidental_descriptive_weight = np.load(
-        "../common_data/global_local_pessimistic_suicide_planned_hunting/accidental_100_trial_data_Omega-with_Q-descriptive-window3-w_intercept-contribution.npy",
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/simple-accidental_100_trial_data_Omega-with_Q-simple-window3-w_intercept-contribution.npy",
         allow_pickle=True
     )
     accidental_redundant_weight = []
@@ -3348,7 +3348,7 @@ def plotCentering():
     #                  For Suicide
     suicide_data = readSimpleTrialData("../common_data/trial/suicide_100_trial_data_Omega-with_Q.pkl")
     suicide_descriptive_weight = np.load(
-        "../common_data/global_local_pessimistic_suicide_planned_hunting/suicide_100_trial_data_Omega-with_Q-descriptive-window3-w_intercept-contribution.npy",
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/simple-suicide_100_trial_data_Omega-with_Q-simple-window3-w_intercept-contribution.npy",
         allow_pickle=True
     )
     suicide_redundant_weight = []
@@ -3382,7 +3382,7 @@ def plotCentering():
     #              For Global
     global_data = readSimpleTrialData("../common_data/trial/global_100_trial_data_Omega-with_Q.pkl")
     global_descriptive_weight = np.load(
-        "../common_data/global_local_pessimistic_suicide_planned_hunting/global_100_trial_data_Omega-with_Q-descriptive-window3-w_intercept-contribution.npy",
+        "../common_data/global_local_pessimistic_suicide_planned_hunting/simple-global_100_trial_data_Omega-with_Q-simple-window3-w_intercept-contribution.npy",
         allow_pickle=True
     )
     global_redundant_weight = []
@@ -3460,7 +3460,7 @@ def plotCentering():
         # )
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
     plt.xlim(0, avg_planned_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-10", "$\mathbf{c}$", "10"], fontsize = 15)
+    plt.xticks([0, 11, 21], ["-10", "Energizer Consumption", "10"], fontsize = 15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon = False, fontsize = 10)
@@ -3485,7 +3485,7 @@ def plotCentering():
     # for pessimistic agent
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
     plt.xlim(0, avg_accidental_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-10", "$\mathbf{c}$", "10"], fontsize=15)
+    plt.xticks([0, 11, 21], ["-10", "Energizer Consumption", "10"], fontsize=15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon=False, fontsize=10)
@@ -3510,7 +3510,7 @@ def plotCentering():
     # for pessimistic agent
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
     plt.xlim(0, avg_suicide_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-20", "-10", "$\mathbf{c}$"], fontsize=15)
+    plt.xticks([0, 11, 21], ["-20", "-10", "End of Round"], fontsize=15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon=False, fontsize=10)
@@ -3535,7 +3535,7 @@ def plotCentering():
     # for pessimistic agent
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
     plt.xlim(0, avg_global_redundant_weight.shape[1])
-    plt.xticks([0, 11, 21], ["-10", "$\mathbf{c}$", "10"], fontsize=15)
+    plt.xticks([0, 11, 21], ["-10", "Local Graze", "10"], fontsize=15)
     plt.yticks(fontsize=15)
     plt.ylim(-0.01, 1.02)
     plt.legend(frameon=False, fontsize=10)
@@ -3558,7 +3558,7 @@ def plotCentering():
 # =================================================
 
 def simpleLabelAnalysis(config):
-    print("="*20, " Descriptive Label Analysis ", "="*20)
+    print("="*20, " Simple Label Analysis ", "="*20)
     # Read trial data
     agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
     window = config["descriptive_window"]
@@ -3680,7 +3680,7 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/{}_200_trial_data_Omega-with_Q-simple.pkl".format(type),
+        "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-simple.pkl".format(type),
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -3696,7 +3696,7 @@ if __name__ == '__main__':
 
         # ==================================================================================
         # "descriptive_filename" : "../common_data/trial/accidental_200_trial_data_Omega-with_Q-descriptive.pkl",
-        "descriptive_filename" : "../common_data/trial/7000_trial_data_Patamon-with_Q-simple.pkl",
+        "descriptive_filename" : "../common_data/trial/100_trial_data_Omega-with_Q-simple.pkl",
         "descriptive_window" : 3,
     }
 
@@ -3738,4 +3738,4 @@ if __name__ == '__main__':
 
     # extractIndex()
 
-    # descriptiveLabelAnalysis(config)
+    # simpleLabelAnalysis(config)
