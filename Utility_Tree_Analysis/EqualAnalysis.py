@@ -6,7 +6,7 @@ Author:
     Jiaqi Zhang <zjqseu@gmail.com>
     
 Date:
-    17 Dec. 2020
+    4 Jan. 2021
 '''
 
 import pickle
@@ -199,21 +199,15 @@ def _pessimisticProcesing(pess_Q, PG, ghost_status):
     temp_pess_Q = copy.deepcopy(pess_Q)
     for index in range(len(temp_pess_Q)):
         non_zero = np.where(temp_pess_Q[index] != 0)
-        # if np.any(temp_pess_Q[index] < -5):
-        if np.any(np.array(PG[index]) <= 10) and np.all(np.array(ghost_status[index]) < 3):
+        # if np.any(np.array(PG[index]) <= 10) and np.all(np.array(ghost_status[index]) < 3):
+        if np.all(np.array(ghost_status[index]) < 3):
             temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
         else:
             temp_pess_Q[index][non_zero] = 0.0
-    # for index in range(len(temp_pess_Q)):
-    #     non_zero = np.where(temp_pess_Q[index] != 0)
-    #     temp_global_Q[index][non_zero] = temp_global_Q[index][non_zero] + offset
-    #     temp_local_Q[index][non_zero] = temp_local_Q[index][non_zero] + offset
-    #     temp_pess_Q[index][non_zero] = temp_pess_Q[index][non_zero] + offset
     return temp_pess_Q
 
 
 def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num, PE, PG):
-    eat_index = []
     if np.any(np.concatenate(planned_Q) < 0):
         temp_planned_Q = np.concatenate(planned_Q)
         temp_planned_Q[temp_planned_Q > 0] = 0.0
@@ -223,22 +217,14 @@ def _plannedHuntingProcesing(planned_Q, ghost_status, energizer_num, PE, PG):
     temp_planned_Q = copy.deepcopy(planned_Q)
     for index in range(len(temp_planned_Q)):
         non_zero = np.where(temp_planned_Q[index] != 0)
-        # if np.all(np.array(ghost_status[index]) >= 3) or energizer_num[index] == 0 or PE[index] > 15:
+        # if (np.all(np.array(ghost_status[index]) <= 3) and energizer_num[index] == 0) \
+        #         or (np.any(np.array(ghost_status[index]) < 3) and PE[index] >= 15) \
+        #         or np.all(np.array(ghost_status[index]) == 3) or np.all(np.array(PG[index]) >= 15) or np.any(np.array(ghost_status[index]) > 3):
         if (np.all(np.array(ghost_status[index]) <= 3) and energizer_num[index] == 0) \
-                or (np.any(np.array(ghost_status[index]) < 3) and PE[index] >= 15) \
-                or np.all(np.array(ghost_status[index]) == 3) or np.all(np.array(PG[index]) >= 15) or np.any(np.array(ghost_status[index]) > 3):
-        # _mixStatus(ghost_status[index], PG[index])
+                or np.all(np.array(ghost_status[index]) == 3) or np.any(np.array(ghost_status[index]) > 3):
             temp_planned_Q[index][non_zero] = 0.0
         else:
             temp_planned_Q[index][non_zero] = temp_planned_Q[index][non_zero] + offset
-        # if index > 0 and np.all(np.array(ghost_status[index]) > 3) and np.all(np.array(ghost_status[index-1]) < 3):
-        #     eat_index.append(index)
-    # if len(eat_index) > 0:
-    #     for i in eat_index:
-    #         for j in range(i, i+1):
-    #             non_zero = np.where(temp_planned_Q[i-1] != 0)
-    #             temp_planned_Q[j] = temp_planned_Q[i-1]
-    #             temp_planned_Q[j][non_zero] += np.random.normal(1, 0.5, len(non_zero[0]))
     return temp_planned_Q
 
 
@@ -254,9 +240,8 @@ def _suicideProcesing(suicide_Q, PR, RR, ghost_status, PG):
     temp_suicide_Q = copy.deepcopy(suicide_Q)
     for index in range(len(temp_suicide_Q)):
         non_zero = np.where(temp_suicide_Q[index] != 0)
-        # if np.all(np.array(ghost_status[index]) >= 3) or (PR[index] > 10 and RR[index] > 10):
-        # not np.any(np.array(PG[index]) < 10)
-        if np.all(np.array(ghost_status[index]) == 3) or np.all(np.array(PG[index]) > 10):
+        # if np.all(np.array(ghost_status[index]) == 3) or np.all(np.array(PG[index]) > 10):
+        if np.all(np.array(ghost_status[index]) == 3):
             temp_suicide_Q[index][non_zero] = 0.0
         else:
             temp_suicide_Q[index][non_zero] = temp_suicide_Q[index][non_zero] + offset
@@ -313,26 +298,30 @@ def readTrialData(filename):
                 if isinstance(all_data.global_Q[index - 1], list):
                     all_data.global_Q[index] = all_data.global_Q[index - 2]
                     all_data.local_Q[index] = all_data.local_Q[index - 2]
-                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 2]
+                    all_data.pessimistic_blinky_Q[index] = all_data.pessimistic_blinky_Q[index - 2]
+                    all_data.pessimistic_clyde_Q[index] = all_data.pessimistic_clyde_Q[index - 2]
                     all_data.suicide_Q[index] = all_data.suicide_Q[index - 2]
                     all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 2]
                 else:
                     all_data.global_Q[index] = all_data.global_Q[index - 1]
                     all_data.local_Q[index] = all_data.local_Q[index - 1]
-                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index - 1]
+                    all_data.pessimistic_blinky_Q[index] = all_data.pessimistic_blinky_Q[index - 1]
+                    all_data.pessimistic_clyde_Q[index] = all_data.pessimistic_clyde_Q[index - 1]
                     all_data.suicide_Q[index] = all_data.suicide_Q[index - 1]
                     all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index - 1]
             else:
                 if isinstance(all_data.global_Q[index + 1], list):
                     all_data.global_Q[index] = all_data.global_Q[index + 2]
                     all_data.local_Q[index] = all_data.local_Q[index + 2]
-                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 2]
+                    all_data.pessimistic_blinky_Q[index] = all_data.pessimistic_blinky_Q[index + 2]
+                    all_data.pessimistic_clyde_Q[index] = all_data.pessimistic_clyde_Q[index + 2]
                     all_data.suicide_Q[index] = all_data.suicide_Q[index + 2]
                     all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 2]
                 else:
                     all_data.global_Q[index] = all_data.global_Q[index + 1]
                     all_data.local_Q[index] = all_data.local_Q[index + 1]
-                    all_data.pessimistic_Q[index] = all_data.pessimistic_Q[index + 1]
+                    all_data.pessimistic_blinky_Q[index] = all_data.pessimistic_blinky_Q[index + 1]
+                    all_data.pessimistic_clyde_Q[index] = all_data.pessimistic_clyde_Q[index + 1]
                     all_data.suicide_Q[index] = all_data.suicide_Q[index + 1]
                     all_data.planned_hunting_Q[index] = all_data.planned_hunting_Q[index + 1]
     # Pre-processng pessimistic Q
@@ -378,10 +367,11 @@ def readTrialData(filename):
     )
     print("Finished extracting features.")
     # TODO: planned hunting and suicide Q value
-    all_data.pessimistic_Q = _pessimisticProcesing(all_data.pessimistic_Q, PG, ghost_status)
+    all_data.pessimistic_blinky_Q = _pessimisticProcesing(all_data.pessimistic_blinky_Q, PG, ghost_status)
+    all_data.pessimistic_clyde_Q = _pessimisticProcesing(all_data.pessimistic_clyde_Q, PG, ghost_status)
     all_data.planned_hunting_Q = _plannedHuntingProcesing(all_data.planned_hunting_Q, ghost_status, energizer_num, PE, PG_wo_dead)
     all_data.suicide_Q = _suicideProcesing(all_data.suicide_Q, PR, RR, ghost_status, PG_wo_dead)
-    all_data.local_Q = _localProcesing(all_data.local_Q, PR)
+    # all_data.local_Q = _localProcesing(all_data.local_Q, PR)
     # all_data.global_Q = _globalProcesing(all_data.global_Q, PR_global)
     print("Finished Q-value pre-processing.")
     # Split into trials
@@ -420,6 +410,7 @@ def _makeChoice(prob):
         copy_estimated[available_dir_index] = copy_estimated[available_dir_index] - np.min(copy_estimated[available_dir_index]) + 1
     return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
+
 def _estimationLabeling(Q_value, agent_list):
     indicies = np.argsort(Q_value)
     # estimated_label = [agent_list[each] for each in indicies[-2:]]
@@ -428,6 +419,7 @@ def _estimationLabeling(Q_value, agent_list):
     #     estimated_label.append(agent_list[indicies[-3]])
     return estimated_label
 
+
 def _estimationVagueLabeling(contributions, all_agent_name):
     sorted_contributions = np.sort(contributions)[::-1]
     if sorted_contributions[0] - sorted_contributions[1] < 0.2 :
@@ -435,6 +427,7 @@ def _estimationVagueLabeling(contributions, all_agent_name):
     else:
         label = all_agent_name[np.argmax(contributions)]
         return [label]
+
 
 def _estimationThreeLabeling(contributions):
     # global, local, pessimistic
@@ -445,6 +438,7 @@ def _estimationThreeLabeling(contributions):
     if contributions[-1] > 0.5:
         labels.append("pessimistic")
     return labels
+
 
 def _handcraftLabeling(labels):
     hand_crafted_label = []
@@ -470,6 +464,7 @@ def _handcraftLabeling(labels):
     if len(hand_crafted_label) == 0:
         hand_crafted_label = None
     return hand_crafted_label
+
 
 def _label2Index(labels):
     label_list = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
@@ -533,7 +528,7 @@ def multiAgentAnalysis(config):
     print(config["trial_data_filename"])
     print(config["multi_agent_list"])
     # Read trial data
-    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]]
     window = config["trial_window"]
     temp_trial_data = readTrialData(config["trial_data_filename"])
     trial_num = len(temp_trial_data)
@@ -559,7 +554,7 @@ def multiAgentAnalysis(config):
     record = []
     # agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
     agent_name = config["multi_agent_list"]
-    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(each) for each in agent_name]
+    agent_index = [["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"].index(each) for each in agent_name]
 
     for trial_index, each in enumerate(trial_data):
         trial_record = []
@@ -663,17 +658,17 @@ def multiAgentAnalysis(config):
     if dir_names not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format(dir_names))
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-multi_labels.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-multi_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-handcrafted_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-matching_rate.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-matching_rate.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-trial_weight.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-trial_weight.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-Q.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-Q.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-contribution.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-contribution.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
     # Save Records
     data_type = None
@@ -687,7 +682,7 @@ def multiAgentAnalysis(config):
         data_type = "global"
     else:
         data_type = None
-    np.save("../common_data/{}/{}_simple_records.npy".format(dir_names, data_type), record)
+    np.save("../common_data/{}/{}_equal_records.npy".format(dir_names, data_type), record)
 
 
 def suicideMultiAgentAnalysis(config):
@@ -879,17 +874,17 @@ def suicideMultiAgentAnalysis(config):
     if dir_names not in os.listdir("../common_data"):
         os.mkdir("../common_data/{}".format(dir_names))
     save_base = config["trial_data_filename"].split("/")[-1].split(".")[0]
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-multi_labels.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-multi_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), all_estimated_label)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-handcrafted_labels.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-handcrafted_labels.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), handcrafted_labels)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-matching_rate.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-matching_rate.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_matching_rate)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-trial_weight.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-trial_weight.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_weight)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-Q.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-Q.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_Q)
-    np.save("../common_data/{}/simple-{}-window{}-{}_intercept-contribution.npy".format(
+    np.save("../common_data/{}/equal-{}-window{}-{}_intercept-contribution.npy".format(
         dir_names, save_base, window, "w" if config["need_intercept"] else "wo"), trial_contribution)
     # Save Records
     data_type = None
@@ -1426,11 +1421,12 @@ def incrementalAnalysis(config):
     # Incremental analysis
     incremental_agents_list = [
         ["local"],
-        ["local", "pessimistic"],
         ["local", "global"],
-        ["local", "pessimistic", "global"],
-        ["local", "pessimistic", "global", "planned_hunting"],
-        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+        ["local", "pessimistic_blinky", "global"],
+        ["local", "pessimistic_clyde", "global"],
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "global"],
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "global", "planned_hunting"],
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "global", "planned_hunting", "suicide"]
     ]
     all_cr = []
     for trial_index, each in enumerate(trial_data):
@@ -1507,7 +1503,7 @@ def incrementalAnalysis(config):
     # save correct rate data
     if "incremental" not in os.listdir("../common_data"):
         os.mkdir("../common_data/incremental")
-    np.save("../common_data/incremental/simple-window{}-incremental_cr-{}_intercept.npy".format(
+    np.save("../common_data/incremental/equal-window{}-incremental_cr-{}_intercept.npy".format(
         window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
@@ -1530,12 +1526,13 @@ def decrementalAnalysis(config):
     print("Num of used trials : ", trial_num)
     # Decremental analysis
     incremental_agents_list = [
-        ["local", "pessimistic", "suicide", "planned_hunting"],
-        ["global", "pessimistic", "suicide", "planned_hunting"],
-        ["global", "local", "suicide", "planned_hunting"],
-        ["global", "local", "pessimistic", "planned_hunting"],
-        ["global", "local", "pessimistic", "suicide"],
-        ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"], # w/o global
+        ["global", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"], # w/o local
+        ["global", "local", "pessimistic_clyde", "suicide", "planned_hunting"], # w/o blinky
+        ["global", "local", "pessimistic_blinky", "suicide", "planned_hunting"],  # w/o clyde
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "planned_hunting"],# w/o suicide
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide"], # w/o planned hunting
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"] # all the agents
     ]
     all_cr = []
     for trial_index, each in enumerate(trial_data):
@@ -1612,7 +1609,7 @@ def decrementalAnalysis(config):
     # save correct rate data
     if "decremental" not in os.listdir("../common_data"):
         os.mkdir("../common_data/decremental")
-    np.save("../common_data/decremental/simple-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+    np.save("../common_data/decremental/equal-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
@@ -1637,7 +1634,8 @@ def oneAgentAnalysis(config):
     incremental_agents_list = [
         ["global"],
         ["local"],
-        ["pessimistic"],
+        ["pessimistic_blinky"],
+        ["pessimistic_clyde"],
         ["suicide"],
         ["planned_hunting"]
     ]
@@ -1716,7 +1714,7 @@ def oneAgentAnalysis(config):
     # save correct rate data
     if "one_agent" not in os.listdir("../common_data"):
         os.mkdir("../common_data/one_agent")
-    np.save("../common_data/one_agent/simple-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
+    np.save("../common_data/one_agent/equal-{}trial-window{}-incremental_cr-{}_intercept.npy".format(
         config["incremental_num_trial"], window, "w" if config["need_intercept"] else "wo"), all_cr)
 
 
@@ -1737,11 +1735,12 @@ def stageAnalysis(config):
     # Incremental analysis
     incremental_agents_list = [
         ["local"],
-        ["local", "pessimistic"],
         ["local", "global"],
-        ["local", "pessimistic", "global"],
-        ["local", "pessimistic", "global", "planned_hunting"],
-        ["local", "pessimistic", "global", "planned_hunting", "suicide"]
+        ["local", "pessimistic_blinky", "global"],
+        ["local", "pessimistic_clyde", "global"],
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "global"],
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "global", "planned_hunting"],
+        ["local", "pessimistic_blinky", "pessimistic_clyde", "global", "planned_hunting", "suicide"]
     ]
     all_cr = {"early":[], "medium":[], "end":[]}
     for i, index in enumerate(stage_index):
@@ -1805,7 +1804,7 @@ def stageAnalysis(config):
     # save correct rate data
     if "stage_together" not in os.listdir("../common_data"):
         os.mkdir("../common_data/stage_together")
-    filename = "../common_data/stage_together/simple-{}trial-cr.npy".format(config["incremental_num_trial"])
+    filename = "../common_data/stage_together/equal-{}trial-cr.npy".format(config["incremental_num_trial"])
     np.save(filename, all_cr)
 
 
@@ -1821,10 +1820,11 @@ def stageCombineAnalysis(config):
     incremental_agents_list = [
         ["global"],
         ["local"],
-        ["pessimistic"],
+        ["pessimistic_blinky"],
+        ["pessimistic_clyde"],
         ["suicide"],
         ["planned_hunting"],
-        ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
     ]
     all_cr = []
     weight = []
@@ -1896,9 +1896,9 @@ def stageCombineAnalysis(config):
     # save correct rate data
     if "stage_together" not in os.listdir("../common_data"):
         os.mkdir("../common_data/stage_together")
-    filename = "../common_data/stage_together/simple-all-100trial-cr.npy"
+    filename = "../common_data/stage_together/equal-all-100trial-cr.npy"
     np.save(filename, all_cr)
-    np.save("../common_data/stage_together/simple-all-100trial-weight.npy", weight)
+    np.save("../common_data/stage_together/equal-all-100trial-weight.npy", weight)
 
 
 def specialCaseAnalysis(config):
@@ -1913,10 +1913,11 @@ def specialCaseAnalysis(config):
     incremental_agents_list = [
         ["global"],
         ["local"],
-        ["pessimistic"],
+        ["pessimistic_blinky"],
+        ["pessimistic_clyde"],
         ["suicide"],
         ["planned_hunting"],
-        ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
     ]
     locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
     print("Finished reading distance file")
@@ -2062,9 +2063,9 @@ def specialCaseAnalysis(config):
     # save correct rate data
     if "special_case" not in os.listdir("../common_data"):
         os.mkdir("../common_data/special_case")
-    filename = "../common_data/special_case/simple-100trial-cr.npy"
+    filename = "../common_data/special_case/equal-100trial-cr.npy"
     np.save(filename, cr_trial)
-    np.save("../common_data/special_case/simple-100trial-contribution.npy", cr_contribuion)
+    np.save("../common_data/special_case/equal-100trial-contribution.npy", cr_contribuion)
 
 
 def specialCaseMovingAnalysis(config):
@@ -2077,10 +2078,11 @@ def specialCaseMovingAnalysis(config):
     incremental_agents_list = [
         ["global"],
         ["local"],
-        ["pessimistic"],
+        ["pessimistic_blinky"],
+        ["pessimistic_clyde"],
         ["suicide"],
         ["planned_hunting"],
-        ["global", "local", "pessimistic", "suicide", "planned_hunting"]
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
     ]
     locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
     print("Finished reading distance file")
@@ -2207,13 +2209,13 @@ def specialCaseMovingAnalysis(config):
     # save correct rate data
     if "special_case" not in os.listdir("../common_data"):
         os.mkdir("../common_data/special_case")
-    filename = "../common_data/special_case/simple-100trial-moving_window-cr.npy"
+    filename = "../common_data/special_case/equal-100trial-moving_window-cr.npy"
     np.save(filename, cr_trial)
 
 
 def diffLabelAnalysis():
     print("="*20, " Diff State Analysis ", "="*20)
-    filename = "../common_data/trial/100_trial_data_Omega-with_Q-simple.pkl"
+    filename = "../common_data/trial/100_trial_data_Omega-with_Q-equal.pkl"
     print(filename)
     data = readTrialData(filename)
     # data = [data[i] for i in range(10)]
@@ -2225,8 +2227,8 @@ def diffLabelAnalysis():
                   "label_suicide",
                   "label_true_accidental_hunting",
                   "label_true_planned_hunting"]
-    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
-    agent_name_list = [["local"], ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]]
+    agent_name_list = [["local"], ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]]
     local_cr = []
     global_cr = []
     evade_cr = []
@@ -2350,7 +2352,7 @@ def diffLabelAnalysis():
     state_cr = [global_cr, local_cr, evade_cr, suicide_cr, attack_cr, vague_cr]
     if "state_comparison" not in os.listdir("../common_data"):
         os.mkdir("../common_data/state_comparison")
-    np.save("../common_data/state_comparison/simple-100trial_Omega_diff_state_agent_cr.npy", state_cr)
+    np.save("../common_data/state_comparison/equal-100trial_Omega_diff_state_agent_cr.npy", state_cr)
 
 # ===============================================
 def readSimpleTrialData(filename):
@@ -3557,10 +3559,10 @@ def plotCentering():
 
 # =================================================
 
-def simpleLabelAnalysis(config):
-    print("="*20, " Simple Label Analysis ", "="*20)
+def equalLabelAnalysis(config):
+    print("="*20, " Equal Label Analysis ", "="*20)
     # Read trial data
-    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic", "suicide", "planned_hunting"]]
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]]
     window = config["descriptive_window"]
     print(config["descriptive_filename"])
     trial_data = readTrialData(config["descriptive_filename"])
@@ -3569,8 +3571,8 @@ def simpleLabelAnalysis(config):
     print("Num of trials : ", trial_num)
 
     record = []
-    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
-    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
+    agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
+    agent_index = [["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"].index(i) for i in agent_name]
     # Construct optimizer
     for trial_index, each in enumerate(trial_data):
         print("-"*15)
@@ -3583,7 +3585,7 @@ def simpleLabelAnalysis(config):
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
         temp_contribution = np.zeros((len(window_index), len(agent_name)))
-        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 6, 4))
         # For each trial, estimate agent weights through sliding windows
         temp_estimated_label = []
         for centering_index, centering_point in enumerate(window_index):
@@ -3646,10 +3648,10 @@ def simpleLabelAnalysis(config):
             X[["ifscared1", "ifscared2"]][window:-window]
         ])
     # Save data
-    if "simple_label_analysis" not in os.listdir("../common_data"):
-        os.mkdir("../common_data/simple_label_analysis")
+    if "equal_label_analysis" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/equal_label_analysis")
     np.save(
-        "../common_data/simple_label_analysis/{}-record.npy".format(
+        "../common_data/equal_label_analysis/{}-record.npy".format(
             config["descriptive_filename"].split("/")[-1].split(".")[-2]
         ), record)
 
@@ -3680,23 +3682,23 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-simple.pkl".format(type),
+        "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-equal.pkl".format(type),
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
         "trial_window" : 3,
-        "multi_agent_list" : ["global", "local", "pessimistic", "suicide", "planned_hunting"],
+        "multi_agent_list" : ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"],
         # ==================================================================================
         "incremental_window" : 3,
-        "incremental_data_filename" : "../common_data/trial/100_trial_data_Omega-with_Q-simple.pkl",
+        "incremental_data_filename" : "../common_data/trial/100_trial_data_Omega-with_Q-equal.pkl",
         "incremental_num_trial" : None,
 
-        "single_trial_data_filename" : "../common_data/trial/test_suicide_trial_data_Omega-with_Q-simple.pkl",
+        "single_trial_data_filename" : "../common_data/trial/test_suicide_trial_data_Omega-with_Q-equal.pkl",
         "single_trial_window" : 3,
 
         # ==================================================================================
         # "descriptive_filename" : "../common_data/trial/accidental_200_trial_data_Omega-with_Q-descriptive.pkl",
-        "descriptive_filename" : "../common_data/trial/all_trial_data-simple.pkl",
+        "descriptive_filename" : "../common_data/trial/100_trial_data_Omega-with_Q-equal.pkl",
         "descriptive_window" : 3,
     }
 
@@ -3724,7 +3726,7 @@ if __name__ == '__main__':
     # specialCaseAnalysis(config)
     # specialCaseMovingAnalysis(config)
 
-    # diffLabelAnalysis()
+    diffLabelAnalysis()
 
     # singleTrial4Hunting(config)
     # singleTrial4Suicide(config)
@@ -3738,4 +3740,4 @@ if __name__ == '__main__':
 
     # extractIndex()
 
-    simpleLabelAnalysis(config)
+    # equalLabelAnalysis(config)
