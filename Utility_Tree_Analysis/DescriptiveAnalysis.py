@@ -3726,7 +3726,7 @@ if __name__ == '__main__':
     # stageAnalysis(config)
     # stageCombineAnalysis(config)
     # specialCaseAnalysis(config)
-    specialCaseMovingAnalysis(config)
+    # specialCaseMovingAnalysis(config)
 
     # diffLabelAnalysis()
 

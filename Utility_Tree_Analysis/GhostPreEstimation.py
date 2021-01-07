@@ -23,12 +23,9 @@ import sys
 sys.path.append("./")
 from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from PathTreeAgent import PathTree
-from SimpleEvadeAgent import SimpleEvade
 from SimpleGlobalAgent import SimpleGlobal
-# from NewPathTreeAgent import PathTree
-from SimpleApproachAgent import SimpleApproach
 from SimpleEnergizerAgent import SimpleEnergizer
-
+from GhostAgent import GhostAgent
 
 # ===================================
 #         UTILITY FUNCTION
@@ -117,9 +114,8 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     # Q-value (utility)
     global_Q = []
     local_Q = []
-    pessimistic_blinky_Q = []
-    pessimistic_clyde_Q = []
-    suicide_Q = []
+    blinky_Q = []
+    clyde_Q = []
     planned_hunting_Q = []
     num_samples = all_data.shape[0]
     print("Sample Num : ", num_samples)
@@ -208,8 +204,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
         local_estimation.append(local_result[0])
         local_Q.append(local_result[1])
         # Pessimistic agent
-        pessimistic_blinky_agent = SimpleEvade(
+        blinky_agent = GhostAgent(
             adjacent_data,
+            adjacent_path,
             locs_df,
             reward_amount,
             cur_pos,
@@ -230,11 +227,12 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             reward_coeff = 0.0,
             risk_coeff = 1.0
         )
-        pessimistic_blinky_result = pessimistic_blinky_agent.nextDir(return_Q=True)
-        pessimistic_blinky_Q.append(pessimistic_blinky_result[1])
+        blinky_result = blinky_agent.nextDir(return_Q=True)
+        blinky_Q.append(blinky_result[1])
 
-        pessimistic_clyde_agent = SimpleEvade(
+        clyde_agent = GhostAgent(
             adjacent_data,
+            adjacent_path,
             locs_df,
             reward_amount,
             cur_pos,
@@ -255,34 +253,9 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
             reward_coeff = 0.0,
             risk_coeff = 1.0
         )
-        pessimistic_clyde_result = pessimistic_clyde_agent.nextDir(return_Q=True)
+        clyde_result = clyde_agent.nextDir(return_Q=True)
         # pessimistic_estimation.append(pessimistic_blinky_result[0])
-        pessimistic_clyde_Q.append(pessimistic_clyde_result[1])
-        # Suicide agent
-        suicide_agent = SimpleApproach(
-            adjacent_data,
-            adjacent_path,
-            locs_df,
-            reward_amount,
-            cur_pos,
-            energizer_data,
-            bean_data,
-            ghost_data,
-            reward_type,
-            fruit_pos,
-            ghost_status,
-            last_dir[index],
-            depth = suicide_depth,
-            ghost_attractive_thr = suicide_ghost_attractive_thr,
-            ghost_repulsive_thr = suicide_fruit_attractive_thr,
-            fruit_attractive_thr = suicide_ghost_repulsive_thr,
-            randomness_coeff = randomness_coeff,
-            # laziness_coeff = laziness_coeff,
-            laziness_coeff=0.0
-        )
-        suicide_result = suicide_agent.nextDir(return_Q=True)
-        suicide_estimation.append(suicide_result[0])
-        suicide_Q.append(suicide_result[1])
+        clyde_Q.append(clyde_result[1])
         # Planned hunting agent
         planned_hunting_agent = SimpleEnergizer(
             adjacent_data,
@@ -313,15 +286,12 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     all_data["local_Q"] = np.tile(np.nan, num_samples)
     all_data["local_Q"] = all_data["local_Q"].apply(np.array)
     all_data["local_Q"] = local_Q
-    all_data["pessimistic_blinky_Q"] = np.tile(np.nan, num_samples)
-    all_data["pessimistic_blinky_Q"] = all_data["pessimistic_blinky_Q"].apply(np.array)
-    all_data["pessimistic_blinky_Q"] = pessimistic_blinky_Q
-    all_data["pessimistic_clyde_Q"] = np.tile(np.nan, num_samples)
-    all_data["pessimistic_clyde_Q"] = all_data["pessimistic_clyde_Q"].apply(np.array)
-    all_data["pessimistic_clyde_Q"] = pessimistic_clyde_Q
-    all_data["suicide_Q"] = np.tile(np.nan, num_samples)
-    all_data["suicide_Q"] = all_data["suicide_Q"].apply(np.array)
-    all_data["suicide_Q"] = suicide_Q
+    all_data["blinky_Q"] = np.tile(np.nan, num_samples)
+    all_data["blinky_Q"] = all_data["blinky_Q"].apply(np.array)
+    all_data["blinky_Q"] = blinky_Q
+    all_data["clyde_Q"] = np.tile(np.nan, num_samples)
+    all_data["clyde_Q"] = all_data["clyde_Q"].apply(np.array)
+    all_data["clyde_Q"] = clyde_Q
     all_data["planned_hunting_Q"] = np.tile(np.nan, num_samples)
     all_data["planned_hunting_Q"] = all_data["planned_hunting_Q"].apply(np.array)
     all_data["planned_hunting_Q"] = planned_hunting_Q
@@ -329,7 +299,7 @@ def _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, rewar
     print("Direction Estimation :")
     print("\n")
     print("Q value :")
-    print(all_data[["global_Q", "local_Q", "pessimistic_blinky_Q", "pessimistic_clyde_Q", "suicide_Q", "planned_hunting_Q"]].iloc[:5])
+    print(all_data[["global_Q", "local_Q", "blinky_Q", "clyde_Q", "planned_hunting_Q"]].iloc[:5])
     return all_data
 
 
@@ -355,8 +325,8 @@ def preEstimation():
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
         # "../common_data/trial/500_trial_data_Omega.pkl",
-        # "../common_data/trial/100_trial_data_Omega.pkl",
-        # "../common_data/trial/100_trial_data_Patamon.pkl",
+        "../common_data/trial/100_trial_data_Omega.pkl",
+        "../common_data/trial/100_trial_data_Patamon.pkl",
         # "../common_data/trial/8000_trial_data_Omega.pkl",
         # "../common_data/trial/7000_trial_data_Patamon.pkl",
         # "../common_data/trial/test_planned_trial_data_Omega.pkl",
@@ -387,7 +357,7 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}/{}-with_Q-equal.pkl".format(
+        with open("{}/{}-with_Q-ghost.pkl".format(
                 "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
                 filename.split("/")[-1].split(".")[0]
         ), "wb") as file:

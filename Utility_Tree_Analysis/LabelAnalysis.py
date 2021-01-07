@@ -3924,7 +3924,7 @@ if __name__ == '__main__':
 
     # stageCombineAnalysis(config)
     # specialCaseAnalysis(config)
-    specialCaseMovingAnalysis(config)
+    # specialCaseMovingAnalysis(config)
 
     # specialRandomAnalysis(config)
     # specialAllRandomAnalysis(config)

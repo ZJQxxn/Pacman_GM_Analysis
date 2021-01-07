@@ -139,8 +139,20 @@ def makeChoice(prob):
     return np.random.choice([idx for idx, i in enumerate(prob) if i == max(prob)])
 
 
+def gini(weights):
+    weights = np.array(weights)
+    d = len(weights)
+    weight_diff = [each - weights for each in weights]
+    weight_diff = np.concatenate(weight_diff)
+    return np.sum(np.abs(weight_diff)) / (2 * d * np.sum(weights))
+
+
+
 if __name__ == '__main__':
     print(scaleOfNumber(0.1204))
+    print(gini([0.25, 0.25, 0.25, 0.25]))
+    print(gini([0.0, 0.0, 0.0, 2.0]))
+    print(gini([0.2, 0.4, 0.3, 0.1]))
 
 
 

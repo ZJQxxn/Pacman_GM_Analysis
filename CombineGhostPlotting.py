@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.gridspec as gridspec
 import pprint
+from sklearn.preprocessing import minmax_scale
 
 # plt.rc('font', family='CMU Serif', weight="roman")
 # plt.rc('font', family='Myriad Pro')
@@ -30,6 +31,7 @@ params = {
     "pdf.fonttype": 42,
     "font.sans-serif": "CMU Serif",
     "font.family": "sans-serif",
+    "axes.unicode_minus":False,
 }
 plt.rcParams.update(params)
 
@@ -49,14 +51,14 @@ from palettable.lightbartlein.diverging import BlueDarkRed18_18, BlueOrange12_5,
 
 
 sys.path.append("./Utility_Tree_Analysis")
-from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber, gini
+from TreeAnalysisUtils import readAdjacentMap, readLocDistance, readRewardAmount, readAdjacentPath, scaleOfNumber
 from LabelAnalysis import _makeChoice, _label2Index, negativeLikelihood
 # from LabelAnalysis import _PG, _PE, _ghostStatus, _energizerNum, _PR, _RR, _PGWODead
 
 from LabelAnalysis import readTrialData as detailedRead
 from DescriptiveAnalysis import readTrialData as descriptiveRead
 from SimpleAnalysis import readTrialData as simpleRead
-from EqualAnalysis import readTrialData as equalRead
+from GhostAnalysis import readTrialData as ghostRead
 
 # colors = RdYlBu_5.mpl_colors
 # agent_color = {
@@ -68,24 +70,24 @@ from EqualAnalysis import readTrialData as equalRead
 #     }
 
 agent_color = {
-        "local": "#D7181C",
-        "pessimistic": "#FDAE61",
-        "pessimistic_blinky": "#FDAE61",
-        "pessimistic_clyde": "#c78444",
-        "global": "#44B53C",
-        "suicide": "#836BB7",
-        "planned_hunting": "#81B3FF",
-        "vague": "black"
-    }
-    
+    "local": "#D7181C",
+    "pessimistic": "#FDAE61",
+    "blinky": "#FDAE61",
+    "clyde": "#c78444",
+    "global": "#44B53C",
+    "suicide": "#836BB7",
+    "planned_hunting": "#81B3FF",
+    "vague": "black"
+}
+
 label_name = {
-        "local": "local",
-        "pessimistic": "evade",
-        "pessimistic_blinky": "evade(Blinky)",
-        "pessimistic_clyde": "evade(Clyde)",
-        "global": "global",
-        "suicide": "suicide",
-        "planned_hunting": "attack"
+    "local": "local",
+    "pessimistic": "evade",
+    "blinky": "Blinky",
+    "clyde": "Clyde",
+    "global": "global",
+    "suicide": "suicide",
+    "planned_hunting": "attack"
 }
 
 
@@ -238,14 +240,14 @@ def _estimationThresholdLabeling(contributions, all_agent_name):
 def singleTrialMultiFitting(config):
     print("="*20, " Single Trial ", "="*20)
     # Read trial data
-    agents_list = ["{}_Q".format(each) for each in ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]]
+    agents_list = ["{}_Q".format(each) for each in ["global", "local", "blinky", "clyde", "planned_hunting"]]
     window = config["single_trial_window"]
     if "descriptive" in config["single_trial_data_filename"] :
         trial_data = descriptiveRead(config["single_trial_data_filename"])
     elif "simple" in config["single_trial_data_filename"]:
         trial_data = simpleRead(config["single_trial_data_filename"])
-    elif "equal" in config["single_trial_data_filename"]:
-        trial_data = equalRead(config["single_trial_data_filename"])
+    elif "ghost" in config["single_trial_data_filename"]:
+        trial_data = ghostRead(config["single_trial_data_filename"])
     else:
         trial_data = detailedRead(config["single_trial_data_filename"])
     trial_num = len(trial_data)
@@ -281,11 +283,11 @@ def singleTrialMultiFitting(config):
 
     # agent_name = ["global", "local", "pessimistic"]
     agent_name = config["single_trial_agents"]
-    agent_index = [["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"].index(i) for i in agent_name]
+    agent_index = [["global", "local", "blinky", "clyde", "planned_hunting"].index(i) for i in agent_name]
     # Construct optimizer
     for trial_index, each in enumerate(trial_data):
-        # if trial_index > 50:
-        #     break
+        if trial_index > 50:
+            break
         temp_record = []
         print("-"*15)
         trial_name = each[0]
@@ -298,6 +300,10 @@ def singleTrialMultiFitting(config):
         handcrafted_label = [_handcraftLabeling(X[label_list].iloc[index]) for index in range(X.shape[0])]
         handcrafted_label = handcrafted_label[window : -window]
         all_hand_crafted.append(handcrafted_label)
+        # label_not_nan_index = []
+        # for i, each in enumerate(handcrafted_label):
+        #     if each is not None:
+        #         label_not_nan_index.append(i)
         # Estimating label through moving window analysis
         print("Trial length : ", trial_length)
         window_index = np.arange(window, trial_length - window)
@@ -309,24 +315,24 @@ def singleTrialMultiFitting(config):
         # temp_contribution_rest = np.zeros((len(window_index), 3))
         cr = np.zeros((len(window_index), ))
         # (num of windows, window size, num of agents, num pf directions)
-        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, len(agent_name), 4))
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
         # For each trial, estimate agent weights through sliding windows
         trial_fitted_label = []
         trial_estimated_label = []
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
             cur_step = X.iloc[centering_point]
-            sub_X = X[centering_point - window:centering_point + window+1]
-            sub_Y = Y[centering_point - window:centering_point + window+1]
+            sub_X = X[centering_point - window:centering_point + window + 1]
+            sub_Y = Y[centering_point - window:centering_point + window + 1]
             Q_value = sub_X[agents_list].values
             for i in range(window * 2 + 1):  # num of samples in a window
-                for j in range(len(agent_name)):  # number of agents
+                for j in range(5):  # number of agents
                     temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
             # estimation in the window
             window_estimated_label = []
             # Construct optimizer
             params = [0 for _ in range(len(agent_name))]
-            bounds = [[0, 10] for _ in range(len(agent_name))]
+            bounds = [[-10, 10] for _ in range(len(agent_name))]
             if config["need_intercept"]:
                 params.append(1)
                 bounds.append([-1000, 1000])
@@ -366,7 +372,6 @@ def singleTrialMultiFitting(config):
                            [scaleOfNumber(each) for each in
                             np.max(np.abs(temp_trial_Q[centering_index, :, agent_index, :]), axis=(1, 2))]
             temp_contribution[centering_index, :] = contribution
-
             # correct rate in the window
             _, estimated_prob = negativeLikelihood(
                 res.x,
@@ -381,10 +386,9 @@ def singleTrialMultiFitting(config):
             correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
             cr[centering_index] = correct_rate
 
-
         for index in range(temp_contribution.shape[0]):
-            temp_contribution[index, :] = temp_contribution[index, :] / np.linalg.norm(temp_contribution[index, :])
-        trial_gini = [gini(temp_contribution[i,:]) for i in range(temp_contribution.shape[0])]
+            # temp_contribution[index, :] = temp_contribution[index, :] / np.linalg.norm(temp_contribution[index, :])
+            temp_contribution[index, :] = minmax_scale(temp_contribution[index, :], feature_range=(-1, 1))
 
         estimated_label = [
             _estimationVagueLabeling(temp_contribution[index, :], agent_name)
@@ -395,29 +399,30 @@ def singleTrialMultiFitting(config):
 
 
         if "descriptive" in config["single_trial_data_filename"] or "simple" in config["single_trial_data_filename"] \
-                or "equal" in config["single_trial_data_filename"]:
+                or "equal" in config["single_trial_data_filename"] or "ghost" in config["single_trial_data_filename"]:
             label_name["suicide"] = "approach"
             label_name["planned_hunting"] = "energizer"
 
-        fig = plt.figure(figsize = (18,12), constrained_layout = True)
-        spec = fig.add_gridspec(5, 1)
+        fig = plt.figure(figsize = (15,8), constrained_layout = True)
+        spec = fig.add_gridspec(4, 1)
         # plt.subplot(2, 1, 1)
         ax1 = fig.add_subplot(spec[:2,:])
         # plt.title(trial_name, fontsize = 10)
         # plt.title(trial_name, fontsize = 15)
+        plt.plot([0, len(temp_contribution[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
         for index in range(len(agent_name)):
             plt.plot(temp_contribution[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                      label=label_name[agent_name[index]])
         # for pessimistic agent
         plt.ylabel("Normalized Strategy Weight", fontsize=20)
         plt.xlim(0, temp_contribution.shape[0] - 1)
-        # plt.xlabel("Time Step", fontsize = 20)
+        plt.xlabel("Time Step", fontsize = 20)
         # x_ticks_index = np.linspace(0, len(temp_contribution), 5)
         x_ticks_index = np.arange(0, len(temp_contribution), 10)
         x_ticks = [window + int(each) for each in x_ticks_index]
         plt.xticks(x_ticks_index, x_ticks, fontsize=20)
         plt.yticks(fontsize=20)
-        plt.ylim(-0.01, 1.02)
+        plt.ylim(-1.02, 1.02)
         plt.legend(loc="upper center", fontsize=20, ncol = len(agent_name), frameon = False, bbox_to_anchor = (0.5, 1.2))
         # plt.show()
 
@@ -438,15 +443,20 @@ def singleTrialMultiFitting(config):
         # plt.yticks([-0.05, -0.15], ["Rule-Based Label", "Fitted Label"], fontsize=10)
         # plt.ylim(-0.05, 0.35)
         plt.axis('off')
+        if "descriptive" in config["single_trial_data_filename"]:
+            base = "descriptive_agents"
+        elif "simple" in config["single_trial_data_filename"]:
+            base = "simple_agents"
+        else:
+            base = "detail_agents"
 
-        ax3 = fig.add_subplot(spec[3, :])
-        plt.title("{a} (Cr : {b:.3f})".format(a=trial_name, b=np.nanmean(cr) if not np.all(np.isnan(cr)) else 0.0),
-                  fontsize=10)
+        ax2 = fig.add_subplot(spec[3, :])
+        plt.title("{a} (Cr : {b:.3f})".format(a=trial_name, b=np.nanmean(cr) if not np.all(np.isnan(cr)) else 0.0), fontsize=10)
         plt.plot(np.arange(len(cr)), cr, "bo-", lw=4, ms=10)
         # for pessimistic agent
         plt.ylabel("Correct Rate", fontsize=20)
         plt.xlim(0, cr.shape[0] - 1)
-        # plt.xlabel("Time Step", fontsize=20)
+        plt.xlabel("Time Step", fontsize=20)
         # x_ticks_index = np.linspace(0, len(temp_contribution), 5)
         x_ticks_index = np.arange(0, len(cr), 10)
         x_ticks = [window + int(each) for each in x_ticks_index]
@@ -454,705 +464,13 @@ def singleTrialMultiFitting(config):
         plt.yticks(fontsize=20)
         plt.ylim(0.5, 1.05)
 
-        ax4 = fig.add_subplot(spec[4, :])
-        plt.title("Gini Coefficient : ({b:.3f})".format(b=np.nanmean(trial_gini) if not np.all(np.isnan(trial_gini)) else np.nan),
-                  fontsize=10)
-        plt.plot(np.arange(len(trial_gini)), trial_gini, "bo-", lw=4, ms=10)
-        # for pessimistic agent
-        plt.ylabel("Gini", fontsize=20)
-        plt.xlim(0, len(trial_gini) - 1)
-        plt.xlabel("Time Step", fontsize=20)
-        # x_ticks_index = np.linspace(0, len(temp_contribution), 5)
-        x_ticks_index = np.arange(0, len(trial_gini), 10)
-        x_ticks = [window + int(each) for each in x_ticks_index]
-        plt.xticks(x_ticks_index, x_ticks, fontsize=20)
-        plt.yticks([0.0, 0.5, 1.0], [0.0, 0.5, 1.0], fontsize=20)
-        plt.ylim(0.0, 1.0)
-
-
-        if "descriptive" in config["single_trial_data_filename"]:
-            base = "descriptive_agents"
-        elif "simple" in config["single_trial_data_filename"]:
-            base = "simple_agents"
-        elif "equal" in config["single_trial_data_filename"]:
-            base = "equal_agents"
-        else:
-            base = "detail_agents"
-        plt.savefig("./common_data/single_trial/equal_agents/{}.pdf".format(trial_name))
-        # pprint.pprint(estimated_label)
+        plt.savefig("./common_data/single_trial/ghost_agents/{}.pdf".format(trial_name))
         # plt.show()
         plt.close(fig)
         plt.clf()
 
-
-
-
 # ===================================================
 
-def plotThreeAgentMatching(config):
-    # agent_name = config["trial_weight_filename"].split("/")[-2].split("_")
-    # if "planned" in agent_name and "hunting" in agent_name:
-    #     agent_name = agent_name[:-2]
-    #     agent_name.append("planned_hunting")
-    agent_name = config["trial_agent_name"]
-    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
-    if len(agent_name) != 3:
-        raise NotImplementedError("The agent list is {}!".format(agent_name))
-    print("Agent name : ", agent_name)
-    # Read data
-    # trial_weight : (num of trials, num of windows, num of agents + 1)
-    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    handcrafted_labels = np.load(config["handcrafted_label_filename"].format("_".join(agent_name)), allow_pickle=True)
-    trial_weight = np.load(config["trial_weight_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_Q = np.load(config["trial_Q_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_contributions = []
-    trial_matching_rate = []
-    estimated_labels = []
-    for trial_index in range(len(trial_weight)):
-        temp_contribution = []
-        temp_labels = []
-        is_same = []
-        for centering_index in range(len(trial_weight[trial_index])):
-            contribution = trial_weight[trial_index][centering_index, :-1] * \
-                           [scaleOfNumber(each) for each in np.max(
-                               np.abs(trial_Q[trial_index][centering_index, :, agent_index, :]),axis=(1, 2)
-                           )]
-            # normalization
-            contribution = contribution / np.linalg.norm(contribution)
-            temp_contribution.append(copy.deepcopy(contribution))
-            # Labeling
-            # est = _estimationThreeLabeling(contribution, agent_name)
-            est = _estimationMultipleLabeling(contribution, agent_name)
-
-            temp_labels.append(copy.deepcopy(est))
-            # Matching
-            if handcrafted_labels[trial_index][centering_index] is not None:
-                if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
-                    is_same.append(1)
-                else:
-                    is_same.append(0)
-        trial_contributions.append(copy.deepcopy(temp_contribution))
-        estimated_labels.append(copy.deepcopy(temp_labels))
-        trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
-
-    # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
-    not_nan_trial_matching_rate = []
-    for each in trial_matching_rate:
-        if each is not None:
-            not_nan_trial_matching_rate.append(float(each))
-    trial_matching_rate = not_nan_trial_matching_rate
-
-    print("-"*15)
-    print("Matching rate : ")
-    print("Max : ", np.nanmax(trial_matching_rate))
-    print("Min : ", np.nanmin(trial_matching_rate))
-    print("Median : ", np.nanmedian(trial_matching_rate))
-    print("Average : ", np.nanmean(trial_matching_rate))
-
-    colors = Davos_5.mpl_colors[1]
-    plt.figure(figsize=(18, 8))
-    plt.subplot(1, 2, 1)
-    # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
-    plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
-    plt.xlabel("Label Matching Rate", fontsize = 20)
-    plt.xlim(0, 1.0)
-    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
-    plt.ylabel("# of Trials", fontsize=20)
-    plt.yticks([], fontsize=20)
-    # plt.show()
-
-    # Plot confusion matrix
-    # _________________________
-    # |______|_local_|_global_| evade
-    # | local|       |        |
-    # |global|       |        |
-    # | evade|
-    # |-----------------------
-    temp_handcrafted = []
-    temp_estimated = []
-    for i in handcrafted_labels:
-        for j in i:
-            temp_handcrafted.append(j)
-    for i in estimated_labels:
-        for j in i:
-            temp_estimated.append(j)
-    handcrafted_labels = temp_handcrafted
-    estimated_labels = temp_estimated
-    confusion_matrix = np.zeros((3, 3), dtype = np.int)
-    used_index = []
-    for index in range(len(handcrafted_labels)):
-        if handcrafted_labels[index] is not None and \
-                ("local" in handcrafted_labels[index] or
-                 "global" in handcrafted_labels[index] or
-                 agent_name[-1] in handcrafted_labels[index]):
-            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-                continue
-            used_index.append(index)
-    estimated_labels = np.array(estimated_labels)[used_index]
-    handcrafted_labels = np.array(handcrafted_labels)[used_index]
-
-    weird_index = []
-    for index in range(len(used_index)):
-        est = [each for each in estimated_labels[index]]
-        hand = [each for each in handcrafted_labels[index]]
-
-        if ["local"] == est and ["local"] == hand:
-            confusion_matrix[0, 0] += 1
-        if ["local"] == est and ["global"] == hand:
-            confusion_matrix[0, 1] += 1
-        if ["local"] == est and [agent_name[-1]] == hand:
-            confusion_matrix[0, 2] += 1
-
-        if ["global"] == est and ["local" ]== hand:
-            confusion_matrix[1, 0] += 1
-        if ["global"] == est and ["global"] == hand:
-            confusion_matrix[1, 1] += 1
-        if ["global"] == est and [agent_name[-1]] == hand:
-            confusion_matrix[1, 2] += 1
-
-        if (agent_name[-1] in est and "local" not in est) and ["local"] == hand:
-            confusion_matrix[2, 0] += 1
-        if (agent_name[-1] in est and "global" not in est) and ["global"] == hand:
-            confusion_matrix[2, 1] += 1
-        if agent_name[-1] in est and [agent_name[-1]] == hand:
-            confusion_matrix[2, 2] += 1
-
-    confusion_matrix = np.array(confusion_matrix, dtype = np.float)
-    for col in range(3):
-        confusion_matrix[:, col] = confusion_matrix[:, col] / np.sum(confusion_matrix[:, col])
-
-
-    plt.subplot(1, 2, 2)
-    if "planned_hunting" in agent_name:
-        agent_name[agent_name.index("planned_hunting")] = "attack"
-    if "pessimistic" in agent_name:
-        agent_name[agent_name.index("pessimistic")] = "evade"
-    seaborn.heatmap(confusion_matrix,
-                    annot = True, cmap = "binary", fmt = ".1%",
-                    xticklabels = ["local", "global", agent_name[-1]],
-                    yticklabels = ["local", "global", agent_name[-1]],
-                    cbar = False, square = True, annot_kws = {"fontsize" : 20})
-    plt.xlabel("Rule-Based Label", fontsize = 20)
-    plt.ylabel("Fitted Label", fontsize = 20)
-    plt.xticks(fontsize = 20)
-    plt.yticks(fontsize = 20)
-    plt.show()
-
-
-def plotGlobalLocalAttackMatching(config):
-    # agent_name = config["trial_weight_filename"].split("/")[-2].split("_")
-    # if "planned" in agent_name and "hunting" in agent_name:
-    #     agent_name = agent_name[:-2]
-    #     agent_name.append("planned_hunting")
-    agent_name = ["global", "local", "planned_hunting"]
-    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
-    if len(agent_name) != 3:
-        raise NotImplementedError("The agent list is {}!".format(agent_name))
-    print("Agent name : ", agent_name)
-    # Read data
-    # trial_weight : (num of trials, num of windows, num of agents + 1)
-    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    handcrafted_labels = np.load(config["handcrafted_label_filename"].format("_".join(agent_name)), allow_pickle=True)
-    trial_weight = np.load(config["trial_weight_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_Q = np.load(config["trial_Q_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_contributions = []
-    trial_matching_rate = []
-    estimated_labels = []
-    for trial_index in range(len(trial_weight)):
-        temp_contribution = []
-        temp_labels = []
-        is_same = []
-        for centering_index in range(len(trial_weight[trial_index])):
-            contribution = trial_weight[trial_index][centering_index, :-1] * \
-                           [scaleOfNumber(each) for each in np.max(
-                               np.abs(trial_Q[trial_index][centering_index, :, agent_index, :]),axis=(1, 2)
-                           )]
-            # normalization
-            contribution = contribution / np.linalg.norm(contribution)
-            temp_contribution.append(copy.deepcopy(contribution))
-            # Labeling
-            # est = _estimationThreeLabeling(contribution, agent_name)
-            est = _estimationVagueLabeling(contribution, agent_name)
-
-            temp_labels.append(copy.deepcopy(est))
-            # Matching
-            if handcrafted_labels[trial_index][centering_index] is not None:
-                if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
-                    is_same.append(1)
-                else:
-                    is_same.append(0)
-        trial_contributions.append(copy.deepcopy(temp_contribution))
-        estimated_labels.append(copy.deepcopy(temp_labels))
-        trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
-
-    # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
-    not_nan_trial_matching_rate = []
-    for each in trial_matching_rate:
-        if each is not None:
-            not_nan_trial_matching_rate.append(float(each))
-    trial_matching_rate = not_nan_trial_matching_rate
-
-    print("-"*15)
-    print("Matching rate : ")
-    print("Max : ", np.nanmax(trial_matching_rate))
-    print("Min : ", np.nanmin(trial_matching_rate))
-    print("Median : ", np.nanmedian(trial_matching_rate))
-    print("Average : ", np.nanmean(trial_matching_rate))
-
-    colors = Davos_5.mpl_colors[1]
-    plt.figure(figsize=(18, 8))
-    plt.subplot(1, 2, 1)
-    # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
-    plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
-    plt.xlabel("Label Matching Rate", fontsize = 20)
-    plt.xlim(0, 1.0)
-    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
-    plt.ylabel("# of Trials", fontsize=20)
-    plt.yticks([], fontsize=20)
-    # plt.show()
-
-    # Plot confusion matrix
-    # _________________________
-    # |______|_local_|_global_| evade
-    # | local|       |        |
-    # |global|       |        |
-    # | evade|
-    # |-----------------------
-    temp_handcrafted = []
-    temp_estimated = []
-    for i in handcrafted_labels:
-        for j in i:
-            temp_handcrafted.append(j)
-    for i in estimated_labels:
-        for j in i:
-            temp_estimated.append(j)
-    handcrafted_labels = temp_handcrafted
-    estimated_labels = temp_estimated
-    confusion_matrix = np.zeros((4, 3), dtype = np.int)
-    used_index = []
-    for index in range(len(handcrafted_labels)):
-        if handcrafted_labels[index] is not None and \
-                ("local" in handcrafted_labels[index] or
-                 "global" in handcrafted_labels[index] or
-                 agent_name[-1] in handcrafted_labels[index]):
-            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-                continue
-            used_index.append(index)
-    estimated_labels = np.array(estimated_labels)[used_index]
-    handcrafted_labels = np.array(handcrafted_labels)[used_index]
-
-    weird_index = []
-    for index in range(len(used_index)):
-        est = [each for each in estimated_labels[index]]
-        hand = [each for each in handcrafted_labels[index]]
-
-        if ["global"] == est and ["global"] == hand:
-            confusion_matrix[0, 0] += 1
-        if ["global"] == est and ["local"] == hand:
-            confusion_matrix[0, 1] += 1
-        if ["global"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[0, 2] += 1
-
-        if ["local"] == est and ["global"] == hand:
-            confusion_matrix[1, 0] += 1
-        if ["local"] == est and ["local"] == hand:
-            confusion_matrix[1, 1] += 1
-        if ["local"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[1, 2] += 1
-
-        if ["planned_hunting"] == est and ["global"] == hand:
-            confusion_matrix[2, 0] += 1
-        if ["planned_hunting"] == est and ["local"] == hand:
-            confusion_matrix[2, 1] += 1
-        if ["planned_hunting"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[2, 2] += 1
-
-        if ["vague"] == est and ["global"] == hand:
-            confusion_matrix[3, 0] += 1
-        if ["vague"] == est and ["local"] == hand:
-            confusion_matrix[3, 1] += 1
-        if ["vague"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[3, 2] += 1
-
-        # if (agent_name[-1] in est and "local" not in est) and ["local"] == hand:
-        #     confusion_matrix[2, 0] += 1
-        # if (agent_name[-1] in est and "global" not in est) and ["global"] == hand:
-        #     confusion_matrix[2, 1] += 1
-        # if agent_name[-1] in est and [agent_name[-1]] == hand:
-        #     confusion_matrix[2, 2] += 1
-
-    confusion_matrix = np.array(confusion_matrix, dtype = np.float)
-    for col in range(3):
-        confusion_matrix[:, col] = confusion_matrix[:, col] / np.sum(confusion_matrix[:, col])
-
-
-    plt.subplot(1, 2, 2)
-    if "planned_hunting" in agent_name:
-        agent_name[agent_name.index("planned_hunting")] = "attack"
-    if "pessimistic" in agent_name:
-        agent_name[agent_name.index("pessimistic")] = "evade"
-    seaborn.heatmap(confusion_matrix,
-                    annot = True, cmap = "binary", fmt = ".1%",
-                    xticklabels = ["global", "local", "attack"],
-                    yticklabels = ["global", "local", "attack", "vague"],
-                    cbar = False, square = True, annot_kws = {"fontsize" : 20})
-    plt.xlabel("Rule-Based Label", fontsize = 20)
-    plt.ylabel("Fitted Label", fontsize = 20)
-    plt.xticks(fontsize = 20)
-    plt.yticks(fontsize = 20)
-    plt.show()
-
-
-def plotLocalEvadeSuicideMatching(config):
-    # agent_name = config["trial_weight_filename"].split("/")[-2].split("_")
-    # if "planned" in agent_name and "hunting" in agent_name:
-    #     agent_name = agent_name[:-2]
-    #     agent_name.append("planned_hunting")
-    agent_name = ["local", "pessimistic", "suicide"]
-    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(i) for i in agent_name]
-    if len(agent_name) != 3:
-        raise NotImplementedError("The agent list is {}!".format(agent_name))
-    print("Agent name : ", agent_name)
-    # Read data
-    # trial_weight : (num of trials, num of windows, num of agents + 1)
-    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    handcrafted_labels = np.load(config["handcrafted_label_filename"].format("_".join(agent_name)), allow_pickle=True)
-    trial_weight = np.load(config["trial_weight_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_Q = np.load(config["trial_Q_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_contributions = []
-    trial_matching_rate = []
-    estimated_labels = []
-    for trial_index in range(len(trial_weight)):
-        temp_contribution = []
-        temp_labels = []
-        is_same = []
-        for centering_index in range(len(trial_weight[trial_index])):
-            contribution = trial_weight[trial_index][centering_index, :-1] * \
-                           [scaleOfNumber(each) for each in np.max(
-                               np.abs(trial_Q[trial_index][centering_index, :, agent_index, :]),axis=(1, 2)
-                           )]
-            # normalization
-            contribution = contribution / np.linalg.norm(contribution)
-            temp_contribution.append(copy.deepcopy(contribution))
-            # Labeling
-            # est = _estimationThreeLabeling(contribution, agent_name)
-            est = _estimationVagueLabeling(contribution, agent_name)
-
-            temp_labels.append(copy.deepcopy(est))
-            # Matching
-            if handcrafted_labels[trial_index][centering_index] is not None:
-                if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
-                    is_same.append(1)
-                else:
-                    is_same.append(0)
-        trial_contributions.append(copy.deepcopy(temp_contribution))
-        estimated_labels.append(copy.deepcopy(temp_labels))
-        trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
-
-    # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
-    not_nan_trial_matching_rate = []
-    for each in trial_matching_rate:
-        if each is not None:
-            not_nan_trial_matching_rate.append(float(each))
-    trial_matching_rate = not_nan_trial_matching_rate
-
-    print("-"*15)
-    print("Matching rate : ")
-    print("Max : ", np.nanmax(trial_matching_rate))
-    print("Min : ", np.nanmin(trial_matching_rate))
-    print("Median : ", np.nanmedian(trial_matching_rate))
-    print("Average : ", np.nanmean(trial_matching_rate))
-
-    colors = Davos_5.mpl_colors[1]
-    plt.figure(figsize=(18, 8))
-    plt.subplot(1, 2, 1)
-    # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
-    plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
-    plt.xlabel("Label Matching Rate", fontsize = 20)
-    plt.xlim(0, 1.0)
-    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
-    plt.ylabel("# of Trials", fontsize=20)
-    plt.yticks([], fontsize=20)
-    # plt.show()
-
-    # Plot confusion matrix
-    # _________________________
-    # |______|_local_|_global_| evade
-    # | local|       |        |
-    # |global|       |        |
-    # | evade|
-    # |-----------------------
-    temp_handcrafted = []
-    temp_estimated = []
-    for i in handcrafted_labels:
-        for j in i:
-            temp_handcrafted.append(j)
-    for i in estimated_labels:
-        for j in i:
-            temp_estimated.append(j)
-    handcrafted_labels = temp_handcrafted
-    estimated_labels = temp_estimated
-    confusion_matrix = np.zeros((4, 3), dtype = np.int)
-    used_index = []
-    for index in range(len(handcrafted_labels)):
-        if handcrafted_labels[index] is not None and \
-                ("local" in handcrafted_labels[index] or
-                 "global" in handcrafted_labels[index] or
-                 agent_name[-1] in handcrafted_labels[index]):
-            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-                continue
-            used_index.append(index)
-    estimated_labels = np.array(estimated_labels)[used_index]
-    handcrafted_labels = np.array(handcrafted_labels)[used_index]
-
-    weird_index = []
-    for index in range(len(used_index)):
-        est = [each for each in estimated_labels[index]]
-        hand = [each for each in handcrafted_labels[index]]
-
-        if ["local"] == est and ["local"] == hand:
-            confusion_matrix[0, 0] += 1
-        if ["local"] == est and "pessimistic" in hand:
-            confusion_matrix[0, 1] += 1
-        if ["local"] == est and "suicide" in hand:
-            confusion_matrix[0, 2] += 1
-
-        if ["pessimistic"] == est and ["local"] == hand:
-            confusion_matrix[1, 0] += 1
-        if ["pessimistic"] == est and ["pessimistic"] == hand:
-            confusion_matrix[1, 1] += 1
-        if ["pessimistic"] == est and ["suicide"] == hand:
-            confusion_matrix[1, 2] += 1
-
-        if ["suicide"] == est and ["local"] == hand:
-            confusion_matrix[2, 0] += 1
-        if ["suicide"] == est and ["pessimistic"] == hand:
-            confusion_matrix[2, 1] += 1
-        if ["suicide"] == est and ["suicide"] == hand:
-            confusion_matrix[2, 2] += 1
-
-        if ["vague"] == est and ["local"] == hand:
-            confusion_matrix[3, 0] += 1
-        if ["vague"] == est and ["pessimistic"] == hand:
-            confusion_matrix[3, 1] += 1
-        if ["vague"] == est and ["suicide"] == hand:
-            confusion_matrix[3, 2] += 1
-
-
-    confusion_matrix = np.array(confusion_matrix, dtype = np.float)
-    for col in range(3):
-        confusion_matrix[:, col] = confusion_matrix[:, col] / np.sum(confusion_matrix[:, col])
-
-
-    plt.subplot(1, 2, 2)
-    if "planned_hunting" in agent_name:
-        agent_name[agent_name.index("planned_hunting")] = "attack"
-    if "pessimistic" in agent_name:
-        agent_name[agent_name.index("pessimistic")] = "evade"
-    seaborn.heatmap(confusion_matrix,
-                    annot = True, cmap = "binary", fmt = ".1%",
-                    xticklabels = ["local", "evade", "suicide"],
-                    yticklabels = ["local", "evade", "suicide", "vague"],
-                    cbar = False, square = True, annot_kws = {"fontsize" : 20})
-    plt.xlabel("Rule-Based Label", fontsize = 20)
-    plt.ylabel("Fitted Label", fontsize = 20)
-    plt.xticks(fontsize = 20)
-    plt.yticks(fontsize = 20)
-    plt.show()
-
-
-def plotAllAgentMatching(config):
-    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting"]
-    agent_index = [["global", "local", "pessimistic", "suicide", "planned_hunting"].index(each) for each in agent_name]
-    print("Agent name : ", agent_name)
-    # Read data
-    # trial_weight : (num of trials, num of windows, num of agents + 1)
-    # trial_Q : (num of trials, num of windows, num of agents + 1, num of directions)
-    handcrafted_labels = np.load(config["handcrafted_label_filename"].format("_".join(agent_name)), allow_pickle=True)
-    trial_weight = np.load(config["trial_weight_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_Q = np.load(config["trial_Q_filename"].format("_".join(agent_name)), allow_pickle = True)
-    trial_contributions = []
-    trial_matching_rate = []
-    estimated_labels = []
-    for trial_index in range(len(trial_weight)):
-        temp_contribution = []
-        temp_labels = []
-        is_same = []
-        for centering_index in range(len(trial_weight[trial_index])):
-            contribution = trial_weight[trial_index][centering_index, :-1] * \
-                           [scaleOfNumber(each) for each in np.max(
-                               np.abs(trial_Q[trial_index][centering_index, :, agent_index, :]),axis=(1, 2)
-                           )]
-            # normalization
-            contribution = contribution / np.linalg.norm(contribution)
-            temp_contribution.append(copy.deepcopy(contribution))
-            # Labeling
-            est = _estimationMultipleLabeling(contribution, agent_name)
-            temp_labels.append(copy.deepcopy(est))
-            # Matching
-            if handcrafted_labels[trial_index][centering_index] is not None:
-                if len(np.intersect1d(est, handcrafted_labels[trial_index][centering_index])) > 0:
-                    is_same.append(1)
-                else:
-                    is_same.append(0)
-        trial_contributions.append(copy.deepcopy(temp_contribution))
-        estimated_labels.append(copy.deepcopy(temp_labels))
-        trial_matching_rate.append(np.sum(is_same)/len(is_same) if len(is_same) > 0 else None)
-
-    # trial_matching_rate = np.load(config["trial_matching_rate_filename"], allow_pickle=True)
-    not_nan_trial_matching_rate = []
-    for each in trial_matching_rate:
-        if each is not None:
-            not_nan_trial_matching_rate.append(float(each))
-    trial_matching_rate = not_nan_trial_matching_rate
-
-    print("-"*15)
-    print("Matching rate : ")
-    print("Max : ", np.nanmax(trial_matching_rate))
-    print("Min : ", np.nanmin(trial_matching_rate))
-    print("Median : ", np.nanmedian(trial_matching_rate))
-    print("Average : ", np.nanmean(trial_matching_rate))
-
-    colors = Davos_5.mpl_colors[1]
-    plt.figure(figsize=(18, 8))
-    plt.subplot(1, 2, 1)
-    # plt.title("Label Matching on {} Trials".format(len(trial_matching_rate)), fontsize = 20)
-    plt.hist(trial_matching_rate, color=colors, rwidth = 0.9)
-    plt.xlabel("Label Matching Rate", fontsize = 20)
-    plt.xlim(0, 1.0)
-    plt.xticks(np.arange(0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
-    plt.ylabel("# of Trials", fontsize=20)
-    plt.yticks([], fontsize=20)
-    # plt.show()
-
-    # Plot confusion matrix
-    temp_handcrafted = []
-    temp_estimated = []
-    for i in handcrafted_labels:
-        for j in i:
-            temp_handcrafted.append(j)
-    for i in estimated_labels:
-        for j in i:
-            temp_estimated.append(j)
-    handcrafted_labels = temp_handcrafted
-    estimated_labels = temp_estimated
-
-    confusion_matrix = np.zeros((len(agent_name), len(agent_name)), dtype = np.int)
-    used_index = []
-    for index in range(len(handcrafted_labels)):
-        if handcrafted_labels[index] is not None:
-            if "local" in handcrafted_labels[index] and "global" in handcrafted_labels[index]:
-                continue
-            used_index.append(index)
-    estimated_labels = np.array(estimated_labels)[used_index]
-    handcrafted_labels = np.array(handcrafted_labels)[used_index]
-
-    weird_index = []
-    for index in range(len(used_index)):
-        est = [each for each in estimated_labels[index]]
-        hand = [each for each in handcrafted_labels[index]]
-
-        if ["local"] == est and ["local"] == hand:
-            confusion_matrix[0, 0] += 1
-        if ["local"] == est and ["global"] == hand:
-            confusion_matrix[0, 1] += 1
-        if ["local"] == est and ["pessimistic"] == hand:
-            confusion_matrix[0, 2] += 1
-        if ["local"] == est and ["suicide"] == hand:
-            confusion_matrix[0, 3] += 1
-        if ["local"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[0, 4] += 1
-
-        if ["global"] == est and ["local" ]== hand:
-            confusion_matrix[1, 0] += 1
-        if ["global"] == est and ["global"] == hand:
-            confusion_matrix[1, 1] += 1
-        if ["global"] == est and ["pessimistic"] == hand:
-            confusion_matrix[1, 2] += 1
-        if ["global"] == est and ["suicide"] == hand:
-            confusion_matrix[1, 3] += 1
-        if ["global"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[1, 4] += 1
-
-        if ["pessimistic"] == est and ["local"] == hand:
-            confusion_matrix[2, 0] += 1
-        if ["pessimistic"] == est and ["global"] == hand:
-            confusion_matrix[2, 1] += 1
-        if ["pessimistic"] == est and ["pessimistic"] == hand:
-            confusion_matrix[2, 2] += 1
-        if ["pessimistic"] == est and ["suicide"] == hand:
-            confusion_matrix[2, 3] += 1
-        if ["pessimistic"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[2, 4] += 1
-
-        if ["suicide"] == est and ["local"] == hand:
-            confusion_matrix[3, 0] += 1
-        if ["suicide"] == est and ["global"] == hand:
-            confusion_matrix[3, 1] += 1
-        if ["suicide"] == est and ["pessimistic"] == hand:
-            confusion_matrix[3, 2] += 1
-        if ["suicide"] == est and ["suicide"] == hand:
-            confusion_matrix[3, 3] += 1
-        if ["suicide"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[3, 4] += 1
-
-        if ["planned_hunting"] == est and ["local"] == hand:
-            confusion_matrix[4, 0] += 1
-        if ["planned_hunting"] == est and ["global"] == hand:
-            confusion_matrix[4, 1] += 1
-        if ["planned_hunting"] == est and ["pessimistic"] == hand:
-            confusion_matrix[4, 2] += 1
-        if ["planned_hunting"] == est and ["suicide"] == hand:
-            confusion_matrix[4, 3] += 1
-        if ["planned_hunting"] == est and ["planned_hunting"] == hand:
-            confusion_matrix[4, 4] += 1
-
-        # if ["suicide"] == est  and ["local"] == hand:
-        #     confusion_matrix[3, 0] += 1
-        # if ["suicide"] == est and ["global"] == hand:
-        #     confusion_matrix[3, 1] += 1
-        # if ["suicide"] == est and ["pessimistic"] == hand:
-        #     confusion_matrix[3, 2] += 1
-        # if ["suicide"] == est and ["suicide"] == hand:
-        #     confusion_matrix[3, 3] += 1
-        # if ["suicide"] == est and ["planned_hunting"] == hand:
-        #     confusion_matrix[3, 4] += 1
-
-        if ("planned_hunting" in est and "local" not in est) and ["local"] == hand:
-            confusion_matrix[4, 0] += 1
-        if ("planned_hunting" in est and "global" not in est) and ["global"] == hand:
-            confusion_matrix[4, 1] += 1
-        if ("planned_hunting" in est) and ["pessimistic"] == hand:
-            confusion_matrix[4, 2] += 1
-        if ("planned_hunting" in est) and ["suicide"] == hand:
-            confusion_matrix[4, 3] += 1
-        if ("planned_hunting" in est) and ["planned_hunting"] == hand:
-            confusion_matrix[4, 4] += 1
-
-    confusion_matrix = np.array(confusion_matrix, dtype = np.float)
-    for col in range(len(agent_name)):
-        confusion_matrix[:, col] = confusion_matrix[:, col] / np.sum(confusion_matrix[:, col])
-
-
-    plt.subplot(1, 2, 2)
-    if "planned_hunting" in agent_name:
-        agent_name[agent_name.index("planned_hunting")] = "attack"
-    if "pessimistic" in agent_name:
-        agent_name[agent_name.index("pessimistic")] = "evade"
-    ticks = ["local", "global"]
-    ticks.extend(agent_name[2:])
-    seaborn.heatmap(confusion_matrix,
-                    annot = True, cmap = "binary", fmt = ".1%",
-                    xticklabels = ticks,
-                    yticklabels = ticks,
-                    cbar = False, square = True, annot_kws = {"fontsize" : 20})
-    plt.xlabel("Rule-Based Label", fontsize = 20)
-    plt.ylabel("Fitted Label", fontsize = 20)
-    plt.xticks(fontsize = 20)
-    plt.yticks(fontsize = 20)
-    plt.show()
-
-# ================================================
 
 def plotIncremental(config):
     print("-"*15)
@@ -1184,7 +502,7 @@ def plotIncremental(config):
     min_bean_num = min(min(bean_num))
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
-    agent_index = [0, 1, 2, 4, 5, 6] # (local, + global, + pessimistic blinky, +pessimistic clyde, + planned hunting, +suicide)
+    agent_index = [0, 1, 2, 4, 5]
     first_phase_agent_cr = [] # num of beans <= 10
     second_phase_agent_cr = [] # 10 < num of beans < 80
     third_phase_agent_cr = [] # num of beans > 80
@@ -1210,9 +528,10 @@ def plotIncremental(config):
             first_phase_agent_cr.append(np.mean(trial_end, axis = 0)[agent_index])
 
     # plotting
-    x_ticks = ["local", "+global", "+evade\n(Blinky)", "+evade\n(Clyde)", "+attack", "+suicide"]
-    if "descriptive" in config["bean_vs_cr_filename"] or "simple" in config["bean_vs_cr_filename"] or "equal" in config["bean_vs_cr_filename"]:
-        x_ticks = ["local", "+global", "+evade\n(Blinky)", "+evade\n(Clyde)", "+energizer", "+approach"]
+    x_ticks = ["local", "+global", "+Blinky", "+Clyde", "+attack"]
+    if "descriptive" in config["bean_vs_cr_filename"] or "simple" in config["bean_vs_cr_filename"] \
+            or "equal" in config["bean_vs_cr_filename"] or "ghost" in config["bean_vs_cr_filename"]:
+        x_ticks = ["local", "+global", "+Blinky", "+Clyde", "+energizer"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     # colors = RdYlBu_5.mpl_colors
     # colors[2] = Balance_6.mpl_colors[2]
@@ -1220,13 +539,12 @@ def plotIncremental(config):
     colors = [
         agent_color["local"],
         agent_color["global"],
-        agent_color["pessimistic_blinky"],
-        agent_color["pessimistic_clyde"],
+        agent_color["blinky"],
+        agent_color["clyde"],
         agent_color["planned_hunting"],
-        agent_color["suicide"]
     ]
 
-    plt.figure(figsize=(27, 5))
+    plt.figure(figsize=(22, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1238,9 +556,9 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw = 5, color = "grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw = 5, color = "grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     if "simple" in config["bean_vs_cr_filename"]:
         plt.yticks([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
         plt.ylim(0.3, 1.05)
@@ -1258,9 +576,9 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     if "simple" in config["bean_vs_cr_filename"]:
         plt.yticks([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
         plt.ylim(0.3, 1.05)
@@ -1278,9 +596,9 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     if "simple" in config["bean_vs_cr_filename"]:
         plt.yticks([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
         plt.ylim(0.3, 1.05)
@@ -1317,7 +635,7 @@ def plotDecremental(config):
     min_bean_num = min(min(bean_num))
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
-    agent_index = [1, 0 ,2, 3, 4, 5]
+    agent_index = [1, 0 ,2, 3, 4]
     first_phase_agent_cr = []  # num of beans <= 10
     second_phase_agent_cr = []  # 10 < num of beans < 80
     third_phase_agent_cr = []  # num of beans > 80
@@ -1343,9 +661,10 @@ def plotDecremental(config):
             first_phase_agent_cr.append(np.mean(trial_end, axis=0)[agent_index])
 
     # plotting
-    x_ticks = ["-local", "-global", "-evade\n(Blinky)", "-evade\n(Clyde)", "-suicide", "-attack"]
-    if "descriptive" in config["decremental_filename"] or "simple" in config["decremental_filename"] or "equal" in config["decremental_filename"]:
-        x_ticks = ["-local", "-global", "-evade\n(Blinky)", "-evade\n(Clyde)", "-approach", "-energizer"]
+    x_ticks = ["-local", "-global", "-Blinky", "-Clyde", "-attack"]
+    if "descriptive" in config["decremental_filename"] or "simple" in config["decremental_filename"] \
+            or "equal" in config["decremental_filename"] or "ghost" in config["decremental_filename"]:
+        x_ticks = ["-local", "-global", "-Blinky", "-Clyde", "-energizer"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     # colors = RdYlBu_5.mpl_colors
     # colors[2] = Balance_6.mpl_colors[2]
@@ -1353,13 +672,12 @@ def plotDecremental(config):
     colors = [
         agent_color["local"],
         agent_color["global"],
-        agent_color["pessimistic_blinky"],
-        agent_color["pessimistic_clyde"],
-        agent_color["suicide"],
+        agent_color["blinky"],
+        agent_color["clyde"],
         agent_color["planned_hunting"]
     ]
 
-    plt.figure(figsize=(27, 5))
+    plt.figure(figsize=(22, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1370,9 +688,9 @@ def plotDecremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     if "simple" in config["decremental_filename"]:
         plt.yticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
         plt.ylim(0.2, 1.05)
@@ -1390,9 +708,9 @@ def plotDecremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     if "simple" in config["decremental_filename"]:
         plt.yticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
                    fontsize=15)
@@ -1411,9 +729,9 @@ def plotDecremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     if "simple" in config["decremental_filename"]:
         plt.yticks([0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
                    fontsize=15)
@@ -1449,7 +767,7 @@ def plotOneAgent(config):
     min_bean_num = min(min(bean_num))
     print("Max bean num : ", max_bean_num)
     print("Min bean num : ", min_bean_num)
-    agent_index = [1, 0, 2, 3, 4, 5]
+    agent_index = [1, 0, 2, 3, 4]
     first_phase_agent_cr = []  # num of beans <= 10
     second_phase_agent_cr = []  # 10 < num of beans < 80
     third_phase_agent_cr = []  # num of beans > 80
@@ -1475,9 +793,10 @@ def plotOneAgent(config):
             first_phase_agent_cr.append(np.mean(trial_end, axis=0)[agent_index])
 
     # plotting
-    x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "suicide", "attack"]
-    if "descriptive" in config["one_agent_filename"] or "simple" in config["one_agent_filename"] or "equal" in config["one_agent_filename"]:
-        x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "approach", "energizer"]
+    x_ticks = ["local", "global", "Blinky", "Clyde", "attack"]
+    if "descriptive" in config["one_agent_filename"] or "simple" in config["one_agent_filename"] \
+            or "equal" in config["one_agent_filename"] or "ghost" in config["one_agent_filename"]:
+        x_ticks = ["local", "global", "Blinky", "Clyde", "energizer"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
     # colors = RdYlBu_5.mpl_colors
     # colors[2] = Balance_6.mpl_colors[2]
@@ -1485,13 +804,12 @@ def plotOneAgent(config):
     colors = [
         agent_color["local"],
         agent_color["global"],
-        agent_color["pessimistic_blinky"],
-        agent_color["pessimistic_clyde"],
-        agent_color["suicide"],
+        agent_color["blinky"],
+        agent_color["clyde"],
         agent_color["planned_hunting"]
     ]
 
-    plt.figure(figsize=(25, 5))
+    plt.figure(figsize=(22, 5))
 
     plt.subplot(1, 3, 1)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -1502,9 +820,9 @@ def plotOneAgent(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
     plt.ylim(0.0, 1.05)
     plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
@@ -1518,9 +836,9 @@ def plotOneAgent(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
                fontsize=15)
     plt.ylim(0.0, 1.05)
@@ -1535,17 +853,63 @@ def plotOneAgent(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 2.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 2.25)
     plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
                fontsize=15)
     plt.ylim(0.0, 1.05)
     plt.show()
 
 
+def plotStateComparison(config):
+    width = 0.4
+    color = RdBu_8.mpl_colors
+    random_data = np.load("./common_data/state_comparison/1000trial-random_is_correct.npy", allow_pickle=True).item()
+    avg_random_cr = {each:np.nanmean(random_data[each]) for each in random_data}
+    filename = "common_data/state_comparison/ghost-100trial_Omega_diff_state_agent_cr.npy"
+    # filename = "common_data/state_comparison/1000trial_Patamon_diff_state_agent_cr.npy"
+
+    state_cr = np.load(filename, allow_pickle=True)
+    state_names = ["global", "local", "evade", "suicide", "attack", "vague"]
+    if "descriptive" in filename or "simple" in filename or "equal" in filename or "ghost" in filename:
+        state_names = ["global", "local", "evade", "approach", "energizer", "vague"]
+
+    only_local = []
+    all_agents = []
+    for i in range(6):
+        only_local.append([np.nanmean([j[0] for j in each]) for each in state_cr[i]])
+        all_agents.append([np.nanmean([j[1] for j in each]) for each in state_cr[i]])
+    avg_only_local = [np.nanmean(each) for each in only_local]
+    std_only_local = [np.nanstd(each) for each in only_local]
+    sem_only_local = [scipy.stats.sem(each) for each in only_local]
+    avg_all_agents = [np.nanmean(each) for each in all_agents]
+    std_all_agents = [np.nanstd(each) for each in all_agents]
+    sem_all_agents = [scipy.stats.sem(each) for each in all_agents]
+
+    plt.figure(figsize=(10,7))
+    plt.bar(x = np.arange(0, 6) - width, height = avg_only_local, width = width, label = "Local Agent",
+            color = color[0], yerr = sem_only_local, capsize = 7, error_kw = {"capthick":3, "elinewidth":3})
+    plt.bar(x = np.arange(0, 6), height=avg_all_agents, width = 0.4, label = "All Agents",
+            color = color[-1], yerr = sem_all_agents, capsize = 7, error_kw = {"capthick":3, "elinewidth":3})
+    # plt.bar(x=np.arange(0, 6) - width, height=avg_only_local, width=width, label="Local Agent", color=color[0])
+    # plt.bar(x=np.arange(0, 6), height=avg_all_agents, width=0.4, label="All Agents", color=color[-1])
+    x_index = [[i-3*width/2, i+width/2] for i in range(6)]
+    label_list = ["global", "local", "evade", "suicide", "attack", "vague"]
+    for i in range(6):
+        plt.plot(x_index[i], [avg_random_cr[label_list[i]], avg_random_cr[label_list[i]]], "--", lw = 4, color="k")
+    plt.xticks(np.arange(0, 6)-width/2, state_names, fontsize = 20)
+    # plt.ylim(0.0, 1.2)
+    # plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 20)
+    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=20)
+    plt.ylabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
+    plt.ylim(0.4, 1.1)
+    plt.legend(frameon = False, fontsize = 20, ncol = 2)
+    plt.show()
+
+
 def specialANDComparison(config):
-    fig = plt.figure(figsize=(24, 15), constrained_layout=False)
+    fig = plt.figure(figsize=(24, 10), constrained_layout=False)
     spec = fig.add_gridspec(2, 3)
     # Plot State Comparison
     # random correct rate
@@ -1556,18 +920,20 @@ def specialANDComparison(config):
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["stage_combine_filename"], allow_pickle=True)
     multi_agent_weight = np.load(config["stage_combine_weight_filename"], allow_pickle=True)[-1]
-    multi_agent_weight = multi_agent_weight / np.linalg.norm(multi_agent_weight)
+    # multi_agent_weight = multi_agent_weight / np.linalg.norm(multi_agent_weight)
+    multi_agent_weight = minmax_scale(multi_agent_weight, feature_range=(-1, 1))
 
-    agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting", "multi"]
+    agent_name = ["global", "local", "blinky", "clyde", "planned_hunting", "multi"]
     temp_agent_color = copy.deepcopy(agent_color)
     temp_agent_color["multi"] = "black"
-    agent_index = [1, 0, 2, 3, 4, 5, 6]
+    agent_index = [1, 0, 2, 3, 4, 5]
     agent_name = np.array(agent_name)[agent_index]
     bean_vs_cr = bean_vs_cr[agent_index]
     # plt.figure(figsize=(16, 5))
-    x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "suicide", "attack", "multi"]
-    if "descriptive" in config["stage_combine_filename"] or "simple" in config["stage_combine_filename"] or "equal" in config["stage_combine_filename"]:
-        x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "approach", "energizer", "multi"]
+    x_ticks = ["local", "global", "Blinky", "Clyde", "attack", "multi"]
+    if "descriptive" in config["stage_combine_filename"] or "simple" in config["stage_combine_filename"] \
+            or "equal" in config["stage_combine_filename"] or "ghost" in config["stage_combine_filename"]:
+        x_ticks = ["local", "global", "Blinky", "Clyde", "energizer", "multi"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
 
     ax1 = fig.add_subplot(spec[0, 0])
@@ -1589,14 +955,17 @@ def specialANDComparison(config):
     ax2 = fig.add_subplot(spec[0, 2])
     x_index = x_index[:-1]
     x_ticks = x_ticks[:-1]
-    multi_agent_weight = multi_agent_weight[[1, 0, 2, 3, 4, 5]]
+    multi_agent_weight = multi_agent_weight[[1, 0, 2, 3, 4]]
     for i, each in enumerate(multi_agent_weight):
         plt.bar(x_index[i], height=multi_agent_weight[i], width=0.4, color=agent_color[agent_name[i]])
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-               [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    # plt.yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    #            [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+    #            fontsize=15)
+    plt.yticks([-1.0, -0.5, 0.0, 0.5, 1.0],
+               [-1.0, -0.5, 0.0, 0.5, 1.0],
                fontsize=15)
-    plt.ylim(0.0, 1.0)
+    plt.ylim(-1.0, 1.0)
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
 
     # For special cases
@@ -1608,7 +977,7 @@ def specialANDComparison(config):
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["special_case_filename"], allow_pickle=True).item()
 
-    agent_index = [1, 0, 2, 3, 4, 5, 6]
+    agent_index = [1, 0, 2, 3, 4, 5]
     end_agent_cr = np.nanmean(np.array(bean_vs_cr["end"]), axis = 0)[agent_index]  # num of beans <= 10
     scared_agent_cr = np.nanmean(np.array(bean_vs_cr["close-scared"]), axis = 0)[agent_index]  # 10 < num of beans < 80
     normal_agent_cr = np.nanmean(np.array(bean_vs_cr["close-normal"]), axis = 0)[agent_index]  # num of beans > 80
@@ -1617,16 +986,17 @@ def specialANDComparison(config):
     scared_agent_cr_std = np.nanstd(np.array(bean_vs_cr["close-scared"]), axis=0)[agent_index]  # 10 < num of beans < 80
     normal_agent_cr_std = np.nanstd(np.array(bean_vs_cr["close-normal"]), axis=0)[agent_index]  # num of beans > 80
     # plotting
-    agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting", "multi"]
+    agent_name = ["global", "local", "pessimistic", "suicide", "planned_hunting", "multi"]
     temp_agent_color = copy.deepcopy(agent_color)
     temp_agent_color["multi"] = "black"
-    agent_index = [1, 0, 2, 3, 4, 5, 6]
+    agent_index = [1, 0, 2, 3, 4, 5]
     agent_name = np.array(agent_name)[agent_index]
     # bean_vs_cr = bean_vs_cr[agent_index]
     # plt.figure(figsize=(23, 5))
-    x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "suicide", "attack", "multi"]
-    if "descriptive" in config["special_case_filename"] or "simple" in config["special_case_filename"]  or "equal" in config["special_case_filename"]:
-        x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "approach", "energizer", "multi"]
+    x_ticks = ["local", "global", "Blinky", "Clyde", "attack", "multi"]
+    if "descriptive" in config["special_case_filename"] or "simple" in config["special_case_filename"] \
+            or "equal" in config["special_case_filename"] or "ghost" in config["special_case_filename"]:
+        x_ticks = ["local", "global", "Blinky", "Clyde", "energizer", "multi"]
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
 
     # plt.subplot(1, 3, 1)
@@ -1672,101 +1042,9 @@ def specialANDComparison(config):
     plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=15)
     plt.ylim(0.0, 1.05)
+    # plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
 
-    plt.savefig("./common_data/special_case/special_and_comparison.pdf")
-    plt.show()
-
-
-def plotCloseGhost(config):
-    # Plot State Comparison
-    # blinky-close-normal / clyde-close-normal / blinky-close-scared / clyde-close-scared
-    weight = np.load(config["closed_ghost_weight"], allow_pickle=True).item()
-    multi_agent_weight = {each:weight[each][-1] for each in weight}
-    for each in multi_agent_weight:
-        multi_agent_weight[each] = multi_agent_weight[each] / np.linalg.norm(multi_agent_weight[each])
-        multi_agent_weight[each] = multi_agent_weight[each][[1, 0, 2, 3, 4, 5]]
-    agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting", "multi"]
-    agent_name = np.array(agent_name)[[1,0,2,3,4,5]]
-    temp_agent_color = copy.deepcopy(agent_color)
-    temp_agent_color["multi"] = "black"
-
-    x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "suicide", "attack", "multi"]
-    if "descriptive" in config["stage_combine_filename"] or "simple" in config["stage_combine_filename"] or "equal" in config["stage_combine_filename"]:
-        x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "approach", "energizer", "multi"]
-    x_index = np.arange(0, len(x_ticks) / 2, 0.5)
-
-    x_index = x_index[:-1]
-    x_ticks = x_ticks[:-1]
-    plt.figure(figsize=(17, 5))
-    plt.subplot(1, 2, 1)
-    case_weight = multi_agent_weight["blinky-close-normal"]
-    plt.title("Closed Normal Blinky", fontsize = 15)
-    for i, each in enumerate(case_weight):
-        plt.bar(x_index[i], height=case_weight[i], width=0.4, color=agent_color[agent_name[i]])
-    plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-               [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-               fontsize=15)
-    plt.ylim(0.0, 1.0)
-    plt.ylabel("Normalized Strategy Weight", fontsize=15)
-    plt.subplot(1, 2, 2)
-    case_weight = multi_agent_weight["clyde-close-normal"]
-    plt.title("Closed Normal Clyde", fontsize=15)
-    for i, each in enumerate(case_weight):
-        plt.bar(x_index[i], height=case_weight[i], width=0.4, color=agent_color[agent_name[i]])
-    plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-               [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-               fontsize=15)
-    plt.ylim(0.0, 1.0)
-    plt.ylabel("Normalized Strategy Weight", fontsize=15)
-    plt.show()
-
-
-
-def plotStateComparison(config):
-    width = 0.4
-    color = RdBu_8.mpl_colors
-    random_data = np.load("./common_data/state_comparison/1000trial-random_is_correct.npy", allow_pickle=True).item()
-    avg_random_cr = {each:np.nanmean(random_data[each]) for each in random_data}
-    filename = "common_data/state_comparison/equal-100trial_Omega_diff_state_agent_cr.npy"
-    # filename = "common_data/state_comparison/1000trial_Patamon_diff_state_agent_cr.npy"
-
-    state_cr = np.load(filename, allow_pickle=True)
-    state_names = ["global", "local", "evade", "suicide", "attack", "vague"]
-    if "descriptive" in filename or "simple" in filename:
-        state_names = ["global", "local", "evade", "approach", "energizer", "vague"]
-
-    only_local = []
-    all_agents = []
-    for i in range(6):
-        only_local.append([np.nanmean([j[0] for j in each]) for each in state_cr[i]])
-        all_agents.append([np.nanmean([j[1] for j in each]) for each in state_cr[i]])
-    avg_only_local = [np.nanmean(each) for each in only_local]
-    std_only_local = [np.nanstd(each) for each in only_local]
-    sem_only_local = [scipy.stats.sem(each) for each in only_local]
-    avg_all_agents = [np.nanmean(each) for each in all_agents]
-    std_all_agents = [np.nanstd(each) for each in all_agents]
-    sem_all_agents = [scipy.stats.sem(each) for each in all_agents]
-
-    plt.figure(figsize=(10,7))
-    plt.bar(x = np.arange(0, 6) - width, height = avg_only_local, width = width, label = "Local Agent",
-            color = color[0], yerr = sem_only_local, capsize = 7, error_kw = {"capthick":3, "elinewidth":3})
-    plt.bar(x = np.arange(0, 6), height=avg_all_agents, width = 0.4, label = "All Agents",
-            color = color[-1], yerr = sem_all_agents, capsize = 7, error_kw = {"capthick":3, "elinewidth":3})
-    # plt.bar(x=np.arange(0, 6) - width, height=avg_only_local, width=width, label="Local Agent", color=color[0])
-    # plt.bar(x=np.arange(0, 6), height=avg_all_agents, width=0.4, label="All Agents", color=color[-1])
-    x_index = [[i-3*width/2, i+width/2] for i in range(6)]
-    label_list = ["global", "local", "evade", "suicide", "attack", "vague"]
-    for i in range(6):
-        plt.plot(x_index[i], [avg_random_cr[label_list[i]], avg_random_cr[label_list[i]]], "--", lw = 4, color="k")
-    plt.xticks(np.arange(0, 6)-width/2, state_names, fontsize = 20)
-    # plt.ylim(0.0, 1.2)
-    # plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 20)
-    plt.yticks([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=20)
-    plt.ylabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
-    plt.ylim(0.4, 1.1)
-    plt.legend(frameon = False, fontsize = 20, ncol = 2)
+    # fig.text(-0.1, 0.5, 'common Y', va='center', rotation='vertical')
     plt.show()
 
 # ===================================================
@@ -1800,7 +1078,7 @@ def plotOptionComparison(config):
     plt.xticks(np.arange(0, 5) - width / 2, [type_name[each] for each in all_types], fontsize=20)
     # plt.ylim(0.0, 1.2)
     # plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 20)
-    plt.ylim(0.4, 1.1)
+    plt.ylim(0.4, 1.0)
     plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=20)
     plt.ylabel("Prediction Accuracy", fontsize=20)
     plt.legend(frameon=False, fontsize=20, ncol=2)
@@ -1808,9 +1086,10 @@ def plotOptionComparison(config):
 
 
 # ===================================================
-def _extractEqualLabel(config):
-    print("="*20, " Simple Label Analysis ", "="*20)
-    record = np.load(config["equal_label_filename"], allow_pickle=True)
+
+def _extractGhostLabel(config):
+    print("="*20, " Descriptive Label Analysis ", "="*20)
+    record = np.load(config["descriptive_label_filename"], allow_pickle=True)
     print("Num of trials : ", len(record))
     # every type of data
     after_step = 5
@@ -1897,20 +1176,20 @@ def _extractEqualLabel(config):
     print("Accidental Attack w/ Ghost Eaten (AAG) | {} trajectories |".format(len(AAG)))
     print("Accidental Attack w/o Ghost Eaten (AANG) | {} trajectories |".format(len(AANG)))
     # Save for plotting
-    np.save("./common_data/equal_label_analysis/{}-extracted_label.npy".format(
-        config["equal_label_filename"].split("/")[-1].split(".")[-2]),
+    np.save("./common_data/ghost_label_analysis/{}-extracted_label.npy".format(
+        config["descriptive_label_filename"].split("/")[-1].split(".")[-2]),
         {"PA":PA, "AA":AA, "AAG":AAG, "AANG":AANG}
     )
 
 
-def plotEqualLabel(config, need_se = True):
-    data = np.load(config["equal_extracted_filename"], allow_pickle=True).item()
+def plotGhostLabel(config):
+    data = np.load(config["descriptive_extracted_filename"], allow_pickle=True).item()
     PA = data["PA"]
     AA= data["AA"]
     AAG = data["AAG"]
     AANG = data["AANG"]
     # |A| PA sort at energizer
-    PA_at_energizer = np.zeros((len(PA), 11, 6))
+    PA_at_energizer = np.zeros((len(PA), 11, 5))
     PA_at_energizer[PA_at_energizer == 0] = np.nan
     for traj_index, trajectory in enumerate(PA):
         contribution = trajectory[0]
@@ -1925,7 +1204,7 @@ def plotEqualLabel(config, need_se = True):
         for i in range(after_num):
             PA_at_energizer[traj_index, 6+i, :] = copy.deepcopy(contribution[center_index+1+i])
     # |B| AA sort at energizer
-    AA_at_energizer = np.zeros((len(AA), 11, 6))
+    AA_at_energizer = np.zeros((len(AA), 11, 5))
     AA_at_energizer[AA_at_energizer == 0] = np.nan
     for traj_index, trajectory in enumerate(AA):
         contribution = trajectory[0]
@@ -1940,7 +1219,7 @@ def plotEqualLabel(config, need_se = True):
         for i in range(after_num):
             AA_at_energizer[traj_index, 6 + i, :] = copy.deepcopy(contribution[center_index + 1 + i])
     # |C| PA sort at ghost
-    PA_at_ghost = np.zeros((len(PA), 11, 6))
+    PA_at_ghost = np.zeros((len(PA), 11, 5))
     PA_at_ghost[PA_at_ghost == 0] = np.nan
     for traj_index, trajectory in enumerate(PA):
         contribution = trajectory[0]
@@ -1951,7 +1230,7 @@ def plotEqualLabel(config, need_se = True):
             PA_at_ghost[traj_index, 9 - i, :] = copy.deepcopy(contribution[center_index - 1 - i])
         PA_at_ghost[traj_index, 10, :] = copy.deepcopy(contribution[center_index])
     # |D| AAG sort at ghost
-    AAG_at_ghost = np.zeros((len(AAG), 11, 6))
+    AAG_at_ghost = np.zeros((len(AAG), 11, 5))
     AAG_at_ghost[AAG_at_ghost == 0] = np.nan
     for traj_index, trajectory in enumerate(AAG):
         contribution = trajectory[0]
@@ -1962,7 +1241,7 @@ def plotEqualLabel(config, need_se = True):
             AAG_at_ghost[traj_index, 9 - i, :] = copy.deepcopy(contribution[center_index - 1 - i])
         AAG_at_ghost[traj_index, 10, :] = copy.deepcopy(contribution[center_index])
     # |E| AANG sort at normal
-    AANG_at_normal = np.zeros((len(AANG), 11, 6))
+    AANG_at_normal = np.zeros((len(AANG), 11, 5))
     AANG_at_normal[AANG_at_normal == 0] = np.nan
     for traj_index, trajectory in enumerate(AANG):
         contribution = trajectory[0]
@@ -1973,7 +1252,7 @@ def plotEqualLabel(config, need_se = True):
             AANG_at_normal[traj_index, 9 - i, :] = copy.deepcopy(contribution[center_index - 1 - i])
         AANG_at_normal[traj_index, 10, :] = copy.deepcopy(contribution[center_index])
     # |F| AA sort at ends (AAG ghost / AANG normal)
-    AA_at_end = np.zeros((len(AA), 11, 6))
+    AA_at_end = np.zeros((len(AA), 11, 5))
     AA_at_end[AA_at_end == 0] = np.nan
     for traj_index, trajectory in enumerate(AA):
         contribution = trajectory[0]
@@ -1987,40 +1266,58 @@ def plotEqualLabel(config, need_se = True):
     # Plotting
     label_name = {
         "local": "local",
-        "pessimistic": "evade",
-        "pessimistic_blinky": "evade (Blinky)",
-        "pessimistic_clyde": "evade (Clyde)",
+        "blinky": "Blinky",
         "global": "global",
-        "suicide": "approach",
+        "clyde": "Clyde",
         "planned_hunting": "energizer"
     }
-    agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
+    agent_name = ["global", "local", "blinky", "clyde", "planned_hunting"]
 
     plt.figure(figsize=(26, 15))
     plt.subplot(2, 3, 1)
     plt.title("Planned Attack at Energizer", fontsize=15)
     PA_at_energizer = np.array(PA_at_energizer)
     avg_PA_at_energizer = np.nanmean(PA_at_energizer, axis=0)
-    sem_weight = scipy.stats.sem(PA_at_energizer, axis=0, nan_policy="omit")
+    # PA_at_energizer_CI = [[[] for j in range(5)] for i in range(11)]
+    # for i in range(11):
+    #     for j in range(5):
+    #         cur_mean = np.nanmean(PA_at_energizer[:, i, j])
+    #         cur_std = np.nanstd(PA_at_energizer[:, i, j], ddof=1)
+    #         # PA_at_energizer_CI[i, j] = scipy.stats.norm.interval(0.95, cur_mean, cur_std)
+    #         CI = scipy.stats.norm.interval(0.95, cur_mean, cur_std)
+    #         PA_at_energizer_CI[i][j] = [CI[0], CI[1]]
+    # PA_at_energizer_CI = np.array(PA_at_energizer_CI)
 
+    # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
+    sem_weight = scipy.stats.sem(PA_at_energizer, axis=0, nan_policy="omit")
+    # sem_weight = np.nanstd(PA_at_energizer, axis=0)
+
+    plt.plot([0, len(avg_PA_at_energizer[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
     for index in range(len(agent_name)):
         plt.plot(avg_PA_at_energizer[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
-        if need_se:
-            plt.fill_between(
-                np.arange(0, avg_PA_at_energizer.shape[0]),
-                avg_PA_at_energizer[:, index] - sem_weight[:, index],
-                avg_PA_at_energizer[:, index] + sem_weight[:, index],
-                color=agent_color[agent_name[index]],
-                alpha=0.3,
-                linewidth=4
-            )
+        # plt.fill_between(
+        #     np.arange(0, avg_PA_at_energizer.shape[0]),
+        #     PA_at_energizer_CI[:, 0, 0],
+        #     PA_at_energizer_CI[:, 0, 1],
+        #     color=agent_color[agent_name[0]],
+        #     alpha=0.3,
+        #     linewidth=4
+        # )
+        plt.fill_between(
+            np.arange(0, avg_PA_at_energizer.shape[0]),
+            avg_PA_at_energizer[:, index] - sem_weight[:, index],
+            avg_PA_at_energizer[:, index] + sem_weight[:, index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
     plt.xlim(0, avg_PA_at_energizer.shape[1]-1)
     plt.xticks([0, 5, 10], ["-5", "Energizer \n Consumption", "5"], fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 3)
+    plt.ylim(-1.02, 1.02)
+    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 5)
 
     plt.subplot(2, 3, 2)
     plt.title("Accidental Attack at Energizer", fontsize=15)
@@ -2028,93 +1325,96 @@ def plotEqualLabel(config, need_se = True):
     avg_AA_at_energizer = np.nanmean(AA_at_energizer, axis=0)
     # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
     sem_weight = scipy.stats.sem(AA_at_energizer, axis=0, nan_policy="omit")
+    plt.plot([0, len(avg_AA_at_energizer[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
     for index in range(len(agent_name)):
         plt.plot(avg_AA_at_energizer[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
-        if need_se:
-            plt.fill_between(
-                np.arange(0, avg_AA_at_energizer.shape[0]),
-                avg_AA_at_energizer[:, index] - sem_weight[:, index],
-                avg_AA_at_energizer[:, index] + sem_weight[:, index],
-                color=agent_color[agent_name[index]],
-                alpha=0.3,
-                linewidth=4
-            )
+        plt.fill_between(
+            np.arange(0, avg_AA_at_energizer.shape[0]),
+            avg_AA_at_energizer[:, index] - sem_weight[:, index],
+            avg_AA_at_energizer[:, index] + sem_weight[:, index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
     plt.ylabel("Normalized Strategy Weight", fontsize=15)
     plt.xlim(0, avg_AA_at_energizer.shape[1]-1)
     plt.xticks([0, 5, 10], ["-5", "Energizer \n Consumption", "5"], fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 3)
+    plt.ylim(-1.02, 1.02)
+    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 5)
 
     plt.subplot(2, 3, 4)
     plt.title("Planned Attack at Ghost", fontsize=15)
     PA_at_ghost = np.array(PA_at_ghost)
     avg_PA_at_ghost = np.nanmean(PA_at_ghost, axis=0)
+    # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
     sem_weight = scipy.stats.sem(PA_at_ghost, axis=0, nan_policy="omit")
+    plt.plot([0, len(avg_PA_at_ghost[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
     for index in range(len(agent_name)):
         plt.plot(avg_PA_at_ghost[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
-        if need_se:
-            plt.fill_between(
-                np.arange(0, avg_PA_at_ghost.shape[0]),
-                avg_PA_at_ghost[:, index] - sem_weight[:, index],
-                avg_PA_at_ghost[:, index] + sem_weight[:, index],
-                color=agent_color[agent_name[index]],
-                alpha=0.3,
-                linewidth=4
-            )
+        plt.fill_between(
+            np.arange(0, avg_PA_at_ghost.shape[0]),
+            avg_PA_at_ghost[:, index] - sem_weight[:, index],
+            avg_PA_at_ghost[:, index] + sem_weight[:, index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
     plt.xlim(0, avg_PA_at_ghost.shape[1]-1)
     plt.xticks([0, 5, 10], ["-10", "-5", "Ghost \n Consumption"], fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 3)
+    plt.ylim(-1.02, 1.02)
+    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 5)
 
     plt.subplot(2, 3, 5)
     plt.title("Accidental Attack at Ghost", fontsize=15)
     AAG_at_ghost = np.array(AAG_at_ghost)
     avg_AAG_at_ghost = np.nanmean(AAG_at_ghost, axis=0)
+    # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
     sem_weight = scipy.stats.sem(AAG_at_ghost, axis=0, nan_policy="omit")
+    plt.plot([0, len(avg_AAG_at_ghost[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
     for index in range(len(agent_name)):
         plt.plot(avg_AAG_at_ghost[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
-        if need_se:
-            plt.fill_between(
-                np.arange(0, avg_AAG_at_ghost.shape[0]),
-                avg_AAG_at_ghost[:, index] - sem_weight[:, index],
-                avg_AAG_at_ghost[:, index] + sem_weight[:, index],
-                color=agent_color[agent_name[index]],
-                alpha=0.3,
-                linewidth=4
-            )
+        plt.fill_between(
+            np.arange(0, avg_AAG_at_ghost.shape[0]),
+            avg_AAG_at_ghost[:, index] - sem_weight[:, index],
+            avg_AAG_at_ghost[:, index] + sem_weight[:, index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
     plt.xlim(0, avg_AAG_at_ghost.shape[1]-1)
     plt.xticks([0, 5, 10], ["-10", "-5", "Ghost \n Consumption"], fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 3)
+    plt.ylim(-1.02, 1.02)
+    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 5)
 
     plt.subplot(2, 3, 3)
     plt.title("Accidental Attack at Normal", fontsize=15)
     AANG_at_normal = np.array(AANG_at_normal)
     avg_AANG_at_normal = np.nanmean(AANG_at_normal, axis=0)
+    # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
     sem_weight = scipy.stats.sem(AANG_at_normal, axis=0, nan_policy="omit")
+    plt.plot([0, len(avg_AANG_at_normal[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
     for index in range(len(agent_name)):
         plt.plot(avg_AANG_at_normal[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
-        if need_se:
-            plt.fill_between(
-                np.arange(0, avg_AANG_at_normal.shape[0]),
-                avg_AANG_at_normal[:, index] - sem_weight[:, index],
-                avg_AANG_at_normal[:, index] + sem_weight[:, index],
-                color=agent_color[agent_name[index]],
-                alpha=0.3,
-                linewidth=4
-            )
+        plt.fill_between(
+            np.arange(0, avg_AANG_at_normal.shape[0]),
+            avg_AANG_at_normal[:, index] - sem_weight[:, index],
+            avg_AANG_at_normal[:, index] + sem_weight[:, index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
     plt.xlim(0, avg_AANG_at_normal.shape[1]-1)
     plt.xticks([0, 5, 10], ["-10", "-5", "Return \n Normal"], fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 3)
+    plt.ylim(-1.02, 1.02)
+    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 5)
 
     plt.subplot(2, 3, 6)
     plt.title("Accidental Attack at End", fontsize=15)
@@ -2122,24 +1422,24 @@ def plotEqualLabel(config, need_se = True):
     avg_AA_at_end = np.nanmean(AA_at_end, axis=0)
     # std_planned_redundant_weight = np.nanstd(planned_redundant_weight, axis = 0)
     sem_weight = scipy.stats.sem(AA_at_end, axis=0, nan_policy="omit")
+    plt.plot([0, len(avg_AA_at_end[:, 0])], [0.0, 0.0], "k--", lw = 3, alpha = 0.5)
     for index in range(len(agent_name)):
         plt.plot(avg_AA_at_end[:, index], color=agent_color[agent_name[index]], ms=3, lw=5,
                  label=label_name[agent_name[index]])
-        if need_se:
-            plt.fill_between(
-                np.arange(0, avg_AA_at_end.shape[0]),
-                avg_AA_at_end[:, index] - sem_weight[:, index],
-                avg_AA_at_end[:, index] + sem_weight[:, index],
-                color=agent_color[agent_name[index]],
-                alpha=0.3,
-                linewidth=4
-            )
+        plt.fill_between(
+            np.arange(0, avg_AA_at_end.shape[0]),
+            avg_AA_at_end[:, index] - sem_weight[:, index],
+            avg_AA_at_end[:, index] + sem_weight[:, index],
+            color=agent_color[agent_name[index]],
+            alpha=0.3,
+            linewidth=4
+        )
     plt.xlim(0, avg_AA_at_end.shape[1]-1)
     plt.xticks([0, 5, 10], ["-10", "-5", "Return \n Normal"], fontsize=15)
     plt.yticks(fontsize=15)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 3)
-    plt.savefig("./common_data/equal_label_analysis/3.4_PA_AA.pdf")
+    plt.ylim(-1.02, 1.02)
+    plt.legend(frameon=False, fontsize=10, loc = "upper center", ncol = 5)
+    plt.savefig("./common_data/ghost_label_analysis/3.4_PA_AA.pdf")
     plt.show()
 
 
@@ -2150,88 +1450,52 @@ if __name__ == '__main__':
     pd.options.mode.chained_assignment = None
 
     config = {
-        # TODO: ===================================
-        # TODO:       Always set to True
-        # TODO: ===================================
         "need_intercept" : True,
         "maximum_try": 5,
 
-        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q-equal.pkl",
+        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q-ghost.pkl",
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
         "single_trial_window": 3,
-        "single_trial_agents": ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"],
-
-        # ==================================================================================
-        #                       For Experimental Results Visualization
-        "estimated_label_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-multi_labels.npy",
-        "handcrafted_label_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-handcrafted_labels.npy",
-        "trial_weight_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-trial_weight.npy",
-        "trial_Q_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-Q.npy",
-        "trial_matching_rate_filename": "./common_data/{}/trajectory-with_Q-window3-w_intercept-matching_rate.npy",
-        # "trial_agent_name" : ["global", "local", "planned_hunting"],
-        "trial_window": 3,
-
-        "agent_list" : [["local", "global"], ["local", "pessimistic"], ["local", "global"],
-                        ["local", "pessimistic"], ["local", "planned_hunting"], ["local", "suicide"]],
+        "single_trial_agents": ["global", "local", "blinky", "clyde", "planned_hunting"],
 
         # ------------------------------------------------------------------------------------
 
-        "bean_vs_cr_filename": "./common_data/incremental/equal-100trial-window3-incremental_cr-w_intercept.npy",
-        "one_agent_filename": "./common_data/one_agent/equal-100trial-window3-incremental_cr-w_intercept.npy",
-        "decremental_filename": "./common_data/decremental/equal-100trial-window3-incremental_cr-w_intercept.npy",
-        "stage_together_filename": "./common_data/stage_together/equal-all-100trial-cr.npy",
+        "bean_vs_cr_filename": "./common_data/incremental/ghost-100trial-window3-incremental_cr-w_intercept.npy",
+        "one_agent_filename": "./common_data/one_agent/ghost-100trial-window3-incremental_cr-w_intercept.npy",
+        "decremental_filename": "./common_data/decremental/ghost-100trial-window3-incremental_cr-w_intercept.npy",
+        "stage_together_filename": "./common_data/stage_together/ghost-all-100trial-cr.npy",
 
-        "stage_combine_filename": "./common_data/stage_together/equal-all-100trial-cr.npy",
-        "stage_combine_weight_filename": "./common_data/stage_together/equal-all-100trial-weight.npy",
+        "stage_combine_filename": "./common_data/stage_together/ghost-all-100trial-cr.npy",
+        "stage_combine_weight_filename": "./common_data/stage_together/ghost-all-100trial-weight.npy",
 
-        "special_case_filename": "./common_data/special_case/equal-100trial-cr.npy",
+        "special_case_filename": "./common_data/special_case/ghost-100trial-cr.npy",
 
-        "descriptive_label_filename" : "./common_data/equal_label_analysis/all_trial_data-descriptive-record.npy",
-        "descriptive_extracted_filename": "./common_data/equal_label_analysis/all_200_trial_data_Omega-descriptive-extracted_label.npy",
+        "descriptive_label_filename" : "./common_data/ghost_label_analysis/100_trial_data_Omega-with_Q-ghost-record.npy",
+        "descriptive_extracted_filename": "./common_data/ghost_label_analysis/100_trial_data_Omega-with_Q-ghost-record-extracted_label.npy",
 
-        "equal_label_filename": "./common_data/equal_label_analysis/100_trial_data_Omega-with_Q-equal-record.npy",
-        "equal_extracted_filename": "./common_data/equal_label_analysis/100_trial_data_Omega-with_Q-equal-record-extracted_label.npy",
-
-        # "option_hybrid_filename": "./common_data/special_case/descriptive-100trial-cr.npy",
-        # "option_moving_filename": "./common_data/special_case/descriptive-100trial-moving_window-cr.npy",
-        # "option_hybrid_filename": "./common_data/special_case/100trial-cr.npy",
-        # "option_moving_filename": "./common_data/special_case/100trial-moving_window-cr.npy",
-        "option_hybrid_filename": "./common_data/special_case/equal-100trial-cr.npy",
-        "option_moving_filename": "./common_data/special_case/equal-100trial-moving_window-cr.npy",
-
-        "closed_ghost_cr":"./common_data/closed_ghost/equal-100trial-cr.npy",
-        "closed_ghost_weight":"./common_data/closed_ghost/equal-100trial-contribution.npy",
+        "option_hybrid_filename": "./common_data/special_case/ghost-100trial-cr.npy",
+        "option_moving_filename": "./common_data/special_case/ghost-100trial-moving_window-cr.npy",
     }
 
     # ============ VISUALIZATION =============
-    # Do not use these two functions
-    # plotThreeAgentMatching(config) # For three agent
-    # plotLocalEvadeSuicideMatching(config) # For local, evade, and suicide
-
-    # plotGlobalLocalAttackMatching(config)
-    # plotLocalEvadeSuicideMatching(config)
-    # plotAllAgentMatching(config)
-
-    # plotWeightVariation(config)
-    # plotTestWeight()
-
     # plotIncremental(config)
     # plotOneAgent(config)
     # plotDecremental(config)
     # plotStateComparison(config)
 
-    # plotCloseGhost(config)
 
     # specialANDComparison(config)
 
     # plotOptionComparison(config)
 
-    # _extractEqualLabel(config)
-    # plotEqualLabel(config, need_se=False)
+    # _extractGhostLabel(config)
+    # plotGhostLabel(config)
+
 
 
     singleTrialMultiFitting(config)
+
 
 

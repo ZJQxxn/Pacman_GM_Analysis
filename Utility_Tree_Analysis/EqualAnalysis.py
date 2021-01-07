@@ -574,18 +574,18 @@ def multiAgentAnalysis(config):
         # (num of windows, num of agents)
         temp_weight = np.zeros((len(window_index), len(agent_name) if not config["need_intercept"] else len(agent_name) + 1))
         # (num of windows, window size, num of agents, num pf directions)
-        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, 5, 4))
+        temp_trial_Q = np.zeros((len(window_index), window * 2 + 1, len(agent_name), 4))
         trial_estimated_label = []
         temp_contribution = []
         # For each trial, estimate agent weights through sliding windows
         for centering_index, centering_point in enumerate(window_index):
             print("Window at {}...".format(centering_point))
             cur_step = X.iloc[centering_point]
-            sub_X = X[centering_point - window:centering_point + window + 1]
-            sub_Y = Y[centering_point - window:centering_point + window + 1]
+            sub_X = X[centering_point - window:centering_point + window+1]
+            sub_Y = Y[centering_point - window:centering_point + window+1]
             Q_value = sub_X[agents_list].values
             for i in range(window * 2 + 1):  # num of samples in a window
-                for j in range(5):  # number of agents
+                for j in range(len(agent_name)):  # number of agents
                     temp_trial_Q[centering_index, i, j, :] = Q_value[i][j]
             # estimation in the window
             window_estimated_label = []
@@ -651,6 +651,7 @@ def multiAgentAnalysis(config):
         trial_record.append(copy.deepcopy(trial_estimated_label))
         trial_record.append(copy.deepcopy(temp_handcrafted_label))
         trial_record.append(copy.deepcopy(temp_trial_Q))
+        trial_record.append(trial_name)
         record.append(copy.deepcopy(trial_record))
 
     # Save data
@@ -682,7 +683,10 @@ def multiAgentAnalysis(config):
         data_type = "global"
     else:
         data_type = None
-    np.save("../common_data/{}/{}_equal_records.npy".format(dir_names, data_type), record)
+    if data_type is not None:
+        np.save("../common_data/{}/{}_equal_records.npy".format(dir_names, data_type), record)
+    else:
+        np.save("../common_data/equal_records.npy".format(dir_names, data_type), record)
 
 
 def suicideMultiAgentAnalysis(config):
@@ -2066,6 +2070,184 @@ def specialCaseAnalysis(config):
     filename = "../common_data/special_case/equal-100trial-cr.npy"
     np.save(filename, cr_trial)
     np.save("../common_data/special_case/equal-100trial-contribution.npy", cr_contribuion)
+
+
+def closedGhostAnalysis(config):
+    # Read trial data
+    print("=== Closed Ghost Analysis ====")
+    print(config["incremental_data_filename"])
+    data = readTrialData(config["incremental_data_filename"])
+    all_X = pd.concat([each[1] for each in data])
+    all_Y = pd.concat([each[2] for each in data])
+    print("Shape of data : ", all_X.shape)
+    # Incremental analysis
+    incremental_agents_list = [
+        ["global"],
+        ["local"],
+        ["pessimistic_blinky"],
+        ["pessimistic_clyde"],
+        ["suicide"],
+        ["planned_hunting"],
+        ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
+    ]
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    print("Finished reading distance file")
+
+    blinky_scared_index = all_X.ifscared1.apply(lambda x: x > 3)
+    blinky_scared_index = np.where(blinky_scared_index == True)[0]
+
+    clyde_scared_index = all_X.ifscared2.apply(lambda x: x > 3)
+    clyde_scared_index = np.where(clyde_scared_index == True)[0]
+
+    blinky_normal_index = all_X.ifscared1.apply(lambda x: x < 3)
+    blinky_normal_index = np.where(blinky_normal_index == True)[0]
+
+    clyde_normal_index = all_X.ifscared2.apply(lambda x: x < 3)
+    clyde_normal_index = np.where(clyde_normal_index == True)[0]
+
+    blinky_close_index = all_X[["pacmanPos", "ghost1Pos"]].apply(
+        lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+        axis=1
+    )
+    blinky_close_index = np.where(blinky_close_index == True)[0]
+
+    clyde_close_index = all_X[["pacmanPos", "ghost2Pos"]].apply(
+        lambda x: True if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos] <= 5,
+        axis=1
+    )
+    clyde_close_index = np.where(clyde_close_index == True)[0]
+
+
+    cr_index = {
+        "blinky-close-normal": np.intersect1d(blinky_close_index, blinky_normal_index),
+        "clyde-close-normal": np.intersect1d(clyde_close_index, clyde_normal_index),
+        "blinky-close-scared": np.intersect1d(blinky_close_index, blinky_scared_index),
+        "clyde-close-scared": np.intersect1d(clyde_close_index, clyde_scared_index),
+    }
+    cr_weight = {
+        "blinky-close-normal": [],
+        "clyde-close-normal": [],
+        "blinky-close-scared": [],
+        "clyde-close-scared": [],
+    }
+    cr_contribuion = {
+        "blinky-close-normal": [],
+        "clyde-close-normal": [],
+        "blinky-close-scared": [],
+        "clyde-close-scared": [],
+    }
+    cr_trial = {
+        "blinky-close-normal": [],
+        "clyde-close-normal": [],
+        "blinky-close-scared": [],
+        "clyde-close-scared": [],
+    }
+    for case in cr_index:
+        print("-" * 20)
+        print("Case : ", case)
+        X = all_X.iloc[cr_index[case]]
+        Y = all_Y.iloc[cr_index[case]]
+        for agent_name in incremental_agents_list:
+            # Construct optimizer
+            params = [0 for _ in range(len(agent_name))]
+            bounds = [[0, 10] for _ in range(len(agent_name))]
+            if config["need_intercept"]:
+                params.append(1)
+                bounds.append([-1000, 1000])
+            cons = []  # construct the bounds in the form of constraints
+            for par in range(len(bounds)):
+                l = {'type': 'ineq', 'fun': lambda x: x[par] - bounds[par][0]}
+                u = {'type': 'ineq', 'fun': lambda x: bounds[par][1] - x[par]}
+                cons.append(l)
+                cons.append(u)
+            # estimation in the window
+            func = lambda params: negativeLikelihood(
+                params,
+                X,
+                Y,
+                agent_name,
+                return_trajectory=False,
+                need_intercept=config["need_intercept"]
+            )
+            is_success = False
+            retry_num = 0
+            while not is_success and retry_num < config["maximum_try"]:
+                res = scipy.optimize.minimize(
+                    func,
+                    x0=params,
+                    method="SLSQP",
+                    bounds=bounds,
+                    tol=1e-5,
+                    constraints=cons
+                )
+                is_success = res.success
+                if not is_success:
+                    print("Fail, retrying...")
+                    retry_num += 1
+            cr_weight[case].append(copy.deepcopy(res.x))
+            # compute contribution
+            Q_list = ["{}_Q".format(each) for each in agent_name]
+            cur_weight = res.x[:-1]
+            for i, j in enumerate(Q_list):
+                Q_value = all_X[j].values
+                Q_scale = scaleOfNumber(np.concatenate(np.abs(Q_value)).max())
+                cur_weight[i] *= Q_scale
+            cr_contribuion[case].append(copy.deepcopy(cur_weight))
+    # correct rate in the window
+    for each_trial in data:
+        trial_X = each_trial[1]
+        trial_Y = each_trial[2]
+
+        blinky_scared_index = trial_X.ifscared1.apply(lambda x: x > 3)
+        blinky_scared_index = np.where(blinky_scared_index == True)[0]
+        clyde_scared_index = trial_X.ifscared2.apply(lambda x: x > 3)
+        clyde_scared_index = np.where(clyde_scared_index == True)[0]
+        blinky_normal_index = trial_X.ifscared1.apply(lambda x: x < 3)
+        blinky_normal_index = np.where(blinky_normal_index == True)[0]
+        clyde_normal_index = trial_X.ifscared2.apply(lambda x: x < 3)
+        clyde_normal_index = np.where(clyde_normal_index == True)[0]
+        blinky_close_index = trial_X[["pacmanPos", "ghost1Pos"]].apply(
+            lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+            axis=1
+        )
+        blinky_close_index = np.where(blinky_close_index == True)[0]
+        clyde_close_index = trial_X[["pacmanPos", "ghost2Pos"]].apply(
+            lambda x: True if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos] <= 5,
+            axis=1
+        )
+        clyde_close_index = np.where(clyde_close_index == True)[0]
+
+        trial_index = {
+            "blinky-close-normal": np.intersect1d(blinky_close_index, blinky_normal_index),
+            "clyde-close-normal": np.intersect1d(clyde_close_index, clyde_normal_index),
+            "blinky-close-scared": np.intersect1d(blinky_close_index, blinky_scared_index),
+            "clyde-close-scared": np.intersect1d(clyde_close_index, clyde_scared_index),
+        }
+
+        for case in trial_index:
+            sub_X = trial_X.iloc[trial_index[case]]
+            sub_Y = trial_Y.iloc[trial_index[case]]
+            trial_cr = []
+            for agent_index, agent_name in enumerate(incremental_agents_list):
+                _, estimated_prob = negativeLikelihood(
+                    cr_weight[case][agent_index],
+                    sub_X,
+                    sub_Y,
+                    agent_name,
+                    return_trajectory=True,
+                    need_intercept=config["need_intercept"]
+                )
+                estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
+                true_dir = sub_Y.apply(lambda x: np.argmax(x)).values
+                correct_rate = np.sum(estimated_dir == true_dir) / len(true_dir)
+                trial_cr.append(correct_rate)
+            cr_trial[case].append(copy.deepcopy(trial_cr))
+    # save correct rate data
+    if "closed_ghost" not in os.listdir("../common_data"):
+        os.mkdir("../common_data/closed_ghost")
+    filename = "../common_data/closed_ghost/equal-100trial-cr.npy"
+    np.save(filename, cr_trial)
+    np.save("../common_data/closed_ghost/equal-100trial-contribution.npy", cr_contribuion)
 
 
 def specialCaseMovingAnalysis(config):
@@ -3682,7 +3864,8 @@ if __name__ == '__main__':
         # ==================================================================================
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
-        "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-equal.pkl".format(type),
+        # "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-equal.pkl".format(type),
+        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q-equal.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -3711,6 +3894,8 @@ if __name__ == '__main__':
         else:
             multiAgentAnalysis(config)
 
+    # multiAgentAnalysis(config)
+
     # plotComparison()
     # plotPlannedHunting()
     # plotAccidentalHunting()
@@ -3726,7 +3911,9 @@ if __name__ == '__main__':
     # specialCaseAnalysis(config)
     # specialCaseMovingAnalysis(config)
 
-    diffLabelAnalysis()
+    # closedGhostAnalysis(config)
+
+    # diffLabelAnalysis()
 
     # singleTrial4Hunting(config)
     # singleTrial4Suicide(config)
@@ -3741,3 +3928,6 @@ if __name__ == '__main__':
     # extractIndex()
 
     # equalLabelAnalysis(config)
+
+    data = np.load("../common_data/equal_records.npy", allow_pickle=True)
+    print()
