@@ -145,7 +145,7 @@ class SimpleApproach:
         else:
             ghost_num = 0
             for index, each in enumerate(self.ghost_data):
-                if self.ghost_status[index] > 3 and each in area_loc:
+                if self.ghost_status[index] != 3 and each in area_loc:
                     ghost_num += 1
             return ghost_num
 
@@ -198,7 +198,7 @@ if __name__ == '__main__':
 
     cur_pos = (14, 27)
     ghost_data = [(13, 27), (15, 27)]
-    ghost_status = [4, 4]
+    ghost_status = [2, 4]
     energizer_data = [(7, 5), (17, 5), (7, 26), (24, 30)]
     bean_data = [(2, 5), (4, 5), (5, 5), (16, 5), (18, 5), (20, 5), (24, 5), (25, 5), (16, 6), (7, 7), (13, 7), (27, 7),
                  (2, 8), (16, 8), (22, 8), (2, 9), (6, 9), (8, 9), (9, 9), (13, 9), (14, 9), (16, 9), (17, 9), (19, 9),
@@ -217,6 +217,7 @@ if __name__ == '__main__':
 
     agent = SimpleApproach(
         adjacent_data,
+        adjacent_path,
         locs_df,
         reward_amount,
         cur_pos,
