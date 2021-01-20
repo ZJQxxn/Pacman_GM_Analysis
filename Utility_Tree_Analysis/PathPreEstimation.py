@@ -354,10 +354,10 @@ def preEstimation():
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
         # "../common_data/trial/500_trial_data_Omega.pkl",
-        "../common_data/trial/100_trial_data_Omega.pkl",
-        "../common_data/trial/100_trial_data_Patamon.pkl",
+        # "../common_data/trial/100_trial_data_Omega.pkl",
+        # "../common_data/trial/100_trial_data_Patamon.pkl",
         # "../common_data/trial/8000_trial_data_Omega.pkl",
-        # "../common_data/trial/7000_trial_data_Patamon.pkl",
+        "../common_data/trial/7000_trial_data_Patamon.pkl",
         # "../common_data/trial/test_planned_trial_data_Omega.pkl",
         # "../common_data/trial/test_suicide_trial_data_Omega.pkl",
 

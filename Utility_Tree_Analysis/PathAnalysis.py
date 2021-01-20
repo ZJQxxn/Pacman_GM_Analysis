@@ -1222,7 +1222,7 @@ def specialCaseAnalysis(config):
     normal_index = all_X[["ifscared1", "ifscared2"]].apply(lambda x: x.ifscared1 < 3 or x.ifscared2 < 3, axis = 1)
     normal_index = np.where(normal_index == True)[0]
     close_index = all_X[["pacmanPos", "ghost1Pos"]].apply(
-        lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+        lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 10,
         axis = 1
     )
     close_index = np.where(close_index== True)[0]
@@ -1390,14 +1390,14 @@ def closedGhostAnalysis(config):
     clyde_normal_index = all_X.ifscared2.apply(lambda x: x < 3)
     clyde_normal_index = np.where(clyde_normal_index == True)[0]
 
-    blinky_close_index = all_X[["pacmanPos", "ghost1Pos"]].apply(
-        lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+    blinky_close_index = all_X[["pacmanPos", "ghost1Pos", "label_evade1"]].apply(
+        lambda x: False if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5 and x.label_evade1,
         axis=1
     )
     blinky_close_index = np.where(blinky_close_index == True)[0]
 
-    clyde_close_index = all_X[["pacmanPos", "ghost2Pos"]].apply(
-        lambda x: True if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos] <= 5,
+    clyde_close_index = all_X[["pacmanPos", "ghost2Pos", "label_evade2"]].apply(
+        lambda x: False if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos] <= 5 and x.label_evade2,
         axis=1
     )
     clyde_close_index = np.where(clyde_close_index == True)[0]
@@ -1491,13 +1491,13 @@ def closedGhostAnalysis(config):
         blinky_normal_index = np.where(blinky_normal_index == True)[0]
         clyde_normal_index = trial_X.ifscared2.apply(lambda x: x < 3)
         clyde_normal_index = np.where(clyde_normal_index == True)[0]
-        blinky_close_index = trial_X[["pacmanPos", "ghost1Pos"]].apply(
-            lambda x: True if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5,
+        blinky_close_index = trial_X[["pacmanPos", "ghost1Pos", "label_evade1"]].apply(
+            lambda x: False if x.pacmanPos == x.ghost1Pos else locs_df[x.pacmanPos][x.ghost1Pos] <= 5 and x.label_evade1,
             axis=1
         )
         blinky_close_index = np.where(blinky_close_index == True)[0]
-        clyde_close_index = trial_X[["pacmanPos", "ghost2Pos"]].apply(
-            lambda x: True if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos] <= 5,
+        clyde_close_index = trial_X[["pacmanPos", "ghost2Pos", "label_evade2"]].apply(
+            lambda x: False if x.pacmanPos == x.ghost2Pos else locs_df[x.pacmanPos][x.ghost2Pos] <= 5 and x.label_evade2,
             axis=1
         )
         clyde_close_index = np.where(clyde_close_index == True)[0]
@@ -2013,12 +2013,12 @@ if __name__ == '__main__':
     # specialCaseAnalysis(config)
     # specialCaseMovingAnalysis(config)
     #
-    # closedGhostAnalysis(config)
+    closedGhostAnalysis(config)
     #
     # diffLabelAnalysis()
 
 
-    pathLabelAnalysis(config)
+    # pathLabelAnalysis(config)
 
     # data = np.load("../common_data/equal_records.npy", allow_pickle=True)
     # print()

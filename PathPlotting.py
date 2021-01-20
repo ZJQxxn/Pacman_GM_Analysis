@@ -846,7 +846,7 @@ def plotOneAgent(config):
 
 
 def specialANDComparison(config):
-    fig = plt.figure(figsize=(24, 15), constrained_layout=False)
+    fig = plt.figure(figsize=(27, 15), constrained_layout=False)
     spec = fig.add_gridspec(2, 3)
     # Plot State Comparison
     # random correct rate
@@ -870,14 +870,14 @@ def specialANDComparison(config):
     x_index = np.arange(0, len(x_ticks) / 2, 0.5)
 
     ax1 = fig.add_subplot(spec[0, 0])
-    plt.title("All Data", fontsize=15)
+    plt.title("All Scenarios", fontsize=15)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], np.nanmean(bean_vs_cr[index, :]), yerr = np.nanstd(bean_vs_cr[index, :]),
                      color=temp_agent_color[agent_name[index]], linestyle="", ms=20, elinewidth=4,
                      mfc=temp_agent_color[agent_name[index]], mec=temp_agent_color[agent_name[index]], marker="o")
-    plt.plot([-0.5, 3.0], [avg_random_cr, avg_random_cr], "--", lw=5, color="grey")
+    plt.plot([-0.5, 3.5], [avg_random_cr, avg_random_cr], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 3.25)
     plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=15)
     plt.ylim(0.0, 1.05)
@@ -906,15 +906,22 @@ def specialANDComparison(config):
     print("-" * 15)
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["special_case_filename"], allow_pickle=True).item()
+    closed_ghost_cr = np.load(config["closed_ghost_filename"], allow_pickle=True).item()
+
 
     agent_index = [1, 0, 2, 3, 4, 5, 6]
     end_agent_cr = np.nanmean(np.array(bean_vs_cr["end"]), axis = 0)[agent_index]  # num of beans <= 10
     scared_agent_cr = np.nanmean(np.array(bean_vs_cr["close-scared"]), axis = 0)[agent_index]  # 10 < num of beans < 80
     normal_agent_cr = np.nanmean(np.array(bean_vs_cr["close-normal"]), axis = 0)[agent_index]  # num of beans > 80
+    closed_blinky_normal_cr = np.nanmean(np.array(closed_ghost_cr["blinky-close-normal"]), axis = 0)[agent_index]
+    closed_clyde_normal_cr = np.nanmean(np.array(closed_ghost_cr["clyde-close-normal"]), axis=0)[agent_index]
 
     end_agent_cr_std = np.nanstd(np.array(bean_vs_cr["end"]), axis=0)[agent_index]  # num of beans <= 10
     scared_agent_cr_std = np.nanstd(np.array(bean_vs_cr["close-scared"]), axis=0)[agent_index]  # 10 < num of beans < 80
     normal_agent_cr_std = np.nanstd(np.array(bean_vs_cr["close-normal"]), axis=0)[agent_index]  # num of beans > 80
+    closed_blinky_normal_cr_std = np.nanstd(np.array(closed_ghost_cr["blinky-close-normal"]), axis=0)[agent_index]
+    closed_clyde_normal_cr_std = np.nanstd(np.array(closed_ghost_cr["clyde-close-normal"]), axis=0)[agent_index]
+
     # plotting
     agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting", "multi"]
     temp_agent_color = copy.deepcopy(agent_color)
@@ -933,9 +940,9 @@ def specialANDComparison(config):
         plt.errorbar(x_index[index], end_agent_cr[index], yerr=end_agent_cr_std[index],
                      color=temp_agent_color[agent_name[index]], linestyle="", ms=20, elinewidth=4,
                      mfc=temp_agent_color[agent_name[index]], mec=temp_agent_color[agent_name[index]], marker="o")
-    plt.plot([-0.5, 3.0], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 3.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 3.25)
     plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=15)
     plt.ylim(0.0, 1.05)
@@ -943,32 +950,47 @@ def specialANDComparison(config):
 
     # plt.subplot(1, 3, 2)
     ax4 = fig.add_subplot(spec[1, 0])
-    plt.title("Close Normal Ghosts", fontsize=15)
+    plt.title("Close Normal Blinky", fontsize=15)
     for index, each in enumerate(x_index):
-        plt.errorbar(x_index[index], normal_agent_cr[index], yerr=normal_agent_cr_std[index],
+        plt.errorbar(x_index[index], closed_blinky_normal_cr[index], yerr=closed_blinky_normal_cr_std[index],
                      color=temp_agent_color[agent_name[index]], linestyle="", ms=20, elinewidth=4,
                      mfc=temp_agent_color[agent_name[index]], mec=temp_agent_color[agent_name[index]], marker="o")
-    plt.plot([-0.5, 3.0], [avg_random_cr["close-normal"], avg_random_cr["close-normal"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 3.5], [avg_random_cr["close-normal"], avg_random_cr["close-normal"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 3.25)
     plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=15)
     plt.ylim(0.0, 1.05)
     # plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
 
     # plt.subplot(1, 3, 3)
-    ax5 = fig.add_subplot(spec[1, 1])
+    ax5 = fig.add_subplot(spec[1, 2])
     plt.title("Close Scared Ghosts", fontsize=15)
     for index, each in enumerate(x_index):
         plt.errorbar(x_index[index], scared_agent_cr[index], yerr=scared_agent_cr_std[index],
                      color=temp_agent_color[agent_name[index]], linestyle="", ms=20, elinewidth=4,
                      mfc=temp_agent_color[agent_name[index]], mec=temp_agent_color[agent_name[index]], marker="o")
-    plt.plot([-0.5, 3.0], [avg_random_cr["close-scared"], avg_random_cr["close-scared"]], "--", lw=5, color="grey")
+    plt.plot([-0.5, 3.5], [avg_random_cr["close-scared"], avg_random_cr["close-scared"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
-    plt.xlim(-0.25, 2.75)
+    plt.xlim(-0.25, 3.25)
     plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
                [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=15)
     plt.ylim(0.0, 1.05)
+
+    # TODO: This !!!!!
+    ax6 = fig.add_subplot(spec[1, 1])
+    plt.title("Close Normal Clyde", fontsize=15)
+    for index, each in enumerate(x_index):
+        plt.errorbar(x_index[index], closed_clyde_normal_cr[index], yerr=closed_clyde_normal_cr_std[index],
+                     color=temp_agent_color[agent_name[index]], linestyle="", ms=20, elinewidth=4,
+                     mfc=temp_agent_color[agent_name[index]], mec=temp_agent_color[agent_name[index]], marker="o")
+    plt.plot([-0.5, 3.5], [avg_random_cr["close-normal"], avg_random_cr["close-normal"]], "--", lw=5, color="grey")
+    plt.xticks(x_index, x_ticks, fontsize=15)
+    plt.xlim(-0.25, 3.25)
+    plt.yticks([0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+               [0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fontsize=15)
+    plt.ylim(0.0, 1.05)
+
 
     plt.savefig("./common_data/special_case/special_and_comparison.pdf")
     plt.show()
@@ -1474,6 +1496,7 @@ if __name__ == '__main__':
         "one_agent_filename": "./common_data/one_agent/path10-100trial-window3-incremental_cr-w_intercept.npy",
         "decremental_filename": "./common_data/decremental/path10-100trial-window3-incremental_cr-w_intercept.npy",
         "stage_together_filename": "./common_data/stage_together/path10-all-100trial-cr.npy",
+        "closed_ghost_filename": "./common_data/closed_ghost/path10-100trial-cr.npy",
 
         "stage_combine_filename": "./common_data/stage_together/path10-all-100trial-cr.npy",
         "stage_combine_weight_filename": "./common_data/stage_together/path10-all-100trial-weight.npy",
@@ -1511,9 +1534,9 @@ if __name__ == '__main__':
     # plotDecremental(config)
     # plotStateComparison(config)
     #
-    # plotCloseGhost(config)
+    plotCloseGhost(config)
 
-    # specialANDComparison(config)
+    specialANDComparison(config)
 
     # plotOptionComparison(config)
 

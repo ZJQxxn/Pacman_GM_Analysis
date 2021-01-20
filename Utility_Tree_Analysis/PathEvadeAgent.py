@@ -369,34 +369,14 @@ class EvadeTree:
         exact_risk = 0.0
         potential_risk = 0.0
         if ifscared <= 2:  # ghosts are normal; use "or" for dealing with dead ghosts
-            if 3 == ifscared:
-                # Pacman is eaten
-                if cur_position == self.ghost_data[0]:
-                    exact_risk = -self.reward_amount[9]
-                    self.is_eaten = True
-                    return exact_risk, potential_risk
-                ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
+            # Pacman is eaten
+            if cur_position == self.ghost_data[0]:
+                exact_risk = -self.reward_amount[9]
+                self.is_eaten = True
+                return exact_risk, potential_risk
+            # Potential risk
             else:
-                # Pacman is eaten
-                if cur_position == self.ghost_data[0]:
-                    exact_risk = -self.reward_amount[9]
-                    self.is_eaten = True
-                    return exact_risk, potential_risk
-                # Potential risk
-                else:
-                    ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
-            # if ghost_dist < self.ghost_repulsive_thr:
-            #     # risk = -self.reward_amount[9] * 1 / ghost_dist
-            #     # risk = -self.reward_amount[9] * (self.ghost_repulsive_thr / ghost_dist - 1)
-            #     # reward += self.reward_amount[int(self.reward_type)] * ( self.fruit_attractive_thr/ fruit_dist - 1)
-            #     R = self.reward_amount[8]
-            #     T = self.ghost_repulsive_thr
-            #     if ghost_dist <= (self.ghost_repulsive_thr / 2):
-            #         potential_risk = -((-R / T) * ghost_dist + R)
-            #     else:
-            #         potential_risk = -((R * T) / (2 * ghost_dist) - R / 2)
-            # else:
-            #     pass
+                ghost_dist = self.locs_df[cur_position][self.ghost_data[0]]
         # Ghosts are not scared
         else:
             pass
