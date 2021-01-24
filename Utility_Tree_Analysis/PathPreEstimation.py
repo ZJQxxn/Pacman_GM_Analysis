@@ -354,10 +354,10 @@ def preEstimation():
         # "../common_data/single_trial/5_trial-data_for_comparison.pkl"
         # "../common_data/simulation/single_trial_record.pkl",
         # "../common_data/trial/500_trial_data_Omega.pkl",
-        # "../common_data/trial/100_trial_data_Omega.pkl",
+        "../common_data/trial/100_trial_data_Omega.pkl",
         # "../common_data/trial/100_trial_data_Patamon.pkl",
         # "../common_data/trial/8000_trial_data_Omega.pkl",
-        "../common_data/trial/7000_trial_data_Patamon.pkl",
+        # "../common_data/trial/7000_trial_data_Patamon.pkl",
         # "../common_data/trial/test_planned_trial_data_Omega.pkl",
         # "../common_data/trial/test_suicide_trial_data_Omega.pkl",
 
@@ -386,7 +386,7 @@ def preEstimation():
         print("Finished reading data.")
         print("Start estimating...")
         all_data = _individualEstimation(all_data, adjacent_data, locs_df, adjacent_path, reward_amount)
-        with open("{}/{}-with_Q-path10.pkl".format(
+        with open("{}/{}-with_Q-uniform_path10.pkl".format(
                 "../common_data/transition" if "transition" in filename.split("/") else "../common_data/trial",
                 filename.split("/")[-1].split(".")[0]
         ), "wb") as file:

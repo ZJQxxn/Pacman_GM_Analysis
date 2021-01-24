@@ -161,7 +161,8 @@ class SimpleGlobal:
         # Add randomness and laziness
         Q_scale = scaleOfNumber(np.max(np.abs(self.Q_value)))
         if len(available_directions_index) > 0:
-            randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
+            # randomness = np.random.normal(loc=0, scale=0.1, size=len(available_directions_index)) * Q_scale
+            randomness = np.random.uniform(low=0, high=0.1, size=len(available_directions_index)) * Q_scale
             self.Q_value[available_directions_index] += (self.randomness_coeff * randomness)
         if self.last_dir is not None and self.dir_list.index(self.last_dir) in available_directions_index:
             self.Q_value[self.dir_list.index(self.last_dir)] += (self.laziness_coeff * Q_scale)
