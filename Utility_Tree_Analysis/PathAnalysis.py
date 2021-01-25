@@ -687,7 +687,7 @@ def multiAgentAnalysis(config):
     if data_type is not None:
         np.save("../common_data/{}/{}_path10_records.npy".format(dir_names, data_type), record)
     else:
-        np.save("../common_data/path10_records.npy".format(dir_names, data_type), record)
+        np.save("../common_data/uniform_path10_records.npy".format(dir_names, data_type), record)
 
 # ===============================================
 def incrementalAnalysis(config):
@@ -1971,7 +1971,7 @@ if __name__ == '__main__':
         #                       For Correlation Analysis and Multiple Label Analysis
         # Filename
         # "trial_data_filename": "../common_data/trial/{}_100_trial_data_Omega-with_Q-equal.pkl".format(type),
-        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q-path10.pkl",
+        "trial_data_filename": "../common_data/trial/100_trial_data_Omega-with_Q-uniform_path10.pkl",
         # The number of trials used for analysis
         "trial_num" : None,
         # Window size for correlation analysis
@@ -1996,7 +1996,7 @@ if __name__ == '__main__':
 
     # multiAgentAnalysis(config)
 
-    # multiAgentAnalysis(config)
+    multiAgentAnalysis(config)
 
     # plotComparison()
     # plotPlannedHunting()
@@ -2013,7 +2013,7 @@ if __name__ == '__main__':
     # specialCaseAnalysis(config)
     # specialCaseMovingAnalysis(config)
     #
-    closedGhostAnalysis(config)
+    # closedGhostAnalysis(config)
     #
     # diffLabelAnalysis()
 

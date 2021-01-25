@@ -243,8 +243,8 @@ def singleTrialMultiFitting(config):
 
     trial_name_list = None
     all_trial_names = np.array([each[0] for each in trial_data])
-    trial_name_list = np.random.choice(all_trial_names, trial_num, replace = True)
-
+    # trial_name_list = np.random.choice(all_trial_names, trial_num, replace = True)
+    trial_name_list = all_trial_names
     record = []
     if trial_name_list is not None and len(trial_name_list) > 0:
         temp_trial_Data = []
@@ -453,7 +453,7 @@ def singleTrialMultiFitting(config):
         plt.ylim(0.0, 1.0)
 
 
-        plt.savefig("./common_data/single_trial/path_agents_depth10/{}.pdf".format(trial_name))
+        plt.savefig("./common_data/single_trial/uniform_depth10/{}.pdf".format(trial_name))
         # plt.show()
         plt.close()
         plt.clf()
@@ -1470,7 +1470,7 @@ if __name__ == '__main__':
         "need_intercept" : True,
         "maximum_try": 5,
 
-        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q-path10.pkl",
+        "single_trial_data_filename": "./common_data/trial/100_trial_data_Omega-with_Q-uniform_path10.pkl",
         # The number of trials used for analysis
         "trial_num": None,
         # Window size for correlation analysis
@@ -1534,9 +1534,9 @@ if __name__ == '__main__':
     # plotDecremental(config)
     # plotStateComparison(config)
     #
-    plotCloseGhost(config)
-
-    specialANDComparison(config)
+    # plotCloseGhost(config)
+    #
+    # specialANDComparison(config)
 
     # plotOptionComparison(config)
 
@@ -1544,6 +1544,6 @@ if __name__ == '__main__':
     # plotPathLabel(config, need_se=False)
 
 
-    # singleTrialMultiFitting(config)
+    singleTrialMultiFitting(config)
 
 

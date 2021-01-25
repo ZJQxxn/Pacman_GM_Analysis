@@ -3,7 +3,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import pickle
+import copy
 
+from palettable.colorbrewer.diverging import RdBu_7
+from palettable.tableau import Tableau_10
 
 
 # Configurations
@@ -130,9 +133,21 @@ def plotFig8AvgStd():
         legend=None,
     )
     plt.ylim(0, 2)
-    plt.xticks(rotation=0)
-    plt.ylabel("Average saccade frequency")
-    plt.xlabel("saccade subject")
+
+    # plt.text(-0.3, 1.8, s= "Local", fontdict={"fontsize":10, "color":status_color_mapping["local"], "weight":"bold"})
+    # plt.text(0.2, 1.8, s= "Global", fontdict={"fontsize":10, "color":status_color_mapping["global"], "weight":"bold"})
+    # plt.text(0.5, 1.8, s= "Evade(Blinky)", fontdict={"fontsize":10, "color":status_color_mapping["evade_blinky"], "weight":"bold"})
+    # plt.text(1.5, 1.8, s= "Evade(Clyde)", fontdict={"fontsize":10, "color":status_color_mapping["evade_clyde"], "weight":"bold"})
+    # plt.text(2.0, 1.8, s= "Energizer", fontdict={"fontsize":10, "color":status_color_mapping["energizer"], "weight":"bold"})
+    # plt.text(2.5, 1.8, s= "Approach", fontdict={"fontsize":10, "color":status_color_mapping["approach"], "weight":"bold"})
+    # plt.text(3.0, 1.8, s= "Vague", fontdict={"fontsize":10, "color":status_color_mapping["vague"], "weight":"bold"})
+
+
+
+
+    plt.xticks(np.arange(4), ["Pellets", "Forward", "Ghosts", "PacMan"], rotation=0, fontsize = 15)
+    plt.ylabel("Average Saccade Frequency", fontsize = 20)
+    plt.xlabel("Saccade Identity", fontsize = 20)
     plt.tight_layout()
     plt.savefig("./plot_data/" + monkey + "/8.pdf")
     plt.show()
@@ -141,7 +156,7 @@ def plotFig8AvgStd():
 def plotFig9():
     with open("./plot_data/{}_9_avg_pupil_size.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-    plt.figure(figsize=(13, 10))
+    plt.figure(figsize=(17, 8))
     plt.bar(
         data.status,
         data["mean"],
@@ -149,8 +164,9 @@ def plotFig9():
         color=[status_color_mapping[c] for c in data.status],
     )
     #     plt.ylim(0, 3)
-    plt.ylabel("Average pupil size")
-    plt.xlabel("state")
+    plt.ylabel("Average Pupil Size", fontsize = 20)
+    plt.yticks(fontsize = 15)
+    plt.xticks(np.arange(7), ["local", "global", "evade(Blinky)", "evade(Clye)", "energizer", "approach", "vague"], fontsize = 20)
     plt.legend(title=None, ncol=3)
     plt.savefig("./plot_data/" + monkey + "/9.pdf") # _avg_pupil_size_z
     plt.show()
@@ -159,14 +175,15 @@ def plotFig9():
 def plotFig10():
     with open("./plot_data/{}_label_rt.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-    plt.figure(figsize=(13, 10))
+    plt.figure(figsize=(15, 8))
     plt.bar(
         data.index,
         data["mean"],
         yerr=data["std"] / np.sqrt(data["size"]),
         color=[status_color_mapping[c] for c in data.index],
     )
-    plt.ylabel("seconds")
+    plt.ylabel("Joystick Lead Time", fontsize = 20)
+    plt.xticks(np.arange(7), ["local", "global", "evade(Blinky)", "evade(Clye)", "energizer", "approach", "vague"], fontsize = 20)
     plt.tight_layout()
     plt.savefig("./plot_data/" + monkey + "/10.pdf") #_label_rt
     plt.show()
@@ -175,7 +192,15 @@ def plotFig10():
 def plotFig74():
     with open("./plot_data/{}_74.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-    data.plot(kind="bar", color=[status_color_mapping[c] for c in data.index])
+        indices = copy.deepcopy(data.index.values)
+        indices[-3] = "evade(Blinky)"
+        indices[-1] = "evade(Clyde)"
+    # data.plot(kind="bar", color=[status_color_mapping[c] for c in data.index])
+    plt.figure(figsize=(10,5))
+    plt.bar(np.arange(7), data.values, color = [status_color_mapping[c] for c in data.index])
+    plt.xticks(np.arange(7), indices, fontsize = 15)
+    plt.xlabel("Dominating Strategy", fontsize = 20)
+    plt.ylabel("Probability", fontsize=20)
     plt.tight_layout()
     plt.savefig("./plot_data/" + monkey + "/7.4.pdf")
     plt.show()
@@ -184,22 +209,46 @@ def plotFig74():
 def plotFig71():
     with open("./plot_data/{}_71.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-    # plt.figure(figsize=(10,5))
-    data.plot(kind="bar", figsize = (15, 10))
-    plt.ylabel("ratio", fontsize = 20)
-    plt.savefig("./plot_data/" + monkey + "/7.1.pdf")
+    cols = data.columns.values
+
+    color = Tableau_10.mpl_colors
+    plt.figure(figsize=(15, 10))
+    bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    r_data = []
+    for index, c in enumerate(cols):
+        temp_data = data[c].values
+        for i,j in enumerate(temp_data):
+            if j < 0.01:
+                continue
+            else:
+                r_data.extend([i/10+0.05 for _ in range(int(100*j))])
+        sns.distplot(r_data, kde=False, bins=bins, label=cols[index], color=color[2-index],hist_kws={"edgecolor": color[2-index]}, norm_hist=True)
+        r_data = []
+
+    # sns.distplot(data[[cols[1]]], kde=False, bins=bins, label=cols[1], color=color[1], hist_kws={"edgecolor": color[1]}, norm_hist=True)
+    # sns.distplot(data[[cols[2]]], kde=False, bins=bins, label=cols[2], color=color[0], hist_kws={"edgecolor": color[0]}, norm_hist=True)
+    plt.ylabel("Probability", fontsize = 20)
+    plt.xlabel("Normalized Weight", fontsize=20)
+    plt.yticks([0, 2, 4, 6, 8, 10], [0.0, .2, .4, .6, .8, 1.0], fontsize = 20)
+    plt.xticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
+    plt.xlim(0, 1.0)
     plt.legend(fontsize = 20)
-    plt.yticks(fontsize = 20)
+    plt.savefig("./plot_data/" + monkey + "/7.1.pdf")
     plt.show()
 
 
 def plotFig73():
     with open("./plot_data/{}_73.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-    data.plot(kind="bar", figsize = (15, 13))
-    plt.xticks(rotation=90, fontsize=10)
-    plt.ylabel("percentage", fontsize = 20)
+        indices = ["{} - {}".format(each[0], each[1]) for each in data.index.values[:6]]
+        data = data.iloc[:6].values
+    plt.figure(figsize = (13, 5))
+    plt.bar(np.arange(6), data)
+    plt.xticks(np.arange(6), indices, fontsize=15)
+    plt.xlabel("Transition strategies around Vague", fontsize=20)
+    plt.ylabel("Probability", fontsize = 20)
     plt.yticks(fontsize = 20)
+    plt.tight_layout()
     plt.savefig("./plot_data/" + monkey + "/7.3.pdf")
     plt.show()
 
@@ -208,9 +257,10 @@ def plotFig72():
     with open("./plot_data/{}_72.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
     data["series"].hist(
-        grid=False, weights=np.ones_like(data["values"][:, 0]) / data["values"].shape[0]
+        grid=False, weights=np.ones_like(data["values"][:, 0]) / data["values"].shape[0], figsize=(8,6)
     )
-    plt.xlabel("largest - 2nd largest")
+    plt.xlabel("Largest strategy weight - 2nd largest strategy weight", fontsize = 20)
+    plt.ylabel("Probability", fontsize = 20)
     plt.savefig("./plot_data/" + monkey + "/7.2.pdf")
     plt.show()
 
@@ -293,6 +343,29 @@ def plotFig112B():
         )
         ax.set_yticklabels([i.get_text().split(".")[0] for i in ax.get_yticklabels()])
         plt.savefig("./plot_data/" + monkey + "/11.2B_" + ghost_name[int(each)-1] + "_relevent.pdf")
+        plt.show()
+
+
+def plotFig112C():
+    with open("./plot_data/{}_112B.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    data = {"1":data["1"], "2":data["2"]}
+    ghost_name = ["Blinky", "Clyde"]
+    for each in data:
+        df_plot = data[each]
+        plt.figure()
+        ax = sns.heatmap(df_plot, square=True, cmap="RdBu_r", vmin=0.5, vmax=1)
+        bottom, top = ax.get_ylim()
+        ax.set_ylim(bottom + 0.5, top - 0.5)
+        ax.invert_yaxis()
+        plt.xlabel("EG distance")
+        plt.ylabel("PG distance")
+        plt.title(each)
+        ax.set_xticklabels(
+            [i.get_text().split(".")[0] for i in ax.get_xticklabels()], rotation=0
+        )
+        ax.set_yticklabels([i.get_text().split(".")[0] for i in ax.get_yticklabels()])
+        plt.savefig("./plot_data/" + monkey + "/11.2C_" + ghost_name[int(each)-1] + "_relevent.pdf")
         plt.show()
 
 
@@ -387,5 +460,6 @@ def plotFig1132():
 # plotFig111C1()
 # plotFig111C2()
 # plotFig112B()
+plotFig112C()
 # plotFig1131()
 # plotFig1132()
