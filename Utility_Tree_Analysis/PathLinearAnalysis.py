@@ -718,14 +718,13 @@ def showDistPlot():
     bins = [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
     plt.subplot(1, 2, 1)
     plt.title("Omega", fontsize = 20)
-    # plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-    #          label = ["Perceptron (local)", "Perceptron (global)", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
-    #          rwidth = 1.0, color=[color[-3], color[-2], color[-1], color[1], color[0]])
-    # sbn.distplot(omega_cr[:, 0], kde = False, label = "Perceptron (local)", color = color[-3])
-    sbn.distplot(omega_cr[:, 1], bins=bins, kde=False, label="Perceptron", color=color[-1], hist_kws={"edgecolor":color[-1]})  # Perceptron all features
-    # sbn.distplot(omega_cr[:, 2], kde=False, label = "Perceptron (dir)", color = color[-1])
-    # sbn.distplot(omega_cr[:, 3], kde=False, label = "Multi-Agent (local)", color = color[1])
-    sbn.distplot(omega_cr[:, 4], bins=bins, kde=False, label="Multi-Agent", color=color[0], hist_kws={"edgecolor":color[0]})  # Multi-agent all agents
+
+    # sbn.distplot(omega_cr[:, 1], bins=bins, kde=False, label="Perceptron", color=color[-1], hist_kws={"edgecolor":color[-1]})  # Perceptron all features
+    # sbn.distplot(omega_cr[:, 4], bins=bins, kde=False, label="Multi-Agent", color=color[0], hist_kws={"edgecolor":color[0]})  # Multi-agent all agents
+    sbn.histplot(omega_cr[:, 1], bins=bins, label="Perceptron", color=color[-1],
+                 stat="probability")  # Perceptron all features
+    sbn.histplot(omega_cr[:, 4], bins=bins, label="Multi-Agent", color=color[0], stat="probability")
+
     plt.xlabel("Joystick Movement Estimation Correct Rate", fontsize = 20)
     plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 20)
     plt.xlim(0.3, 1.0)
@@ -735,14 +734,13 @@ def showDistPlot():
 
     plt.subplot(1, 2, 2)
     plt.title("Patamon", fontsize=20)
-    # plt.hist(cr, density = False,  histtype='bar', bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-    #          label = ["Perceptron (local)", "Perceptron (global)", "Perceptron (w.r.t. dir)", "Multi-Agent (local)", "Multi-Agent (all)"], align="mid",
-    #          rwidth = 1.0, color=[color[-3], color[-2], color[-1], color[1], color[0]])
-    # sbn.distplot(patamon_cr[:, 0], kde = False, label = "Perceptron (local)", color = color[-3])
-    sbn.distplot(patamon_cr[:, 1], bins = bins, kde=False, label="Perceptron", color=color[-1], hist_kws={"edgecolor":color[-1]})  # Perceptron all features
-    # sbn.distplot(patamon_cr[:, 2], kde=False, label = "Perceptron (dir)", color = color[-1])
-    # sbn.distplot(patamon_cr[:, 3], kde=False, label = "Multi-Agent (local)", color = color[1])
-    sbn.distplot(patamon_cr[:, 4], bins = bins, kde=False, label="Multi-Agent", color=color[0], hist_kws={"edgecolor":color[0]})  # Multi-agent all agents
+
+    # sbn.distplot(patamon_cr[:, 1], bins = bins, kde=False, label="Perceptron", color=color[-1], hist_kws={"edgecolor":color[-1]})  # Perceptron all features
+    # sbn.distplot(patamon_cr[:, 4], bins = bins, kde=False, label="Multi-Agent", color=color[0], hist_kws={"edgecolor":color[0]})  # Multi-agent all agents
+
+    sbn.histplot(patamon_cr[:, 1], bins=bins, label="Perceptron", color=color[-1],stat="probability")  # Perceptron all features
+    sbn.histplot(patamon_cr[:, 4], bins=bins, label="Multi-Agent", color=color[0],stat="probability")
+
     plt.xlabel("Joystick Movement Estimation Correct Rate", fontsize=20)
     plt.xticks(np.arange(0.0, 1.1, 0.1), [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=20)
     plt.xlim(0.3, 1.0)

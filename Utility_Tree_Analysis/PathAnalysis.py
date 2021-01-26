@@ -718,6 +718,7 @@ def incrementalAnalysis(config):
         ["local", "pessimistic_blinky", "pessimistic_clyde", "global", "planned_hunting", "suicide"]
     ]
     all_cr = []
+    all_contribution = []
     for trial_index, each in enumerate(trial_data):
         print("-"*15)
         trial_name = each[0]
@@ -1996,7 +1997,7 @@ if __name__ == '__main__':
 
     # multiAgentAnalysis(config)
 
-    multiAgentAnalysis(config)
+    # multiAgentAnalysis(config)
 
     # plotComparison()
     # plotPlannedHunting()
@@ -2005,7 +2006,7 @@ if __name__ == '__main__':
     # plotGlobal()
     # plotCentering()
 
-    # incrementalAnalysis(config)
+    incrementalAnalysis(config)
     # decrementalAnalysis(config)
     # oneAgentAnalysis(config)
     # stageAnalysis(config)

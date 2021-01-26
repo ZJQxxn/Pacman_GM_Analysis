@@ -4,6 +4,7 @@ import pandas as pd
 import seaborn as sns
 import pickle
 import copy
+import scipy.stats
 
 from palettable.colorbrewer.diverging import RdBu_7
 from palettable.tableau import Tableau_10
@@ -23,6 +24,7 @@ params = {
     "font.sans-serif": "CMU Serif",
     "font.family": "sans-serif",
     "axes.unicode_minus": False,
+    # "patch.force_edgecolor": False,
 }
 plt.rcParams.update(params)
 pd.set_option("display.float_format", "{:.5f}".format)
@@ -36,15 +38,18 @@ status_color_mapping = {
     "evade": "#fdae61",
     "evade_blinky": "#fdae61",
     "evade_clyde": "#c78444",
+    "evade-blinky": "#fdae61",
+    "evade-clyde": "#c78444",
     "local": "#d7181c",
     "vague": "#929292",
 }
+agent_name = ["global", "local", "evade_blinky", "evade_clyde", "approach", "energizer"]
 
 print("Finished configuration.")
 print("="*50)
 
 # Monkey
-monkey = "Patamon"
+monkey = "Omega"
 
 
 def plotSaccByWeight():
@@ -173,20 +178,31 @@ def plotFig9():
 
 
 def plotFig10():
-    with open("./plot_data/{}_label_rt.pkl".format(monkey), "rb") as file:
-        data = pickle.load(file)
-    plt.figure(figsize=(15, 8))
-    plt.bar(
-        data.index,
-        data["mean"],
-        yerr=data["std"] / np.sqrt(data["size"]),
-        color=[status_color_mapping[c] for c in data.index],
-    )
-    plt.ylabel("Joystick Lead Time", fontsize = 20)
-    plt.xticks(np.arange(7), ["local", "global", "evade(Blinky)", "evade(Clye)", "energizer", "approach", "vague"], fontsize = 20)
-    plt.tight_layout()
-    plt.savefig("./plot_data/" + monkey + "/10.pdf") #_label_rt
-    plt.show()
+    type_name = ["Corner", "T-Junction", "Cross", "Tunnel", "All"]
+    for index, type in enumerate(["corners", "t_junctions", "cross", "tunnel", "all"]):
+        with open("./plot_data/{}_label_rt_{}.pkl".format(monkey, type), "rb") as file:
+            data = pickle.load(file)
+        plt.figure(figsize=(15, 8))
+        plt.title(type_name[index], fontsize = 20)
+        plt.bar(
+            data.index,
+            data["mean"],
+            yerr=data["std"] / np.sqrt(data["size"]),
+            color=[status_color_mapping[c] for c in data.index],
+        )
+        for i in range(7):
+            if i in [0, 1]:
+                plt.text(i - 0.15, data["mean"].values[i] + 0.02, data["size"].values[i], fontdict={"fontsize": 20})
+            else:
+                plt.text(i-0.11, data["mean"].values[i]+0.02, data["size"].values[i], fontdict={"fontsize":20})
+        plt.ylabel("Joystick Lead Time", fontsize=20)
+        plt.xticks(np.arange(7), ["local", "global", "evade(Blinky)", "evade(Clye)", "energizer", "approach", "vague"],
+                   fontsize=20)
+        plt.ylim(0, np.max(data["mean"]+0.1))
+        plt.yticks(fontsize = 20)
+        plt.tight_layout()
+        plt.savefig("./plot_data/" + monkey + "/10_{}.pdf".format(type))  # _label_rt
+        plt.show()
 
 
 def plotFig74():
@@ -237,11 +253,53 @@ def plotFig71():
     plt.show()
 
 
+def plotFig75():
+    # in vague
+    with open("./plot_data/{}_75.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+        indices = []
+        for each in data.index.values[:6]:
+            temp = list(each)
+            if "evade-blinky" == temp[0]:
+                temp[0] = "evade(B)"
+            if "evade-clyde" == temp[0]:
+                temp[0] = "evade(C)"
+            if "evade-blinky" == temp[1]:
+                temp[1] = "evade(B)"
+            if "evade-clyde" == temp[1]:
+                temp[1] = "evade(C)"
+            indices.append("{}-{}".format(temp[0], temp[1]))
+        data = data.iloc[:6].values
+
+    plt.figure(figsize = (13, 5))
+    plt.bar(np.arange(6), data)
+    plt.xticks(np.arange(6), indices, fontsize=15)
+    plt.xlabel("Transition strategies in Vague", fontsize=20)
+    plt.ylabel("Probability", fontsize = 20)
+    plt.yticks(fontsize = 20)
+    plt.tight_layout()
+    plt.savefig("./plot_data/" + monkey + "/7.5.pdf")
+    plt.show()
+
+
 def plotFig73():
+    # around vague
     with open("./plot_data/{}_73.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-        indices = ["{} - {}".format(each[0], each[1]) for each in data.index.values[:6]]
+        indices = []
+        for each in data.index.values[:6]:
+            temp = list(each)
+            if "evade-blinky" == temp[0]:
+                temp[0] = "evade(B)"
+            if "evade-clyde" == temp[0]:
+                temp[0] = "evade(C)"
+            if "evade-blinky" == temp[1]:
+                temp[1] = "evade(B)"
+            if "evade-clyde" == temp[1]:
+                temp[1] = "evade(C)"
+            indices.append("{}-{}".format(temp[0], temp[1]))
         data = data.iloc[:6].values
+
     plt.figure(figsize = (13, 5))
     plt.bar(np.arange(6), data)
     plt.xticks(np.arange(6), indices, fontsize=15)
@@ -346,27 +404,93 @@ def plotFig112B():
         plt.show()
 
 
-def plotFig112C():
-    with open("./plot_data/{}_112B.pkl".format(monkey), "rb") as file:
+def plotFig112Hist():
+    colors = RdBu_7.mpl_colors
+    with open("./plot_data/{}_112C.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
     data = {"1":data["1"], "2":data["2"]}
     ghost_name = ["Blinky", "Clyde"]
-    for each in data:
-        df_plot = data[each]
-        plt.figure()
-        ax = sns.heatmap(df_plot, square=True, cmap="RdBu_r", vmin=0.5, vmax=1)
-        bottom, top = ax.get_ylim()
-        ax.set_ylim(bottom + 0.5, top - 0.5)
-        ax.invert_yaxis()
-        plt.xlabel("EG distance")
-        plt.ylabel("PG distance")
-        plt.title(each)
-        ax.set_xticklabels(
-            [i.get_text().split(".")[0] for i in ax.get_xticklabels()], rotation=0
-        )
-        ax.set_yticklabels([i.get_text().split(".")[0] for i in ax.get_yticklabels()])
-        plt.savefig("./plot_data/" + monkey + "/11.2C_" + ghost_name[int(each)-1] + "_relevent.pdf")
-        plt.show()
+    all_data = data["1"]
+    all_data["distance2"] = data["2"].distance2
+    all_data["EG2_dis"] = data["2"].EG2_dis
+    planned_indices = np.where(all_data.cate == "Planned Hunting")[0]
+    accidental_indices = np.where(all_data.cate == "Accidentally Hunting")[0]
+
+    # 11.2C - Blinky
+    bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+    planned_dis = all_data.iloc[planned_indices].EG1_dis + all_data.iloc[planned_indices].distance1
+    accidentald_dis = all_data.iloc[accidental_indices].EG1_dis + all_data.iloc[accidental_indices].distance1
+    plt.figure(figsize=(10,7))
+
+    sns.histplot(planned_dis, kde=False, bins=bins, label="Planned Hunting", color=colors[-1], stat="probability")
+    sns.histplot(accidentald_dis, kde=False, bins=bins, label="Accidentally Hunting", color=colors[0], stat="probability")
+    # sns.histplot(planned_dis, stat="probability")
+    # sns.histplot(accidentald_dis, stat="probability")
+
+    plt.xlabel("(Energizer-Blinky Distance) + (PacMan-Blinky Distance)", fontsize = 20)
+    plt.xticks(fontsize = 20)
+    plt.xlim(0, 90)
+    plt.ylabel("Probability", fontsize = 20)
+    plt.yticks(fontsize=20)
+    plt.legend(frameon = False, fontsize = 20)
+    plt.savefig("./plot_data/" + monkey + "/11.2C.pdf")
+    plt.show()
+
+    # 11.2D - Clyde
+    bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+    planned_dis = all_data.iloc[planned_indices].EG2_dis + all_data.iloc[planned_indices].distance2
+    accidentald_dis = all_data.iloc[accidental_indices].EG2_dis + all_data.iloc[accidental_indices].distance2
+    plt.figure(figsize=(10,7))
+    # sns.distplot(planned_dis, kde=False, bins=bins, label="Planned Hunting", color=colors[-1],
+    #              hist_kws={"edgecolor": colors[-1]}, norm_hist=True)
+    # sns.distplot(accidentald_dis, kde=False, bins=bins, label="Accidentally Hunting", color=colors[0],
+    #              hist_kws={"edgecolor": colors[0]})
+    sns.histplot(planned_dis, kde=False, bins=bins, label="Planned Hunting", color=colors[-1], stat="probability")
+    sns.histplot(accidentald_dis, kde=False, bins=bins, label="Accidentally Hunting", color=colors[0],
+                 stat="probability")
+    plt.xlabel("(Energizer-Clyde Distance) + (PacMan-Clyde Distance)", fontsize=20)
+    plt.xticks(fontsize=20)
+    plt.xlim(0, 90)
+    plt.ylabel("Probability", fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.legend(frameon=False, fontsize=20)
+    plt.savefig("./plot_data/" + monkey + "/11.2D.pdf")
+    plt.show()
+
+    # 11.2E - Ghost close to energizer
+    bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
+    planned_dis = []
+    for each in planned_indices:
+        temp_data = all_data.iloc[each]
+        if temp_data.EG1_dis < temp_data.EG2_dis:
+            temp_dis = temp_data.EG1_dis + temp_data.distance1
+        else:
+            temp_dis = temp_data.EG2_dis + temp_data.distance2
+        planned_dis.append(temp_dis)
+    accidentald_dis = []
+    for each in accidental_indices:
+        temp_data = all_data.iloc[each]
+        if temp_data.EG1_dis < temp_data.EG2_dis:
+            temp_dis = temp_data.EG1_dis + temp_data.distance1
+        else:
+            temp_dis = temp_data.EG2_dis + temp_data.distance2
+        accidentald_dis.append(temp_dis)
+    plt.figure(figsize=(10, 7))
+    # sns.distplot(planned_dis, kde=False, bins=bins, label="Planned Hunting", color=colors[-1],
+    #              hist_kws={"edgecolor": colors[-1]}, norm_hist=True)
+    # sns.distplot(accidentald_dis, kde=False, bins=bins, label="Accidentally Hunting", color=colors[0],
+    #              hist_kws={"edgecolor": colors[0]}, norm_hist=True)
+    sns.histplot(planned_dis, kde=False, bins=bins, label="Planned Hunting", color=colors[-1], stat="probability")
+    sns.histplot(accidentald_dis, kde=False, bins=bins, label="Accidentally Hunting", color=colors[0],
+                 stat="probability")
+    plt.xlabel("(Energizer-ClosestGhost Distance) + (PacMan-ClosestGhost Distance)", fontsize=20)
+    plt.xticks(fontsize=20)
+    plt.xlim(0, 90)
+    plt.ylabel("Probability", fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.legend(frameon=False, fontsize=20)
+    plt.savefig("./plot_data/" + monkey + "/11.2E.pdf")
+    plt.show()
 
 
 def plotFig1131():
@@ -408,7 +532,7 @@ def plotFig1131():
 def plotFig1132():
     with open("./plot_data/{}_1132.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
-    sns.set_palette([status_color_mapping["approach"], status_color_mapping["evade"]])
+    sns.set_palette([status_color_mapping["evade"], status_color_mapping["approach"]])
     df_plot_all = data[data["index"] < 25]
     ax = sns.barplot(
         data=df_plot_all.sort_values(by="index"), x="index", y="value", hue="category",
@@ -423,43 +547,213 @@ def plotFig1132():
     plt.show()
 
 
-# ==========================
-# Plot saccade by weight
+def plotFig1141():
+    with open("./plot_data/{}_1141.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
 
-# plotSaccByWeight()
-# plotAvgSaccByWeight() #TODO: bugs for Patamon
+    sns.set_palette([status_color_mapping["evade"], status_color_mapping["approach"]])
+    ax = sns.barplot(
+        data=data["data"],
+        x="index",
+        y="distance",
+        hue="category",
 
-# ==========================
-# Plot Fig. 7
+    )
+    # handles, labels = ax.get_legend_handles_labels()
+    # labels = [
+    #     "{} > 0 ratio: {}".format(labels[0].split(" ")[0], labels[0][-4:]),
+    #     "{} > 0 ratio: {}".format(labels[1].split(" ")[0], labels[1][-4:])
+    # ]
+    # ax.legend(handles, labels)
+    ax.vlines(
+        x=data["temp"],
+        ymin=0,
+        ymax=0.15,
+        linestyle="--",
+        color=status_color_mapping["evade"],
+    )
+    ax.vlines(
+        x=data["df_com"],
+        ymin=0,
+        ymax=0.15,
+        linestyle="--",
+        color=status_color_mapping["approach"],
+    )
+    plt.legend()
+    plt.ylim(0, 0.2)
+    tks, labels = ax.get_xticks(), [i.get_text() for i in ax.get_xticklabels()]
+    ax.set_xticks(tks[::6])
+    ax.set_xticklabels(labels[::6])
+    ax.set_xlabel("(Pacman-Pellet Distance) - (Reset-Pellet Distance)")
+    ax.set_ylabel("Probability")
+    plt.savefig("./plot_data/" + monkey + "/11.4.1.pdf")
+    plt.show()
 
-# plotFig71()
-# plotFig72()
-# plotFig73()
-# plotFig74()
 
-# ==========================
-# Plot Fig. 8
+def plotFig1142():
+    with open("./plot_data/{}_1142.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    sns.set_palette([status_color_mapping["evade"], status_color_mapping["approach"]])
+    df_plot_all = data[data["index"] < 25]
+    ax = sns.barplot(
+        data=df_plot_all.sort_values(by="index"), x="index", y="value", hue="category",
+    )
+    tks, labels = ax.get_xticks(), [i.get_text() for i in ax.get_xticklabels()]
+    ax.set_xticks(tks[::6])
+    ax.set_xticklabels(labels[::6])
+    plt.legend(title=None)
+    plt.xlabel("PacMan-Ghost Distance")
+    plt.ylabel("Probability")
+    plt.savefig("./plot_data/" + monkey + "/11.4.2.pdf")
+    plt.show()
 
-# plotFig8Freq()
-# plotFig8AvgStd()
 
-# ==========================
-# Plot Fig. 9
+def plotFig115():
+    plt.figure(figsize=(15, 5))
 
-# plotFig9()
+    plt.subplot(1,2,1)
+    plt.title("Suicide", fontsize = 20)
+    with open("./plot_data/{}_115_suicide_weight.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    mean_data = np.nanmean(data, axis = 0)
+    std_data = np.nanstd(data, axis = 0)
+    sem_data = scipy.stats.sem(data, axis=0, nan_policy="omit")
+    tmp_agent_name = copy.deepcopy(agent_name)
+    tmp_agent_name[2] = "evade(Blinky)"
+    tmp_agent_name[3] = "evade(Clyde)"
+    for i in range(6):
+        plt.plot(mean_data[i,:7], "-", lw = 5, color = status_color_mapping[agent_name[i]], label = tmp_agent_name[i])
+        plt.fill_between(
+            np.arange(0, 7),
+            mean_data[i,:7] - sem_data[i,:7],
+            mean_data[i,:7] + sem_data[i,:7],
+            color=status_color_mapping[agent_name[i]],
+            alpha=0.3,
+            linewidth=4
+        )
+    plt.legend(fontsize = 15, ncol = 6)
+    plt.xticks([0, 1, 6], ["", -5, "Dead"], fontsize=20)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 20)
+    plt.ylim(0, 1.05)
+    plt.xlim(0, 6)
+    plt.ylabel("Strategy Weight", fontsize = 20)
+    plt.legend(fontsize = 13, ncol = 3)
 
-# ==========================
-# Plot Fig. 10
+    plt.subplot(1, 2, 2)
+    plt.title("Normal Death", fontsize = 20)
+    with open("./plot_data/{}_115_normal_weight.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    mean_data = np.nanmean(data, axis=0)
+    std_data = np.nanstd(data, axis=0)
+    sem_data = scipy.stats.sem(data, axis=0, nan_policy="omit")
+    tmp_agent_name = copy.deepcopy(agent_name)
+    tmp_agent_name[2] = "evade(Blinky)"
+    tmp_agent_name[3] = "evade(Clyde)"
+    for i in range(6):
+        plt.plot(mean_data[i, :7], "-", lw=5, color=status_color_mapping[agent_name[i]], label=tmp_agent_name[i])
+        plt.fill_between(
+            np.arange(0, 7),
+            mean_data[i, :7] - sem_data[i, :7],
+            mean_data[i, :7] + sem_data[i, :7],
+            color=status_color_mapping[agent_name[i]],
+            alpha=0.3,
+            linewidth=4
+        )
+    plt.legend(fontsize=15, ncol=6)
+    plt.xticks([0, 1, 6], ["", -5, "Dead"], fontsize=20)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize=20)
+    plt.ylim(0, 1.05)
+    plt.xlim(0, 6)
+    plt.ylabel("Strategy Weight", fontsize=20)
+    plt.legend(fontsize=13, ncol=3)
 
-# plotFig10()
+    plt.savefig("./plot_data/" + monkey + "/11.5.pdf")
+    plt.show()
 
-# ==========================
-# Plot Fig. 11
 
-# plotFig11AB()
-# plotFig111C1()
-# plotFig111C2()
-# plotFig112B()
-plotFig112C()
-# plotFig1131()
-# plotFig1132()
+def plotFig12():
+    with open("./plot_data/{}_12.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    mean_data = np.nanmean(data, axis = 0)
+    std_data = np.nanstd(data, axis = 0)
+    sem_data = scipy.stats.sem(data, axis=0, nan_policy="omit")
+    tmp_agent_name = copy.deepcopy(agent_name)
+    tmp_agent_name[2] = "evade(Blinky)"
+    tmp_agent_name[3] = "evade(Clyde)"
+
+    plt.figure(figsize=(15, 5))
+    for i in range(6):
+        plt.plot(mean_data[i,:], "-", lw = 5, color = status_color_mapping[agent_name[i]], label = tmp_agent_name[i])
+        plt.fill_between(
+            np.arange(0, mean_data.shape[1]),
+            mean_data[i,:] - sem_data[i,:],
+            mean_data[i,:] + sem_data[i,:],
+            color=status_color_mapping[agent_name[i]],
+            alpha=0.3,
+            linewidth=4
+        )
+    plt.legend(fontsize = 15, ncol = 6)
+    plt.xticks([0, 6, 13], ["Move In", "", "Move Out"], fontsize = 20)
+    plt.yticks([0.2, 0.4, 0.6, 0.8, 1.0], [0.2, 0.4, 0.6, 0.8, 1.0], fontsize = 20)
+    plt.ylim(0, 1.1)
+    plt.xlim(0, 13)
+    plt.ylabel("Strategy Weight", fontsize = 20)
+    plt.savefig("./plot_data/" + monkey + "/12.pdf")
+    plt.show()
+
+
+
+if __name__ == '__main__':
+    # ==========================
+    # Plot saccade by weight
+
+    # plotSaccByWeight()
+    # plotAvgSaccByWeight() #TODO: bugs for Patamon
+
+    # ==========================
+    # Plot Fig. 7
+
+    # plotFig71()
+    # plotFig72()
+    # plotFig73()
+    # plotFig74()
+    # plotFig75()
+
+    # ==========================
+    # Plot Fig. 8
+
+    # plotFig8Freq()
+    # plotFig8AvgStd() # Fig. 8
+
+    # ==========================
+    # Plot Fig. 9
+
+    # plotFig9()
+
+    # ==========================
+    # Plot Fig. 10
+
+    # plotFig10()
+
+    # ==========================
+    # Plot Fig. 11
+
+    # plotFig11AB()
+    # plotFig111C1()
+    # plotFig111C2()
+    # plotFig112B()
+    # plotFig112Hist()
+
+    # plotFig1131()
+    # plotFig1132()
+    # plotFig1141()
+    # plotFig1142()
+    #
+    # plotFig115()
+
+    # ==========================
+    # Plot Fig. 12
+
+    # plotFig12()
+
+    pass

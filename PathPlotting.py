@@ -473,6 +473,7 @@ def plotIncremental(config):
     random_cr = np.load("./common_data/incremental/100trial-window3-random_is_correct.npy", allow_pickle=True).item()
     # avg_random_cr = np.nanmean([np.nanmean(each) for each in random_cr])
     avg_random_cr = {each:np.nanmean(random_cr[each]) for each in random_cr}
+    print(avg_random_cr)
     # trial name, pacman pos, beans, window cr for different agents
     bean_vs_cr = np.load(config["bean_vs_cr_filename"], allow_pickle = True)[trial_indices]
     bean_num = []
@@ -543,7 +544,7 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw = 5, color = "grey")
+    # plt.plot([-0.5, 3.5], [avg_random_cr["early"], avg_random_cr["early"]], "--", lw = 5, color = "grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
     plt.xlim(-0.25, 2.75)
     if "simple" in config["bean_vs_cr_filename"]:
@@ -551,7 +552,7 @@ def plotIncremental(config):
         plt.ylim(0.3, 1.05)
     else:
         plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize = 15)
-        plt.ylim(0.4, 1.05)
+        plt.ylim(0.7, 1.05)
     plt.ylabel("Joystick Movement Prediction Correct Rate", fontsize=15)
 
     plt.subplot(1, 3, 2)
@@ -563,7 +564,7 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec = colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
+    # plt.plot([-0.5, 3.5], [avg_random_cr["middle"], avg_random_cr["middle"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
     plt.xlim(-0.25, 2.75)
     if "simple" in config["bean_vs_cr_filename"]:
@@ -571,7 +572,7 @@ def plotIncremental(config):
         plt.ylim(0.3, 1.05)
     else:
         plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
-        plt.ylim(0.4, 1.05)
+        plt.ylim(0.7, 1.05)
 
     plt.subplot(1, 3, 3)
     # plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.9,hspace=0.2,wspace=0.2)
@@ -583,15 +584,15 @@ def plotIncremental(config):
         plt.errorbar(x_index[index], avg_cr[index], yerr=var_cr[index],
                      color=colors[index], linestyle="", ms=20, elinewidth=4,
                      mfc=colors[index], mec=colors[index], marker="o")
-    plt.plot([-0.5, 3.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
+    # plt.plot([-0.5, 3.5], [avg_random_cr["end"], avg_random_cr["end"]], "--", lw=5, color="grey")
     plt.xticks(x_index, x_ticks, fontsize=15)
     plt.xlim(-0.25, 2.75)
     if "simple" in config["bean_vs_cr_filename"]:
         plt.yticks([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
-        plt.ylim(0.3, 1.05)
+        plt.ylim(0.7, 1.05)
     else:
         plt.yticks([0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], fontsize=15)
-        plt.ylim(0.4, 1.05)
+        plt.ylim(0.7, 1.05)
 
     plt.show()
 
@@ -993,6 +994,42 @@ def specialANDComparison(config):
 
 
     plt.savefig("./common_data/special_case/special_and_comparison.pdf")
+    plt.show()
+
+
+def specialWeight(config):
+
+    multi_agent_weight = np.load(config["special_weight_filename"], allow_pickle=True).item()
+    multi_agent_weight = {
+        each:multi_agent_weight[each][-1] / np.linalg.norm(multi_agent_weight[each][-1]) for each in multi_agent_weight
+    }
+
+    # plt.subplot(1, 2, 2)
+    agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting", "multi"]
+    agent_index = [1, 0, 2, 3, 4, 5, 6]
+    agent_name = np.array(agent_name)[agent_index]
+
+    x_ticks = ["local", "global", "evade\n(Blinky)", "evade\n(Clyde)", "approach", "energizer", "multi"]
+    x_index = np.arange(0, len(x_ticks) / 2, 0.5)
+    x_index = x_index[:-1]
+    x_ticks = x_ticks[:-1]
+
+    case_name = ["Early Stage (Pellets >= 80)", "Middle Stage (10 < Pellets < 80)", "End Stage (Pellets <= 10)"]
+    plt.figure(figsize=(23, 5))
+    for index, case in enumerate(["early", "middle", "end"]):
+        plt.subplot(1, 3, index +1)
+        plt.title(case_name[index], fontsize = 15)
+        temp_multi_agent_weight = multi_agent_weight[case][[1, 0, 2, 3, 4, 5]]
+        for i, each in enumerate(multi_agent_weight):
+            plt.bar(x_index[i], height=temp_multi_agent_weight[i], width=0.4, color=agent_color[agent_name[i]])
+        plt.xticks(x_index, x_ticks, fontsize=15)
+        plt.yticks([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                   [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                   fontsize=15)
+        plt.ylim(0.0, 1.0)
+        plt.ylabel("Normalized Strategy Weight", fontsize=15)
+
+    # plt.savefig("./common_data/special_case/special_case_weight.pdf")
     plt.show()
 
 
@@ -1502,6 +1539,7 @@ if __name__ == '__main__':
         "stage_combine_weight_filename": "./common_data/stage_together/path10-all-100trial-weight.npy",
 
         "special_case_filename": "./common_data/special_case/path10-100trial-cr.npy",
+        "special_weight_filename": "./common_data/special_case/path10-100trial-contribution.npy",
 
         "equal_label_filename": "./common_data/path_label_analysis/100_trial_data_Omega-with_Q-path10-record.npy",
         "equal_extracted_filename": "./common_data/path_label_analysis/100_trial_data_Omega-with_Q-path10-record-extracted_label.npy",
@@ -1529,7 +1567,7 @@ if __name__ == '__main__':
     # plotWeightVariation(config)
     # plotTestWeight()
 
-    # plotIncremental(config)
+    plotIncremental(config)
     # plotOneAgent(config)
     # plotDecremental(config)
     # plotStateComparison(config)
@@ -1538,12 +1576,14 @@ if __name__ == '__main__':
     #
     # specialANDComparison(config)
 
+    # specialWeight(config)
+
     # plotOptionComparison(config)
 
     # _extractPathLabel(config)
     # plotPathLabel(config, need_se=False)
 
 
-    singleTrialMultiFitting(config)
+    # singleTrialMultiFitting(config)
 
 

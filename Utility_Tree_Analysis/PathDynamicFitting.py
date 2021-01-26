@@ -47,8 +47,8 @@ def oneHot(val):
 
 def multiAgentAnalysis(trial_num = None):
     print("== Patamon Data Analysis with All the Agents ==")
-    trial_data_filename = "../common_data/trial/7000_trial_data_Patamon-with_Q-path10.pkl"
-    # trial_data_filename = "../common_data/single_trial/5_trial-data_for_comparison-one_ghost-with_Q.pkl"
+    # trial_data_filename = "../common_data/trial/7000_trial_data_Patamon-with_Q-path10.pkl"
+    trial_data_filename = "../common_data/trial/100_trial_data_Omega-with_Q-path10.pkl"
     agent_name = ["global", "local", "pessimistic_blinky", "pessimistic_clyde", "suicide", "planned_hunting"]
     print(trial_data_filename)
     print(agent_name)
