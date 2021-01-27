@@ -178,6 +178,30 @@ def plotFig9():
 
 
 def plotFig10():
+    with open("./plot_data/{}_label_rt.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    plt.figure(figsize=(15, 8))
+    plt.title("All Surrounding", fontsize=20)
+    plt.bar(
+        data.index,
+        data["mean"],
+        yerr=data["std"] / np.sqrt(data["size"]),
+        color=[status_color_mapping[c] for c in data.index],
+    )
+    for i in range(7):
+        if i in [0, 1]:
+            plt.text(i - 0.15, data["mean"].values[i] + 0.02, data["size"].values[i], fontdict={"fontsize": 20})
+        else:
+            plt.text(i - 0.11, data["mean"].values[i] + 0.02, data["size"].values[i], fontdict={"fontsize": 20})
+    plt.ylabel("Joystick Lead Time", fontsize=20)
+    plt.xticks(np.arange(7), ["local", "global", "evade(Blinky)", "evade(Clye)", "energizer", "approach", "vague"],
+               fontsize=20)
+    plt.ylim(0, np.max(data["mean"] + 0.1))
+    plt.yticks(fontsize=20)
+    plt.tight_layout()
+    plt.savefig("./plot_data/" + monkey + "/10.1_surrounding.pdf")  # _label_rt
+    plt.show()
+
     type_name = ["Corner", "T-Junction", "Cross", "Tunnel", "All"]
     for index, type in enumerate(["corners", "t_junctions", "cross", "tunnel", "all"]):
         with open("./plot_data/{}_label_rt_{}.pkl".format(monkey, type), "rb") as file:
@@ -201,7 +225,7 @@ def plotFig10():
         plt.ylim(0, np.max(data["mean"]+0.1))
         plt.yticks(fontsize = 20)
         plt.tight_layout()
-        plt.savefig("./plot_data/" + monkey + "/10_{}.pdf".format(type))  # _label_rt
+        plt.savefig("./plot_data/" + monkey + "/10.{}_{}.pdf".format(index+2, type))  # _label_rt
         plt.show()
 
 
@@ -746,10 +770,11 @@ if __name__ == '__main__':
 
     # plotFig1131()
     # plotFig1132()
-    # plotFig1141()
-    # plotFig1142()
-    #
-    # plotFig115()
+
+    plotFig1141()
+    plotFig1142()
+
+    plotFig115()
 
     # ==========================
     # Plot Fig. 12

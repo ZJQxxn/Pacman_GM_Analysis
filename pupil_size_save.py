@@ -159,7 +159,8 @@ cons_list_accident = [
     for i in energizer_lists
     if (df_total.loc[i[:5], "labels"] == "approach").sum() == 0 and len(i) > 0
 ]
-
+print("Finished configuring.")
+print("="*50)
 
 # Fig. 16.1 (sacc freq)
 

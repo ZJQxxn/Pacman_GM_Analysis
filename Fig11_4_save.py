@@ -143,6 +143,19 @@ normal_path = list(
         normal_lists,
     )
 )
+
+# select normal dead after evade
+print("Normal data num before filtering: ", len(normal_path))
+temp_list = []
+for each in normal_path:
+    # print(each[0])
+    before_normal = df_total.iloc[each[0] - 10:each[0]]
+    is_evade = before_normal[["label_evade1", "label_evade2"]].apply(
+        lambda x: x.label_evade1 == True or x.label_evade2 == True, axis=1)
+    if is_evade.sum() == 10:
+        temp_list.append(each)
+normal_path = temp_list
+
 print("Suicide data num : ", len(suicide_path))
 print("Normal data num : ", len(normal_path))
 
