@@ -375,7 +375,6 @@ def plot_weight_accuracy(df_monkey, result_list, trial_name, base):
     plt.savefig("../common_data/single_trial/{}/{}.pdf".format(base, trial_name))
     # plt.show()
 
-
 # =================================================
 
 def rawChangePointFitting():
@@ -429,7 +428,7 @@ def AICChangePointFitting():
         signal = df_plot.filter(regex="_w").fillna(0).values
         algo = rpt.Dynp(model="l2").fit(signal)
         AIC_list = []
-        bkpt_list = list(range(2, 10))
+        bkpt_list = list(range(2, 101))
         this_bkpt_list = []
         for index, n_bkpt in enumerate(bkpt_list):
             try:
@@ -487,7 +486,7 @@ def logChangePointFitting():
         signal = df_plot.filter(regex="_w").fillna(0).values
         algo = rpt.Dynp(model="l2").fit(signal)
         nll_list = []
-        bkpt_list = list(range(2, 10))
+        bkpt_list = list(range(2, 101))
         this_bkpt_list = []
         for index, n_bkpt in enumerate(bkpt_list):
             try:
@@ -518,7 +517,134 @@ def logChangePointFitting():
     np.save("../common_data/single_trial/nll_change_point/likelihood_best_kpt_list.npy", best_bkpt_list)
 
 
+def woConstraintChangePointFitting():
+    print("Start reading data...")
+    df = pd.read_pickle(
+        "../common_data/trial/100_trial_data_Omega-with_Q-uniform_path10.pkl"
+    )
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    print("Finished reading trial data.")
+    trial_name_list = np.unique(df.file.values)
+    print("The num of trials : ", len(trial_name_list))
+    print("-" * 50)
+    best_bkpt_list = []
+    for t, trial_name in enumerate(trial_name_list):
+        # trial_name = "7-1-Omega-03-Sep-2019-1.csv"
+        # df_monkey = revise_q(
+        #     df[df.file == trial_name].reset_index().drop(columns="level_0"), locs_df
+        # )
+        df_monkey = df[df.file == trial_name].reset_index().drop(columns="level_0")
+        print("| ({}) {} |Data shape {}".format(t, trial_name, df_monkey.shape))
+        ## fit based on turning points
+        cutoff_pts = change_dir_index(df_monkey.next_pacman_dir_fill)
+        result_list, _ = fit_func(df_monkey, cutoff_pts)
+        print("-" * 50)
+        # ============= select best # of breakpoints ================
+        # breakpoints detection
+        df_plot, _ = normalize_weights(df_monkey, result_list)
+        signal = df_plot.filter(regex="_w").fillna(0).values
+        algo = rpt.Dynp(model="l2").fit(signal)
+        AIC_list = []
+        bkpt_list = list(range(2, 10))
+        this_bkpt_list = []
+        for index, n_bkpt in enumerate(bkpt_list):
+            try:
+                result = algo.predict(n_bkpt)
+                result_list, total_loss = fit_func(df_monkey, result[:-1])
+                print(
+                    "| {} |".format(n_bkpt), 'total loss:', total_loss, 'penalty:', 0.5 * n_bkpt * 5, 'AIC:',total_loss + 0.5 * n_bkpt * 5,
+                )
+                AIC_list.append(total_loss + 0.5 * n_bkpt * 5)
+                this_bkpt_list.append(n_bkpt)
+            except:
+                print("No admissible last breakpoints found.")
+                break
+        # print("-" * 50)
+        if len(AIC_list) == 0:
+            continue
+        best_arg = np.argmin(AIC_list)
+        best_num_of_bkpt = this_bkpt_list[best_arg]
+        best_AIC = AIC_list[best_arg]
+        best_bkpt_list.append((trial_name, best_num_of_bkpt))
+        print("Least AIC value : {}, Best # of breakpoints {}".format(best_AIC, best_num_of_bkpt))
+        # =============use best # of breakpoints to get weights and accuracy================
+        result = algo.predict(best_num_of_bkpt)
+        result_list, total_loss = fit_func(df_monkey, result[:-1])
+        plot_weight_accuracy(df_monkey, result_list, trial_name, "AIC_change_point")
+        print("="*50)
+    # save data
+    np.save("../common_data/single_trial/AIC_change_point/best_kpt_list.npy", best_bkpt_list)
+
+
+def singlTrielFitting(need_constraint):
+    print("Start reading data...")
+    df = pd.read_pickle(
+        "../common_data/trial/100_trial_data_Omega-with_Q-uniform_path10.pkl"
+    )
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    print("Finished reading trial data.")
+    trial_name_list = np.unique(df.file.values)
+    print("The num of trials : ", len(trial_name_list))
+    print("-" * 50)
+    best_bkpt_list = []
+    trial_name = "12-1-Omega-05-Jul-2019-1.csv"
+    trial_name = "3-1-Omega-24-Jun-2019-1.csv"
+    trial_name = "30-1-Omega-06-Jun-2019-1.csv"
+
+    if need_constraint:
+        df_monkey = revise_q(
+            df[df.file == trial_name].reset_index().drop(columns="level_0"), locs_df
+        )
+    else:
+        df_monkey = df[df.file == trial_name].reset_index().drop(columns="level_0")
+    print("| {} |Data shape {}".format(trial_name, df_monkey.shape))
+    ## fit based on turning points
+    cutoff_pts = change_dir_index(df_monkey.next_pacman_dir_fill)
+    result_list, _ = fit_func(df_monkey, cutoff_pts)
+    print("-" * 50)
+    # ============= select best # of breakpoints ================
+    # breakpoints detection
+    df_plot, _ = normalize_weights(df_monkey, result_list)
+    signal = df_plot.filter(regex="_w").fillna(0).values
+    algo = rpt.Dynp(model="l2").fit(signal)
+    nll_list = []
+    bkpt_list = list(range(2, 50))
+    this_bkpt_list = []
+    for index, n_bkpt in enumerate(bkpt_list):
+        try:
+            result = algo.predict(n_bkpt)
+            result_list, total_loss = fit_func(df_monkey, result[:-1])
+            print(
+                "| {} |".format(n_bkpt), 'total loss:', total_loss, 'penalty:', 0.5 * n_bkpt * 5, 'AIC:',
+                                                                                total_loss + 0.5 * n_bkpt * 5,
+            )
+            # nll_list.append(total_loss)
+            nll_list.append(total_loss)
+            this_bkpt_list.append(n_bkpt)
+
+        except:
+            print("No admissible last breakpoints found.")
+            break
+    best_arg = np.argmin(nll_list)
+    best_num_of_bkpt = this_bkpt_list[best_arg]
+    best_log = nll_list[best_arg]
+    best_bkpt_list.append((trial_name, best_num_of_bkpt))
+    print("Least Log Likelihood value : {}, Best # of breakpoints {}".format(best_log, best_num_of_bkpt))
+    # =============use best # of breakpoints to get weights and accuracy================
+    result = algo.predict(best_num_of_bkpt)
+    result_list, total_loss = fit_func(df_monkey, result[:-1])
+    plot_weight_accuracy(df_monkey, result_list, trial_name, "nll_change_point")
+    print("=" * 50)
+
+# =================================================
+
+
+
 if __name__ == '__main__':
     # rawChangePointFitting()
     # AICChangePointFitting()
     logChangePointFitting()
+
+    # singlTrielFitting(need_constraint=True)
+
+    # woConstraintChangePointFitting()

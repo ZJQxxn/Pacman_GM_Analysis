@@ -29,3 +29,7 @@ import numpy as np
 
 # data = pd.read_csv("test_data.csv")
 # num = data.shape[0]
+
+with open("../constants/all_data_new.pkl", "rb") as file:
+    data = pkl.load(file)
+    print(list(data.keys()))

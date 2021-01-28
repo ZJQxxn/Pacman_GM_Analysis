@@ -49,7 +49,7 @@ print("Finished configuration.")
 print("="*50)
 
 # Monkey
-monkey = "Omega"
+monkey = "Patamon"
 
 
 def plotSaccByWeight():
@@ -695,6 +695,107 @@ def plotFig115():
     plt.show()
 
 
+def plotFig116():
+    with open("./plot_data/{}_11.6.1.saccade.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    plt.figure(figsize=(10,5))
+    colors = [RdBu_7.mpl_colors[0], RdBu_7.mpl_colors[-1]]
+    type = ["Planned Attack", "Accidental Attack"]
+    data_mean = data.pivot(index="agent", columns="status", values="mean").loc[:, ::-1]
+    data_std = data.pivot(index="agent", columns="status", values="std").values
+    x_index = [
+        np.arange(3) - 0.3,
+        np.arange(3)
+    ]
+    for index, each in enumerate(type):
+        plt.bar(x_index[index], data_mean.values[:, index], width=0.3,
+                yerr=data_std[:, index], color=colors[index], label=each)
+    plt.ylabel("Average Saccade Frequency", fontsize = 20)
+    # plt.xlabel("saccade subject")
+    plt.legend(fontsize=20)
+    plt.xticks(np.arange(3) - 0.15, ["Ghost Blinky", "Ghost Clyde", "PacMan Self"], fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.savefig('./plot_data/{}/11.6.1_saccade.pdf'.format(monkey))
+    plt.show()
+
+    with open("./plot_data/{}_11.6.1.pupil.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    plt.figure(figsize=(13, 8))
+    colors = [RdBu_7.mpl_colors[0], RdBu_7.mpl_colors[-1]]
+    type = ["planned", "accidental"]
+    for index, each in enumerate(type):
+        plt.errorbar(
+            data[each].index,
+            data[each]["mean"],
+            yerr=data[each]["std"] / np.sqrt(data[each]["count"]),
+            elinewidth = 3,
+            ecolor=colors[index],
+            mfc = colors[index],
+            linewidth = 3,
+            color=colors[index],
+            marker=None,
+            capsize=3,
+            barsabove=True,
+        )
+    plt.ylabel("Pupil Size - Avg. Pupil Size per Trial", fontsize = 20)
+    plt.xlabel("Seconds before/after Eating Ghost", fontsize=20)
+    plt.legend(["Planned Attack", "Accidental Attack"], fontsize = 20, ncol = 2, loc = "upper right")
+    plt.xticks([-10, -5, 0, 5, 10], [-10.0, -5.0, 0.0, 5.0, 10.0], fontsize = 20)
+    plt.yticks(fontsize=20)
+    plt.savefig('./plot_data/{}/11.6.1_pupil.pdf'.format(monkey))
+    plt.show()
+
+    colors = [RdBu_7.mpl_colors[0], RdBu_7.mpl_colors[-1]]
+    type = ["Suicide", "Normal Dead"]
+    with open("./plot_data/{}_11.6.2.saccade.pkl".format(monkey), "rb") as file:
+        data = pickle.load(file)
+    plt.figure(figsize=(10, 5))
+    data_mean = data.pivot(index="agent", columns="status", values="mean").loc[:, ::-1]
+    data_std = data.pivot(index="agent", columns="status", values="std").values
+    x_index = [
+        np.arange(3)-0.3,
+        np.arange(3)
+    ]
+    for index, each in enumerate(type):
+        plt.bar(x_index[index], data_mean.values[:,index], width = 0.3,
+                yerr = data_std[:,index], color = colors[index], label = each)
+    plt.ylabel("Average Saccade Frequency", fontsize = 20)
+    # plt.xlabel("saccade subject")
+    plt.legend(fontsize = 20)
+    plt.xticks(np.arange(3)-0.15, ["Ghost Blinky", "Ghost Clyde", "PacMan Self"], fontsize = 20)
+    plt.yticks(fontsize=20)
+    plt.savefig('./plot_data/{}/11.6.2_saccade.pdf'.format(monkey))
+    plt.show()
+
+    with open("./plot_data/{}_11.6.2.pupil.pkl".format(monkey), "rb") as file:
+        gpd = pickle.load(file)
+    plt.figure(figsize=(13, 8))
+    colors = [RdBu_7.mpl_colors[0], RdBu_7.mpl_colors[-1]]
+    type = ["suicide", "normal"]
+    for index, each in enumerate(type):
+        plt.errorbar(
+            gpd[each].index,
+            gpd[each]["mean"],
+            yerr=gpd[each]["std"] / np.sqrt(gpd[each]["count"]),
+            label = type[index],
+            elinewidth=3,
+            ecolor=colors[index],
+            mfc=colors[index],
+            linewidth=3,
+            color=colors[index],
+            marker=None,
+            capsize=3,
+            barsabove=True,
+        )
+    plt.legend(["Suicide", "Normal Dead"], fontsize = 20)
+    plt.ylabel("Relative Pupil Size", fontsize = 20)
+    plt.xlabel("Time Before Getting Caught", fontsize = 20)
+    plt.xticks([-1, -2, -3, -4], [-1.0, -2.0, -3.0, -4.0], fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.savefig('./plot_data/{}/11.6.2_pupil.pdf'.format(monkey))
+    plt.show()
+
+
 def plotFig12():
     with open("./plot_data/{}_12.pkl".format(monkey), "rb") as file:
         data = pickle.load(file)
@@ -724,7 +825,6 @@ def plotFig12():
     plt.ylabel("Strategy Weight", fontsize = 20)
     plt.savefig("./plot_data/" + monkey + "/12.pdf")
     plt.show()
-
 
 
 if __name__ == '__main__':
@@ -771,14 +871,17 @@ if __name__ == '__main__':
     # plotFig1131()
     # plotFig1132()
 
-    plotFig1141()
-    plotFig1142()
+    # plotFig1141()
+    # plotFig1142()
 
-    plotFig115()
+    # plotFig115()
+
+    plotFig116()
 
     # ==========================
     # Plot Fig. 12
 
     # plotFig12()
+
 
     pass
