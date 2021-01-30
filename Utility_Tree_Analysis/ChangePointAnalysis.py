@@ -310,70 +310,10 @@ def normalize_weights(df_monkey, result_list):
     return df_plot, df_result
 
 
-def plot_weight_accuracy(df_monkey, result_list, trial_name, base):
-    agent_color = {
-        "local": "#D7181C",
-        "pessimistic_blinky": "#FDAE61",
-        "pessimistic_clyde": "#c78444",
-        "global": "#44B53C",
-        "suicide": "#836BB7",
-        "planned_hunting": "#81B3FF",
-        "vague": "black",
-    }
-    agent_name = {
-        "global":"global",
-        "local":"local",
-        "pessimistic_blinky":"evade(Blinky)",
-        "pessimistic_clyde":"evade(Clyde)",
-        "suicide":"approach",
-        "planned_hunting":"energizer",
-    }
-
-    df_plot, df_result = normalize_weights(df_monkey, result_list)
-
-    fig = plt.figure(figsize=(18, 8), constrained_layout=True)
-    spec = fig.add_gridspec(4, 1)
-
-    ax1 = fig.add_subplot(spec[:2,:])
-    for c in df_result.filter(regex="_w").columns:
-        plt.plot(df_plot[c], color=agent_color[c[:-2]], ms=3, lw=5,label=agent_name[c[:-2]])
-    plt.title(trial_name, fontsize = 13)
-    plt.ylabel("Normalized Strategy Weight", fontsize=20)
-    plt.xlim(0, df_plot.shape[0] - 1)
-    x_ticks_index = np.arange(0, len(df_plot), 10)
-    x_ticks = [1+int(each) for each in x_ticks_index]
-    plt.xticks(x_ticks_index, x_ticks, fontsize=20)
-    plt.yticks(fontsize=20)
-    plt.ylim(-0.01, 1.02)
-    plt.legend(loc="upper center", fontsize=20, ncol = len(agent_name), frameon = False, bbox_to_anchor = (0.5, 1.2))
-
-    contributions = df_result[df_result.filter(regex="_w").columns]
-    estimated_label = [
-        _estimationVagueLabeling(contributions.iloc[i].values/np.linalg.norm(contributions.iloc[i].values), agents)
-        for i in range(contributions.shape[0])
-    ]
-    ax2 = fig.add_subplot(spec[2, :])
-    for i in range(len(estimated_label)):
-        seq = np.linspace(-0.02, 0.0, len(estimated_label[i]) + 1)
-        for j, h in enumerate(estimated_label[i]):
-            plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
-    plt.xlim(0, len(estimated_label))
-    plt.axis('off')
-
-    ax3 = fig.add_subplot(spec[3,:])
-    plt.title("Cr : {b:.3f}".format(b=np.nanmean(df_result.accuracy) if not np.all(np.isnan(df_result.accuracy)) else 0.0),
-              fontsize=13)
-    plt.plot(np.arange(len(df_result)), df_result.accuracy, "bo-", lw=4, ms=10)
-    plt.ylabel("Correct Rate", fontsize=20)
-    plt.xlim(0, df_result.shape[0] - 1)
-    x_ticks_index = np.arange(0, len(df_result), 10)
-    x_ticks = [1+int(each) for each in x_ticks_index]
-    plt.xticks(x_ticks_index, x_ticks, fontsize=20)
-    plt.yticks(fontsize=20)
-    plt.ylim(0.5, 1.05)
-
-    plt.savefig("../common_data/single_trial/{}/{}.pdf".format(base, trial_name))
-    # plt.show()
+def normalize_Q(Q_val):
+    non_zero_indices = np.where(np.array(Q_val) != 0)
+    Q_val[non_zero_indices] = Q_val[non_zero_indices] / np.linalg.norm(Q_val[non_zero_indices])
+    return Q_val
 
 # =================================================
 
@@ -636,14 +576,139 @@ def singlTrielFitting(need_constraint):
     plot_weight_accuracy(df_monkey, result_list, trial_name, "nll_change_point")
     print("=" * 50)
 
+
+def qNormalizePointFitting():
+    print("Start reading data...")
+    df = pd.read_pickle(
+        "../common_data/trial/100_trial_data_Omega-with_Q-uniform_path10.pkl"
+    )
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    print("Finished reading trial data.")
+    trial_name_list = np.unique(df.file.values)
+    print("The num of trials : ", len(trial_name_list))
+    print("-" * 50)
+    best_bkpt_list = []
+    for t, trial_name in enumerate(trial_name_list):
+        # trial_name = "7-1-Omega-03-Sep-2019-1.csv"
+        df_monkey = revise_q(df[df.file == trial_name].reset_index().drop(columns="level_0"), locs_df)
+        for a in ["global_Q", "local_Q", "pessimistic_blinky_Q", "pessimistic_clyde_Q", "suicide_Q", "planned_hunting_Q"]:
+            df_monkey[a] = df_monkey[a].apply(lambda x: normalize_Q(x))
+        print("| ({}) {} |Data shape {}".format(t, trial_name, df_monkey.shape))
+        ## fit based on turning points
+        cutoff_pts = change_dir_index(df_monkey.next_pacman_dir_fill)
+        result_list, _ = fit_func(df_monkey, cutoff_pts)
+        print("-" * 50)
+        # ============= select best # of breakpoints ================
+        # breakpoints detection
+        df_plot, _ = normalize_weights(df_monkey, result_list)
+        signal = df_plot.filter(regex="_w").fillna(0).values
+        algo = rpt.Dynp(model="l2").fit(signal)
+        nll_list = []
+        bkpt_list = list(range(2, 101))
+        this_bkpt_list = []
+        for index, n_bkpt in enumerate(bkpt_list):
+            try:
+                result = algo.predict(n_bkpt)
+                result_list, total_loss = fit_func(df_monkey, result[:-1])
+                print(
+                    "| {} |".format(n_bkpt), 'total loss:', total_loss, 'penalty:', 0.5 * n_bkpt * 5, 'AIC:',total_loss + 0.5 * n_bkpt * 5,
+                )
+                nll_list.append(total_loss)
+                this_bkpt_list.append(n_bkpt)
+            except:
+                print("No admissible last breakpoints found.")
+                break
+        # print("-" * 50)
+        if len(nll_list) == 0:
+            continue
+        best_arg = np.argmin(nll_list)
+        best_num_of_bkpt = this_bkpt_list[best_arg]
+        best_log = nll_list[best_arg]
+        best_bkpt_list.append((trial_name, best_num_of_bkpt))
+        print("Least Log Likelihood value : {}, Best # of breakpoints {}".format(best_log, best_num_of_bkpt))
+        # =============use best # of breakpoints to get weights and accuracy================
+        result = algo.predict(best_num_of_bkpt)
+        result_list, total_loss = fit_func(df_monkey, result[:-1])
+        plot_weight_accuracy(df_monkey, result_list, trial_name, "normalize_q_nll")
+        print("="*50)
+    # save data
+    np.save("../common_data/single_trial/normalize_q_nll/likelihood_best_kpt_list.npy", best_bkpt_list)
+
 # =================================================
+
+def plot_weight_accuracy(df_monkey, result_list, trial_name, base):
+    agent_color = {
+        "local": "#D7181C",
+        "pessimistic_blinky": "#FDAE61",
+        "pessimistic_clyde": "#c78444",
+        "global": "#44B53C",
+        "suicide": "#836BB7",
+        "planned_hunting": "#81B3FF",
+        "vague": "black",
+    }
+    agent_name = {
+        "global":"global",
+        "local":"local",
+        "pessimistic_blinky":"evade(Blinky)",
+        "pessimistic_clyde":"evade(Clyde)",
+        "suicide":"approach",
+        "planned_hunting":"energizer",
+    }
+
+    df_plot, df_result = normalize_weights(df_monkey, result_list)
+
+    fig = plt.figure(figsize=(18, 8), constrained_layout=True)
+    spec = fig.add_gridspec(4, 1)
+
+    ax1 = fig.add_subplot(spec[:2,:])
+    for c in df_result.filter(regex="_w").columns:
+        plt.plot(df_plot[c], color=agent_color[c[:-2]], ms=3, lw=5,label=agent_name[c[:-2]])
+    plt.title(trial_name, fontsize = 13)
+    plt.ylabel("Normalized Strategy Weight", fontsize=20)
+    plt.xlim(0, df_plot.shape[0] - 1)
+    x_ticks_index = np.arange(0, len(df_plot), 10)
+    x_ticks = [1+int(each) for each in x_ticks_index]
+    plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(-0.01, 1.02)
+    plt.legend(loc="upper center", fontsize=20, ncol = len(agent_name), frameon = False, bbox_to_anchor = (0.5, 1.2))
+
+    contributions = df_result[df_result.filter(regex="_w").columns]
+    estimated_label = [
+        _estimationVagueLabeling(contributions.iloc[i].values/np.linalg.norm(contributions.iloc[i].values), agents)
+        for i in range(contributions.shape[0])
+    ]
+    ax2 = fig.add_subplot(spec[2, :])
+    for i in range(len(estimated_label)):
+        seq = np.linspace(-0.02, 0.0, len(estimated_label[i]) + 1)
+        for j, h in enumerate(estimated_label[i]):
+            plt.fill_between(x=[i, i + 1], y1=seq[j + 1], y2=seq[j], color=agent_color[h])
+    plt.xlim(0, len(estimated_label))
+    plt.axis('off')
+
+    ax3 = fig.add_subplot(spec[3,:])
+    plt.title("Cr : {b:.3f}".format(b=np.nanmean(df_result.accuracy) if not np.all(np.isnan(df_result.accuracy)) else 0.0),
+              fontsize=13)
+    plt.plot(np.arange(len(df_result)), df_result.accuracy, "bo-", lw=4, ms=10)
+    plt.ylabel("Correct Rate", fontsize=20)
+    plt.xlim(0, df_result.shape[0] - 1)
+    x_ticks_index = np.arange(0, len(df_result), 10)
+    x_ticks = [1+int(each) for each in x_ticks_index]
+    plt.xticks(x_ticks_index, x_ticks, fontsize=20)
+    plt.yticks(fontsize=20)
+    plt.ylim(0.5, 1.05)
+
+    plt.savefig("../common_data/single_trial/{}/{}.pdf".format(base, trial_name))
+    # plt.show()
 
 
 
 if __name__ == '__main__':
     # rawChangePointFitting()
     # AICChangePointFitting()
-    logChangePointFitting()
+    # logChangePointFitting()
+
+    qNormalizePointFitting()
 
     # singlTrielFitting(need_constraint=True)
 
