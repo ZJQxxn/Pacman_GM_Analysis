@@ -72,7 +72,7 @@ def _makeChoice(prob):
 
 
 def negativeLikelihood(
-    param, all_data, true_prob, agents_list, return_trajectory=False
+    param, all_data, true_prob, agents_list, return_trajectory=False, suffix="_Q"
 ):
     """
     Estimate agent weights with utility (Q-value).
@@ -89,7 +89,7 @@ def negativeLikelihood(
     # Compute estimation error
     nll = 0  # negative log likelihood
     num_samples = all_data.shape[0]
-    agents_list = ["{}_Q".format(each) for each in agents_list]
+    agents_list = [("{}" + suffix).format(each) for each in agents_list]
     pre_estimation = all_data[agents_list].values
     agent_Q_value = np.zeros((num_samples, 4, len(agents_list)))
     for each_sample in range(num_samples):
@@ -135,9 +135,9 @@ def normalize(x):
     return (x) / (x).sum()
 
 
-def caculate_correct_rate(result_x, all_data, true_prob, agents):
+def caculate_correct_rate(result_x, all_data, true_prob, agents, suffix="_Q"):
     _, estimated_prob = negativeLikelihood(
-        result_x, all_data, true_prob, agents, return_trajectory=True
+        result_x, all_data, true_prob, agents, return_trajectory=True, suffix=suffix
     )
     true_dir = np.array([np.argmax(each) for each in true_prob])
     estimated_dir = np.array([_makeChoice(each) for each in estimated_prob])
@@ -242,8 +242,6 @@ def revise_q(df_monkey, locs_df):
     df_monkey.suicide_Q = _suicideProcesing(
         df_monkey.suicide_Q, PR, RR, ghost_status, PG_wo_dead
     )
-    df_monkey.local_Q = _localProcesing(df_monkey.local_Q, PR)
-
     return df_monkey
 
 
@@ -252,19 +250,19 @@ def change_dir_index(x):
     return temp[(temp - temp.shift()) > 1].values
 
 
-def fit_func(df_monkey, cutoff_pts):
+def fit_func(df_monkey, cutoff_pts, suffix="_Q"):
     result_list = []
     bounds = [[0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000], [0, 1000]]
     params = [0] * 6
     cons = []  # construct the bounds in the form of constraints
-    # agents = [
-    #     "global",
-    #     "local",
-    #     "pessimistic_blinky",
-    #     "pessimistic_clyde",
-    #     "suicide",
-    #     "planned_hunting",
-    # ]
+    agents = [
+        "global",
+        "local",
+        "pessimistic_blinky",
+        "pessimistic_clyde",
+        "suicide",
+        "planned_hunting",
+    ]
 
     for par in range(len(bounds)):
         l = {"type": "ineq", "fun": lambda x: x[par] - bounds[par][0]}
@@ -274,11 +272,11 @@ def fit_func(df_monkey, cutoff_pts):
 
     prev = 0
     total_loss = 0
-    for end in cutoff_pts:
+    for prev, end in cutoff_pts:
         all_data = df_monkey[prev:end]
-        true_prob = all_data.next_pacman_dir_fill.apply(oneHot)
+        true_prob = all_data.next_pacman_dir_fill.fillna(method="ffill").apply(oneHot)
         func = lambda params: negativeLikelihood(
-            params, all_data, true_prob, agents, return_trajectory=False
+            params, all_data, true_prob, agents, return_trajectory=False, suffix=suffix
         )
         res = scipy.optimize.minimize(
             func,
@@ -289,15 +287,27 @@ def fit_func(df_monkey, cutoff_pts):
             constraints=cons,
         )
         total_loss += negativeLikelihood(
-            res.x / res.x.sum(), all_data, true_prob, agents, return_trajectory=False
+            res.x / res.x.sum(),
+            all_data,
+            true_prob,
+            agents,
+            return_trajectory=False,
+            suffix=suffix,
         )
-        cr = caculate_correct_rate(res.x, all_data, true_prob, agents)
+        cr = caculate_correct_rate(res.x, all_data, true_prob, agents, suffix=suffix)
         result_list.append(res.x.tolist() + [cr] + [prev] + [end])
-        prev = end
     return result_list, total_loss
 
 
-def normalize_weights(df_monkey, result_list):
+def normalize_weights(result_list, df_monkey):
+    agents = [
+        "global",
+        "local",
+        "pessimistic_blinky",
+        "pessimistic_clyde",
+        "suicide",
+        "planned_hunting",
+    ]
     df_result = (
         pd.DataFrame(
             result_list,
@@ -313,10 +323,63 @@ def normalize_weights(df_monkey, result_list):
     return df_plot, df_result
 
 
+def normalize_weights_slide(result_list, df_monkey):
+    agents = [
+        "global",
+        "local",
+        "pessimistic_blinky",
+        "pessimistic_clyde",
+        "suicide",
+        "planned_hunting",
+    ]
+    window = (result_list[0][-1] - result_list[0][-2]) // 2
+    for i in result_list:
+        i[-2] = i[-2] + window
+    df_result = (
+        pd.DataFrame(
+            result_list,
+            columns=[i + "_w" for i in agents] + ["accuracy", "start", "end"],
+        )
+        .set_index("start")
+        .reindex(range(df_monkey.shape[0]))
+    )
+    df_plot = df_result.filter(regex="_w").divide(
+        df_result.filter(regex="_w").sum(1), 0
+    )
+    return df_plot, df_result
+
+
 def normalize_Q(Q_val):
     non_zero_indices = np.where(np.array(Q_val) != 0)
     Q_val[non_zero_indices] = Q_val[non_zero_indices] / np.linalg.norm(Q_val[non_zero_indices])
     return Q_val
+
+
+def add_cutoff_pts(cutoff_pts, df_monkey):
+    eat_ghost = (
+        (
+            ((df_monkey.ifscared1 == 3) & (df_monkey.ifscared1.diff() < 0))
+            | ((df_monkey.ifscared2 == 3) & (df_monkey.ifscared2.diff() < 0))
+        )
+        .where(lambda x: x == True)
+        .dropna()
+        .index.tolist()
+    )
+
+    eat_energizers = (
+        (
+            df_monkey.energizers.apply(
+                lambda x: len(x) if not isinstance(x, float) else 0
+            ).diff()
+            < 0
+        )
+        .where(lambda x: x == True)
+        .dropna()
+        .index.tolist()
+    )
+
+    cutoff_pts = sorted(list(cutoff_pts) + eat_ghost + eat_energizers)
+    return cutoff_pts
 
 # =================================================
 
@@ -532,7 +595,7 @@ def singlTrielFitting(need_constraint):
     best_bkpt_list = []
     trial_name = "12-1-Omega-05-Jul-2019-1.csv"
     trial_name = "3-1-Omega-24-Jun-2019-1.csv"
-    trial_name = "1-8-Omega-11-Jun-2019-1.csv"
+    # trial_name = "1-8-Omega-11-Jun-2019-1.csv"
 
     if need_constraint:
         df_monkey = revise_q(
@@ -578,8 +641,11 @@ def singlTrielFitting(need_constraint):
     # =============use best # of breakpoints to get weights and accuracy================
     result = algo.predict(best_num_of_bkpt)
     result_list, total_loss = fit_func(df_monkey, result[:-1])
-    plot_weight_accuracy(df_monkey, result_list, trial_name, "normalize_q_nll")
+    plot_weight_accuracy(df_monkey, result_list, trial_name, "single_test")
     print("=" * 50)
+
+    rpt.display(signal, result, result)
+    plt.show()
 
 
 def qNormalizePointFitting():
@@ -646,6 +712,19 @@ def cleanChangePointFitting():
         "../common_data/trial/100_trial_data_Omega-with_Q-clean.pkl"
     )
     locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    for c in df.filter(regex="_Q").columns:
+        if "pess" not in c:
+            df[c + "_norm"] = df[c].apply(
+                lambda x: x / max(x) if set(x) != {0} else [0, 0, 0, 0]
+            )
+        else:
+            offset_num = df[c].explode().min()
+            df[c + "_norm"] = df[c].apply(
+                lambda x: (x + offset_num) / max(x + offset_num)
+                if set(x) != {0}
+                else [0, 0, 0, 0]
+            )
+    suffix = "_Q_norm"
     print("Finished reading trial data.")
     trial_name_list = np.unique(df.file.values)
     print("The num of trials : ", len(trial_name_list))
@@ -653,27 +732,35 @@ def cleanChangePointFitting():
     best_bkpt_list = []
     for t, trial_name in enumerate(trial_name_list):
         # trial_name = "7-1-Omega-03-Sep-2019-1.csv"
-        # df_monkey = revise_q(
-        #     df[df.file == trial_name].reset_index().drop(columns="level_0"), locs_df
-        # )
-        df_monkey = df[df.file == trial_name].reset_index().drop(columns="level_0")
+        df_monkey = revise_q(
+            df[df.file == trial_name].reset_index().drop(columns="level_0"), locs_df
+        )
+        # df_monkey = df[df.file == trial_name].reset_index().drop(columns="level_0")
         print("| ({}) {} | Data shape {}".format(t, trial_name, df_monkey.shape))
+
         ## fit based on turning points
-        cutoff_pts = change_dir_index(df_monkey.next_pacman_dir_fill)
-        result_list, _ = fit_func(df_monkey, cutoff_pts)
+        # cutoff_pts = change_dir_index(df_monkey.next_pacman_dir_fill) # No add eating ghost and eating energizer points
+        cutoff_pts = add_cutoff_pts(change_dir_index(df_monkey.next_pacman_dir_fill), df_monkey) # Add eating ghost and eating energizer points
+        cutoff_pts = list(zip([0] + list(cutoff_pts[:-1]), cutoff_pts))
+        result_list, _ = fit_func(df_monkey, cutoff_pts, suffix=suffix)
         print("-" * 50)
         # ============= select best # of breakpoints ================
         # breakpoints detection
-        df_plot, _ = normalize_weights(df_monkey, result_list)
+        try:
+            df_plot, df_result = normalize_weights(result_list, df_monkey)
+        except:
+            print("Error occurs in weight normalization.")
+            continue
         signal = df_plot.filter(regex="_w").fillna(0).values
-        algo = rpt.Dynp(model="l2").fit(signal)
+        algo = rpt.Dynp(model="l2", jump=2).fit(signal)
         nll_list = []
-        bkpt_list = list(range(2, 101))
+        bkpt_list = list(range(2, 21))
         this_bkpt_list = []
         for index, n_bkpt in enumerate(bkpt_list):
             try:
                 result = algo.predict(n_bkpt)
-                result_list, total_loss = fit_func(df_monkey, result[:-1])
+                result = list(zip([0] + result[:-1], result))
+                result_list, total_loss = fit_func(df_monkey, result, suffix=suffix)
                 print(
                     "| {} |".format(n_bkpt), 'total loss:', total_loss, 'penalty:', 0.5 * n_bkpt * 5, 'AIC:',total_loss + 0.5 * n_bkpt * 5,
                 )
@@ -692,11 +779,61 @@ def cleanChangePointFitting():
         print("Least Log Likelihood value : {}, Best # of breakpoints {}".format(best_log, best_num_of_bkpt))
         # =============use best # of breakpoints to get weights and accuracy================
         result = algo.predict(best_num_of_bkpt)
-        result_list, total_loss = fit_func(df_monkey, result[:-1])
-        plot_weight_accuracy(df_monkey, result_list, trial_name, "clean_agents")
+        result = list(zip([0] + result[:-1], result))
+        result_list, total_loss = fit_func(df_monkey, result, suffix=suffix)
+        plot_weight_accuracy(df_monkey, result_list, trial_name, "clean_agents_change")
         print("="*50)
     # save data
-    np.save("../common_data/single_trial/clean_agents/likelihood_best_kpt_list.npy", best_bkpt_list)
+    np.save("../common_data/single_trial/clean_agents_change/likelihood_best_kpt_list.npy", best_bkpt_list)
+
+
+def cleanSlideWindowFitting(window):
+    print("="*0)
+    print("Window Size = {}".format(window))
+    print("=" * 0)
+    print("Start reading data...")
+    df = pd.read_pickle(
+        "../common_data/trial/100_trial_data_Omega-with_Q-clean.pkl"
+    )
+    locs_df = readLocDistance("extracted_data/dij_distance_map.csv")
+    for c in df.filter(regex="_Q").columns:
+        if "pess" not in c:
+            df[c + "_norm"] = df[c].apply(
+                lambda x: x / max(x) if set(x) != {0} else [0, 0, 0, 0]
+            )
+        else:
+            offset_num = df[c].explode().min()
+            df[c + "_norm"] = df[c].apply(
+                lambda x: (x + offset_num) / max(x + offset_num)
+                if set(x) != {0}
+                else [0, 0, 0, 0]
+            )
+    suffix = "_Q_norm"
+    print("Finished reading trial data.")
+    trial_name_list = np.unique(df.file.values)
+    print("The num of trials : ", len(trial_name_list))
+    print("-" * 50)
+    best_bkpt_list = []
+    for t, trial_name in enumerate(trial_name_list):
+        # trial_name = "7-1-Omega-03-Sep-2019-1.csv"
+        df_monkey = revise_q(
+            df[df.file == trial_name].reset_index().drop(columns="level_0"), locs_df
+        )
+        # df_monkey = df[df.file == trial_name].reset_index().drop(columns="level_0")
+        print("| ({}) {} | Data shape {}".format(t, trial_name, df_monkey.shape))
+
+        window = window
+        cutoff_pts = list(
+            zip(
+                list(range(df_monkey.shape[0] - window + 1)),
+                list(range(window, df_monkey.shape[0] + 1)),
+            )
+        )
+        result_list, _ = fit_func(df_monkey, cutoff_pts, suffix=suffix)
+        plot_weight_accuracy(df_monkey, result_list, trial_name, "clean_agents_slide_window{}".format(window))
+        print("="*50)
+    # save data
+    np.save("../common_data/single_trial/clean_agents_slide_window{}/likelihood_best_kpt_list.npy".format(window), best_bkpt_list)
 
 # =================================================
 
@@ -719,7 +856,7 @@ def plot_weight_accuracy(df_monkey, result_list, trial_name, base):
         "planned_hunting":"energizer",
     }
 
-    df_plot, df_result = normalize_weights(df_monkey, result_list)
+    df_plot, df_result = normalize_weights(result_list, df_monkey)
 
     fig = plt.figure(figsize=(18, 8), constrained_layout=True)
     spec = fig.add_gridspec(4, 1)
@@ -773,7 +910,10 @@ if __name__ == '__main__':
     # logChangePointFitting()
 
     # qNormalizePointFitting()
-    cleanChangePointFitting()
+
+    # cleanChangePointFitting()
+    # cleanSlideWindowFitting(window = 11)
+    cleanSlideWindowFitting(window=7)
 
     # singlTrielFitting(need_constraint=True)
 
